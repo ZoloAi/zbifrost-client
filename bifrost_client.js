@@ -96,8 +96,10 @@
 
     async _loadCore(connectionInfo) {
       this._coreLoading = true;
-      // 3B: server tells us the authoritative core URL; falls back to local
-      const coreUrl = connectionInfo.bifrost_core_url || '/bifrost/src/bifrost_core.js';
+      // 3B: server tells us the authoritative core URL; falls back to local.
+      // If script is cross-origin (CDN), relative paths need an absolute base.
+      const rawUrl = connectionInfo.bifrost_core_url || '/bifrost/src/bifrost_core.js';
+      const coreUrl = rawUrl.startsWith('/') ? (window.location.origin + rawUrl) : rawUrl;
       this.logger.info('Loading core from', coreUrl);
 
       // Close the bootstrap WS cleanly before the core opens its own
