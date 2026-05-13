@@ -34,6 +34,7 @@ export class WidgetHookManager {
     count += await this.registerSwiperHooks();
     await this.registerDashboardHook() && count++;
     await this.registerWizardGateResultHook() && count++;
+    await this.registerMenuHook() && count++;
     
     this.logger.log(`[WidgetHookManager] Registered ${count} hooks`);
   }
@@ -265,6 +266,21 @@ export class WidgetHookManager {
         this.logger.debug('[WidgetHookManager] onWizardGateResult triggered for gate:', message.gateKey);
         await this.client._ensureZDisplayOrchestrator();
         await this.client.zDisplayOrchestrator.handleWizardGateResult(message);
+      });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Register onMenu hook — default for all zBifrost apps
+   */
+  async registerMenuHook() {
+    if (!this.hooks.has('onMenu')) {
+      this.hooks.register('onMenu', async (message) => {
+        this.logger.debug('[WidgetHookManager] onMenu triggered');
+        await this.client._ensureMenuRenderer();
+        this.client.menuRenderer.renderMenu(message);
       });
       return true;
     }
