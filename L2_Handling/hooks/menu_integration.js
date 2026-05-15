@@ -31,9 +31,15 @@ export function registerMenuHook(client) {
   const menuRenderer = new MenuRenderer(client);
 
   // Register the onMenu hook
+  // New-format zMenu events have flat 'options' array and 'title'.
+  // Legacy menu events have 'menu_key' and nested options with breadcrumbs.
   client.registerHook('onMenu', (message) => {
     logger.debug('[MenuIntegration] onMenu hook called with message:', message);
-    menuRenderer.renderMenu(message);
+    if (Array.isArray(message.options) && !message.menu_key) {
+      menuRenderer.renderZMenu(message);
+    } else {
+      menuRenderer.renderMenu(message);
+    }
   });
 
   logger.info('[MenuIntegration] onMenu hook registered successfully');

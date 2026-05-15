@@ -280,7 +280,12 @@ export class WidgetHookManager {
       this.hooks.register('onMenu', async (message) => {
         this.logger.debug('[WidgetHookManager] onMenu triggered');
         await this.client._ensureMenuRenderer();
-        this.client.menuRenderer.renderMenu(message);
+        // New zMenu primitive: flat options array, no menu_key
+        if (Array.isArray(message.options) && !message.menu_key) {
+          this.client.menuRenderer.renderZMenu(message);
+        } else {
+          this.client.menuRenderer.renderMenu(message);
+        }
       });
       return true;
     }

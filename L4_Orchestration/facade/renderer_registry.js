@@ -162,7 +162,7 @@ export const RENDERER_REGISTRY = {
     useModuleRegistry: true
   },
   menu: {
-    path: 'L2_Handling/display/inputs/menu_renderer.js',
+    path: 'L2_Handling/display/navigation/menu_renderer.js',
     className: 'MenuRenderer',
     isDefault: false,
     passClient: true, // MenuRenderer needs client for menu interactions
