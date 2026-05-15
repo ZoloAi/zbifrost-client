@@ -287,6 +287,14 @@ export class ZDisplayOrchestrator {
     // Regular (non-grouped) rendering continues below
     // 
 
+    // Track option keys that belong to a ~* menu — skip their sibling content rendering
+    const menuOptionKeys = new Set();
+    for (const [k, v] of Object.entries(data)) {
+      if (k.startsWith('~') && k.includes('*') && Array.isArray(v)) {
+        v.forEach(opt => typeof opt === 'string' && menuOptionKeys.add(opt));
+      }
+    }
+
     // Iterate through all keys in this level
     for (const [key, value] of Object.entries(data)) {
       const keyPath = currentPath ? `${currentPath}.${key}` : key;
@@ -298,7 +306,24 @@ export class ZDisplayOrchestrator {
           await this.renderNavBar(value, parentElement);
           continue;
         }
-        // Other metadata keys - skip for now
+        // Menu shorthand: ~Key* with array of option strings
+        // Expand to zMenu structure using sibling content — SSOT: identical to longhand zMenu
+        if (key.includes('*') && Array.isArray(value) && value.every(item => typeof item === 'string')) {
+          const cleanKey = key.replace(/[~*^$]/g, '').trim();
+          const menuValue = {
+            title: cleanKey.replace(/_/g, ' '),
+            options: value,
+            ...Object.fromEntries(value.map(opt => [opt, data[opt]]).filter(([, v]) => v !== undefined)),
+          };
+          await this._renderZMenuBlock(cleanKey, menuValue, parentElement, keyPath);
+          continue;
+        }
+        // Other ~ metadata keys - skip
+        continue;
+      }
+
+      // Skip option keys that are sibling content of a ~* menu
+      if (menuOptionKeys.has(key)) {
         continue;
       }
 
@@ -338,6 +363,12 @@ export class ZDisplayOrchestrator {
         }
       }
 
+      // zMenu: route through unified renderer (same path as ~* shorthand)
+      if (key === 'zMenu') {
+        await this._renderZMenuBlock(key, value, parentElement, keyPath);
+        continue;
+      }
+
       // Create container wrapper for this zKey (zTheme responsive layout)
       const containerDiv = await this.createContainer(key, itemMetadata);
 
@@ -346,92 +377,6 @@ export class ZDisplayOrchestrator {
       // Set id for DevTools navigation and CSS targeting (unless custom zId provided)
       if (!itemMetadata.zId) {
         containerDiv.setAttribute('id', key);
-      }
-
-      // zMenu primitive — nav/ul/li buttons + sibling placeholders.
-      // Wizard-flow semantics: clicking option[i] renders options[i..n] sequentially.
-      // value = { title, options: [...], zAnchor, Option_A: {...}, Option_B: {...} }
-      if (key === 'zMenu') {
-        this.logger.debug('[ZDisplayOrchestrator] Rendering zMenu inline (nav + placeholders)');
-        const options = Array.isArray(value.options) ? value.options : [];
-        const title = value.title || null;
-
-        // Optional title
-        if (title) {
-          const titleEl = document.createElement('p');
-          titleEl.className = 'zText-muted zSmall zmb-1';
-          titleEl.textContent = title;
-          containerDiv.appendChild(titleEl);
-        }
-
-        // <nav> with <ul class="zNavbar-nav zflex-column"> — SSOT with zNavbar classes
-        const nav = document.createElement('nav');
-        nav.className = 'zMenu-nav zmb-2';
-        nav.setAttribute('role', 'menu');
-        if (title) nav.setAttribute('aria-label', title);
-
-        const ul = document.createElement('ul');
-        ul.className = 'zNavbar-nav zd-flex zflex-column zgap-1 list-unstyled zm-0 zp-0';
-        nav.appendChild(ul);
-        containerDiv.appendChild(nav);
-
-        // Sibling placeholder divs — one per option, appended to containerDiv after nav
-        const placeholders = {};
-        options.forEach(optKey => {
-          const ph = document.createElement('div');
-          ph.className = 'zMenu-option-content';
-          ph.style.display = 'none';
-          ph.dataset.menuContent = optKey;
-          placeholders[optKey] = ph;
-          containerDiv.appendChild(ph);
-        });
-
-        // Build nav items — click triggers sequential wizard-flow render
-        options.forEach((optKey, idx) => {
-          const li = document.createElement('li');
-          li.className = 'zNav-item';
-
-          const btn = document.createElement('button');
-          btn.className = 'zNav-link zBtn w-100 text-start zp-2';
-          btn.setAttribute('role', 'menuitem');
-          btn.dataset.key = optKey;
-          btn.innerHTML = `<span class="zBadge zBadge-secondary me-2">${idx + 1}</span>${optKey.replace(/_/g, ' ')}`;
-
-          btn.addEventListener('click', async () => {
-            // Reset: hide all placeholders, clear rendered state, remove active
-            ul.querySelectorAll('button[data-key]').forEach(b => b.classList.remove('active'));
-            options.forEach(k => {
-              const ph = placeholders[k];
-              if (ph) { ph.style.display = 'none'; ph.innerHTML = ''; delete ph.dataset.rendered; }
-            });
-
-            btn.classList.add('active');
-
-            // Wizard flow: render from selected index forward, sequentially
-            const tail = options.slice(idx);
-            for (const optKey of tail) {
-              const ph = placeholders[optKey];
-              if (!ph) continue;
-              ph.style.display = 'block';
-              if (value[optKey]) {
-                ph.dataset.rendered = '1';
-                try {
-                  // Wrap in {optKey: content} so renderItems sees the key and
-                  // correctly routes value.event (expanded shorthand) or nested dict
-                  await this.renderItems({ [optKey]: value[optKey] }, ph, [...keyPath, key]);
-                } catch (e) {
-                  this.logger.error(`[ZDisplayOrchestrator] zMenu option render error (${optKey}):`, e);
-                }
-              }
-            }
-          });
-
-          li.appendChild(btn);
-          ul.appendChild(li);
-        });
-
-        parentElement.appendChild(containerDiv);
-        continue;
       }
 
       // Handle list/array values (sequential zDisplay events, zDialog forms, OR menus)
@@ -604,6 +549,88 @@ export class ZDisplayOrchestrator {
       }
     }
     return el;
+  }
+
+  /**
+   * Unified zMenu block renderer — single code path for both longhand zMenu key
+   * and ~Key* shorthand. menuValue = { title, options: [...], [optKey]: content, ... }
+   */
+  async _renderZMenuBlock(menuKey, menuValue, parentElement, keyPath) {
+    this.logger.debug('[ZDisplayOrchestrator] Rendering zMenu block:', menuKey);
+    const options = Array.isArray(menuValue.options) ? menuValue.options : [];
+    const title = menuValue.title || null;
+
+    const containerDiv = document.createElement('div');
+    containerDiv.setAttribute('data-zkey', menuKey);
+    containerDiv.setAttribute('id', menuKey);
+
+    if (title) {
+      const titleEl = document.createElement('p');
+      titleEl.className = 'zText-muted zSmall zmb-1';
+      titleEl.textContent = title;
+      containerDiv.appendChild(titleEl);
+    }
+
+    const nav = document.createElement('nav');
+    nav.className = 'zMenu-nav zmb-2';
+    nav.setAttribute('role', 'menu');
+    if (title) nav.setAttribute('aria-label', title);
+
+    const ul = document.createElement('ul');
+    ul.className = 'zNavbar-nav zd-flex zflex-column zgap-1 list-unstyled zm-0 zp-0';
+    nav.appendChild(ul);
+    containerDiv.appendChild(nav);
+
+    const placeholders = {};
+    options.forEach(optKey => {
+      const ph = document.createElement('div');
+      ph.className = 'zMenu-option-content';
+      ph.style.display = 'none';
+      ph.dataset.menuContent = optKey;
+      placeholders[optKey] = ph;
+      containerDiv.appendChild(ph);
+    });
+
+    options.forEach((optKey, idx) => {
+      const li = document.createElement('li');
+      li.className = 'zNav-item';
+
+      const btn = document.createElement('button');
+      btn.className = 'zNav-link zBtn w-100 text-start zp-2';
+      btn.setAttribute('role', 'menuitem');
+      btn.dataset.key = optKey;
+      btn.innerHTML = `<span class="zBadge zBadge-secondary me-2">${idx + 1}</span>${optKey.replace(/_/g, ' ')}`;
+
+      btn.addEventListener('click', async () => {
+        ul.querySelectorAll('button[data-key]').forEach(b => b.classList.remove('active'));
+        options.forEach(k => {
+          const ph = placeholders[k];
+          if (ph) { ph.style.display = 'none'; ph.innerHTML = ''; delete ph.dataset.rendered; }
+        });
+
+        btn.classList.add('active');
+
+        const tail = options.slice(idx);
+        for (const opt of tail) {
+          const ph = placeholders[opt];
+          if (!ph) continue;
+          ph.style.display = 'block';
+          if (menuValue[opt]) {
+            ph.dataset.rendered = '1';
+            try {
+              await this.renderItems({ [opt]: menuValue[opt] }, ph, [...keyPath, menuKey]);
+            } catch (e) {
+              this.logger.error(`[ZDisplayOrchestrator] zMenu option render error (${opt}):`, e);
+            }
+          }
+        }
+      });
+
+      li.appendChild(btn);
+      ul.appendChild(li);
+    });
+
+    parentElement.appendChild(containerDiv);
   }
 
   /**
