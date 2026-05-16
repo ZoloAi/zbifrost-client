@@ -1361,10 +1361,43 @@ class BifrostCore {
         this.logger.warn(`[zDelta] No zVaFile/zVaFolder in zuiConfig — cannot hop to block: ${blockName}`);
         return;
       }
-      this.logger.log(`[zDelta] Block hop: ${zVaFile} → ${blockName}`);
+      // Track current block for zBack before hopping
+      this._prevBlock = this._currentBlock || this.options.zBlock || null;
+      this._currentBlock = blockName;
+      this.logger.log(`[zDelta] Block hop: ${zVaFile} → ${blockName} (prev: ${this._prevBlock})`);
       return this.send({
         event: 'execute_walker',
         zBlock: blockName,
+        zVaFile,
+        zVaFolder
+      });
+    }
+
+    /**
+     * Navigate back to the previous block (intra-file).
+     * Mirrors CLI zBack semantics — pops one level from the block navigation history.
+     * Falls back to browser history.back() if no block history is available.
+     */
+    async zBack() {
+      const prevBlock = this._prevBlock;
+      if (!prevBlock) {
+        this.logger.log('[zBack] No previous block tracked — falling back to browser history');
+        window.history.back();
+        return;
+      }
+      const zVaFile = this.zuiConfig?.zVaFile;
+      const zVaFolder = this.zuiConfig?.zVaFolder;
+      if (!zVaFile || !zVaFolder) {
+        this.logger.warn('[zBack] No zVaFile/zVaFolder — falling back to browser history');
+        window.history.back();
+        return;
+      }
+      this.logger.log(`[zBack] Returning to block: ${prevBlock}`);
+      this._currentBlock = prevBlock;
+      this._prevBlock = null;
+      return this.send({
+        event: 'execute_walker',
+        zBlock: prevBlock,
         zVaFile,
         zVaFolder
       });

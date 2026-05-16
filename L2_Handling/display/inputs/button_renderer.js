@@ -277,6 +277,16 @@ export default class ButtonRenderer {
         return;
       }
 
+      // zBack action — navigate back one block, mirrors CLI semantics
+      if (action === 'zBack') {
+        this.logger.log('[ButtonRenderer] zBack action — navigating back');
+        const client = this.client || window.bifrostClient;
+        if (client?.zBack) {
+          client.zBack();
+        }
+        return;
+      }
+
       // zDelta action — intra-file block hop, mirrors CLI semantics
       if (action && (action.startsWith('zDelta(') || action.startsWith('$'))) {
         const blockName = action.startsWith('zDelta(')
