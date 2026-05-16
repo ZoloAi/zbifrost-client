@@ -446,6 +446,17 @@ export class NavigationRenderer {
    */
   _deriveZpathLabels(paths) {
     if (!paths || paths.length === 0) return [];
+    // resolve_zpath_references converts @.UI.* zPaths to HTTP routes before the chunk is
+    // sent to Bifrost (e.g. @.UI.zProducts.zUI.zOS.zOS → /zProducts/zOS).
+    // URL paths have no '.' separators, so the dot-split algorithm yields empty strings.
+    // Detect URL-format paths and derive labels from the last non-empty path segment instead.
+    if (paths[0] && paths[0].startsWith('/')) {
+      return paths.map(p => {
+        const segs = p.split('/').filter(Boolean);
+        return segs.length > 0 ? segs[segs.length - 1] : p;
+      });
+    }
+    // zPath strings (@.UI.* not yet resolved): minimum-depth uniqueness algorithm
     const stripped = paths.map(p => p.split('#')[0]);
     const parts = stripped.map(p => p.split('.'));
     const maxDepth = Math.max(...parts.map(p => p.length));
@@ -467,7 +478,9 @@ export class NavigationRenderer {
     if (!folder && !file) return [];
     // "@.UI.zProducts.zOS.Events" → strip root prefix → "UI.zProducts.zOS.Events" → split → drop mount root
     const folderParts = folder.replace(/^[@~]\./, '').split('.');
-    const segments = folderParts.slice(1).filter(Boolean);
+    // Keep only z-prefixed segments (named sections like zProducts, zOS).
+    // Plain organizational folders (Events, UI, etc.) are file-system details, not nav levels.
+    const segments = folderParts.slice(1).filter(p => p && p.startsWith('z'));
     const fileLabel = file.startsWith('zUI.') ? file.slice(4) : file;
     return [...segments, ...(fileLabel ? [fileLabel] : [])];
   }
@@ -576,13 +589,13 @@ export class NavigationRenderer {
           };
           li.appendChild(a);
         } else {
-          // disabled link — visual breadcrumb, not navigable
+          // disabled link — same visual as zMenu:true but non-clickable
           const a = createLink('#', {
-            class: 'zText-muted',
             'aria-disabled': 'true',
             tabindex: '-1'
           });
           a.style.pointerEvents = 'none';
+          a.style.cursor = 'default';
           a.textContent = this._formatLabel(label);
           li.appendChild(a);
         }
@@ -603,13 +616,13 @@ export class NavigationRenderer {
           };
           li.appendChild(a);
         } else {
-          // zMenu: false (default) → disabled link (visual only)
+          // zMenu: false (default) → disabled link (same visual, non-clickable)
           const a = createLink(href, {
-            class: 'zText-muted',
             'aria-disabled': 'true',
             tabindex: '-1'
           });
           a.style.pointerEvents = 'none';
+          a.style.cursor = 'default';
           a.textContent = this._formatLabel(label);
           li.appendChild(a);
         }
