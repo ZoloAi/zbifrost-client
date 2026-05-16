@@ -277,6 +277,19 @@ export default class ButtonRenderer {
         return;
       }
 
+      // zDelta action — intra-file block hop, mirrors CLI semantics
+      if (action && (action.startsWith('zDelta(') || action.startsWith('$'))) {
+        const blockName = action.startsWith('zDelta(')
+          ? action.slice(7, -1).replace(/^\$/, '').trim()
+          : action.slice(1).trim();
+        this.logger.log(`[ButtonRenderer] zDelta action — block hop to: ${blockName}`);
+        const client = this.client || window.bifrostClient;
+        if (client?.zDelta) {
+          client.zDelta(blockName);
+        }
+        return;
+      }
+
       // For regular buttons (type="button"), check if it has an action
       if (action && action.startsWith('&')) {
         this.logger.log(`[ButtonRenderer] Button has plugin action - collecting wizard values`);

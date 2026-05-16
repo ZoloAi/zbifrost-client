@@ -1349,6 +1349,28 @@ class BifrostCore {
     }
 
     /**
+     * Intra-file block hop — re-execute a different block from the same file.
+     * Same route, same zVaFile/zVaFolder, different zBlock streamed into the container.
+     * Mirrors CLI zDelta semantics client-side.
+     * @param {string} blockName - target block name ($ prefix already stripped)
+     */
+    async zDelta(blockName) {
+      const zVaFile = this.zuiConfig?.zVaFile;
+      const zVaFolder = this.zuiConfig?.zVaFolder;
+      if (!zVaFile || !zVaFolder) {
+        this.logger.warn(`[zDelta] No zVaFile/zVaFolder in zuiConfig — cannot hop to block: ${blockName}`);
+        return;
+      }
+      this.logger.log(`[zDelta] Block hop: ${zVaFile} → ${blockName}`);
+      return this.send({
+        event: 'execute_walker',
+        zBlock: blockName,
+        zVaFile,
+        zVaFolder
+      });
+    }
+
+    /**
      * Convert a zLink path to a Bifrost URL route.
      * Pattern: @.UI.<Folders>.zUI.<PageName>.<Block> → /<Folders>/<PageName>
      * @param {string} path
