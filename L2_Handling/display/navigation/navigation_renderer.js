@@ -485,14 +485,16 @@ export class NavigationRenderer {
     // Helper: build trail items into an <ol>
     const formatCrumbLabel = (item) => item.replace(/_/g, ' ');
 
+    // Extract readable block name from full scope path (e.g. "@.UI.zProducts.zOS.Events.zUI.zNavigation.Demo_zCrumbs" → "Demo_zCrumbs")
+    const scopeLabel = (scope) => scope.includes('.') ? scope.split('.').pop() : scope;
+
     const buildTrailOl = (scope, trail) => {
       const ol = createList(true, { class: 'zBreadcrumb' });
       
       if (trail.length === 0) {
-        // Empty trail: show just the scope name (like Terminal: "scope[]")
         const li = createListItem({ class: 'zBreadcrumb-item zActive' });
         li.setAttribute('aria-current', 'page');
-        li.textContent = `${scope}[]`;
+        li.textContent = scopeLabel(scope);
         ol.appendChild(li);
       } else {
         trail.forEach((item, index) => {
@@ -544,7 +546,7 @@ export class NavigationRenderer {
       if (!Array.isArray(trail)) return null;
       
       const nav = createNav({
-        'aria-label': `${scope} breadcrumb`,
+        'aria-label': `${scopeLabel(scope)} breadcrumb`,
         'class': 'zmb-3'  // Margin on nav directly
       });
       
@@ -562,10 +564,10 @@ export class NavigationRenderer {
       if (!Array.isArray(trail)) return;
       
       // Add scope label for multi-trail displays
-      const scopeLabel = createSpan({ class: 'zText-muted zSmall zFw-bold zD-block' });
-      scopeLabel.textContent = `${scope}:`;
-      scopeLabel.style.marginBottom = '0.25rem';
-      container.appendChild(scopeLabel);
+      const label = createSpan({ class: 'zText-muted zSmall zFw-bold zD-block' });
+      label.textContent = `${scopeLabel(scope)}:`;
+      label.style.marginBottom = '0.25rem';
+      container.appendChild(label);
       
       const nav = createNav({ 'aria-label': `${scope} breadcrumb` });
       nav.appendChild(buildTrailOl(scope, trail));
