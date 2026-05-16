@@ -1329,15 +1329,44 @@ class BifrostCore {
     }
 
     /**
-     * Navigate to a zLink path
-     * @param {string} path - zLink navigation path
+     * Navigate to a zLink path.
+     * Resolves @.UI.* paths to Bifrost routes client-side (no backend walker needed).
+     * @param {string} path - zLink navigation path (@.UI.Folder.zUI.File.Block or raw URL)
      * @returns {Promise<any>}
      */
     async zLink(path) {
+      const url = this._zLinkPathToUrl(path);
+      if (url) {
+        this.logger.log(`[zLink] Navigating to: ${url} (from: ${path})`);
+        return this._navigateToRoute(url);
+      }
+      // Fallback: unknown path format — pass to backend
       return this.send({
+        event: 'dispatch',
         zKey: 'zLink',
         zHorizontal: `zLink(${path})`
       });
+    }
+
+    /**
+     * Convert a zLink path to a Bifrost URL route.
+     * Pattern: @.UI.<Folders>.zUI.<PageName>.<Block> → /<Folders>/<PageName>
+     * @param {string} path
+     * @returns {string|null}
+     */
+    _zLinkPathToUrl(path) {
+      if (!path.startsWith('@.UI.')) return null;
+      const inner = path.slice(5); // strip '@.UI.'
+      const parts = inner.split('.');
+      const zUIIdx = parts.indexOf('zUI');
+      if (zUIIdx === -1) {
+        // Folder-only path: @.UI.zProducts.zOS → /zProducts/zOS
+        return '/' + parts.join('/');
+      }
+      const folderParts = parts.slice(0, zUIIdx);       // e.g. ['Demos']
+      const pageNamePart = parts[zUIIdx + 1] || null;   // e.g. 'zNavigation_demo'
+      if (!pageNamePart) return null;
+      return '/' + [...folderParts, pageNamePart].join('/');
     }
 
     /**

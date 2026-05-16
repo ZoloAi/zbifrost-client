@@ -363,6 +363,16 @@ export class ZDisplayOrchestrator {
         }
       }
 
+      // zLink: fire navigation immediately — mirrors CLI redirect semantics
+      if (key === 'zLink') {
+        const path = typeof value === 'string' ? value : (value.zLink || '');
+        if (path) {
+          this.logger.debug(`[ZDisplayOrchestrator] zLink redirect: ${path}`);
+          this.client.zLink(path);
+        }
+        continue;
+      }
+
       // zMenu: route through unified renderer (same path as ~* shorthand)
       if (key === 'zMenu') {
         await this._renderZMenuBlock(key, value, parentElement, keyPath);

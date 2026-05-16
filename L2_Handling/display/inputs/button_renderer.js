@@ -266,6 +266,17 @@ export default class ButtonRenderer {
         return;
       }
 
+      // zLink action — auto-redirect, mirrors CLI semantics
+      if (action && action.startsWith('zLink(')) {
+        const path = action.slice(6, -1).trim();
+        this.logger.log(`[ButtonRenderer] zLink action — navigating to: ${path}`);
+        const client = this.client || window.bifrostClient;
+        if (client?.zLink) {
+          client.zLink(path);
+        }
+        return;
+      }
+
       // For regular buttons (type="button"), check if it has an action
       if (action && action.startsWith('&')) {
         this.logger.log(`[ButtonRenderer] Button has plugin action - collecting wizard values`);
