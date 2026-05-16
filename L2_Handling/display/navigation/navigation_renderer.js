@@ -438,144 +438,194 @@ export class NavigationRenderer {
    * @returns {HTMLElement|null} - nav element (single trail) or container div (multi-trail)
    * @see zOS/zTheme/Manual/ztheme-breadcrumb.html
    */
+  /**
+   * Derive display labels from an array of zPaths using minimum-depth uniqueness.
+   * Mirrors the Python _derive_zpath_labels logic for Bifrost-side label rendering.
+   * @param {string[]} paths - Array of zPath strings (may include #N suffixes)
+   * @returns {string[]} - Unique display labels at minimum consistent depth
+   */
+  _deriveZpathLabels(paths) {
+    if (!paths || paths.length === 0) return [];
+    const stripped = paths.map(p => p.split('#')[0]);
+    const parts = stripped.map(p => p.split('.'));
+    const maxDepth = Math.max(...parts.map(p => p.length));
+    for (let depth = 2; depth < maxDepth; depth++) {
+      const labels = parts.map(p => p.slice(-depth).join('.'));
+      if (new Set(labels).size === labels.length) return labels;
+    }
+    return parts.map(p => p.slice(1).join('.'));
+  }
+
+  /**
+   * Derive structure trail from the client's current page context.
+   * Reads zVaFolder + zVaFile from bifrostClient.zuiConfig — the runtime SSOT.
+   * @returns {string[]} - Folder segments + file label (e.g. ['zProducts','zOS','Events','zNavigation'])
+   */
+  _deriveStructureTrail() {
+    const folder = this.client?.zuiConfig?.zVaFolder || '';
+    const file   = this.client?.zuiConfig?.zVaFile   || '';
+    if (!folder && !file) return [];
+    // "@.UI.zProducts.zOS.Events" → strip root prefix → "UI.zProducts.zOS.Events" → split → drop mount root
+    const folderParts = folder.replace(/^[@~]\./, '').split('.');
+    const segments = folderParts.slice(1).filter(Boolean);
+    const fileLabel = file.startsWith('zUI.') ? file.slice(4) : file;
+    return [...segments, ...(fileLabel ? [fileLabel] : [])];
+  }
+
+  _formatLabel(item) {
+    return String(item).replace(/_/g, ' ');
+  }
+
+  /**
+   * Render breadcrumbs from a zCrumbs display event.
+   *
+   * Bifrost receives the raw expander display_data: {event, show, header, trail?, parent?}
+   * — the Python zCrumbs() method does NOT run in Bifrost mode (chunks are pre-built).
+   * All derivation (labels, structure trail) must happen here in JS.
+   *
+   * Modes:
+   *   manual    — trail[] of zPaths in eventData; derive labels; ancestors are zLink clickable
+   *   structure — derive trail from client.zuiConfig.zVaFolder/zVaFile; ancestors display-only
+   *   session   — crumbs from separate try_gui_event payload (crumbs key) if present; else empty
+   *   static    — legacy: parent dot-path in eventData; display-only ancestors
+   *
+   * @param {Object} eventData - Raw event from backend: {event, show, trail?, parent?, crumbs?}
+   * @returns {HTMLElement|null}
+   */
   renderBreadcrumbs(eventData) {
-    // Extract crumbs data from event (backend sends in _KEY_CRUMBS or crumbs)
     this.logger.debug('[NavigationRenderer] renderBreadcrumbs called', eventData);
-    
-    let crumbsData = eventData.crumbs || eventData._KEY_CRUMBS || {};
-    this.logger.debug('[NavigationRenderer] Extracted crumbsData', crumbsData);
-    
-    // NEW: Handle static mode - build trails from parent parameter
-    if (eventData.show === 'static' && eventData.parent && !crumbsData.trails) {
-      this.logger.debug('[NavigationRenderer] Static mode, building trails from parent', eventData.parent);
-      const parentParts = eventData.parent.split('.');
 
-      // Derive current page from URL (e.g. /zProducts/zOS/Install → 'Install')
-      const urlParts = window.location.pathname.split('/').filter(Boolean);
-      const urlCurrentPage = urlParts[urlParts.length - 1];
-      const lastParent = parentParts[parentParts.length - 1];
-      if (urlCurrentPage && urlCurrentPage.toLowerCase() !== lastParent.toLowerCase()) {
-        parentParts.push(urlCurrentPage);
+    const show    = eventData.show || 'session';
+    const zMenu   = eventData.zMenu === true || eventData.zMenu === 'true';
+    let displayLabels  = [];
+    let navPaths       = null;  // zPaths for manual mode
+    let structureSegs  = null;  // raw URL segments for structure mode
+
+    if (show === 'manual') {
+      // trail: array of zPaths injected by the expander
+      const rawPaths = (eventData.trail || []).map(p => String(p).trim().replace(/^["']|["']$/g, ''));
+      if (!rawPaths.length) return null;
+      displayLabels = this._deriveZpathLabels(rawPaths);
+      navPaths = rawPaths;
+      this.logger.debug('[NavigationRenderer] manual mode, labels:', displayLabels);
+
+    } else if (show === 'structure') {
+      // Derive from current page context — raw segments double as URL path parts
+      structureSegs = this._deriveStructureTrail();
+      if (!structureSegs.length) return null;
+      displayLabels = structureSegs;
+      this.logger.debug('[NavigationRenderer] structure mode, zMenu=%s, trail:', zMenu, displayLabels);
+
+    } else if (show === 'session') {
+      // Session crumbs come via a separate try_gui_event payload (crumbs key)
+      // if the Python backend sent them; otherwise return null (no history yet)
+      const crumbsData = eventData.crumbs || {};
+      const trails = crumbsData.trails || {};
+      const visibleTrails = Object.entries(trails).filter(([k]) => !k.startsWith('_'));
+      if (!visibleTrails.length) {
+        this.logger.debug('[NavigationRenderer] session mode: no crumbs data, skipping');
+        return null;
       }
+      displayLabels = visibleTrails[0][1];
+      this.logger.debug('[NavigationRenderer] session mode, labels:', displayLabels);
 
-      crumbsData = {
-        trails: {
-          declarative: parentParts
-        },
-        _source: 'declarative',
-        _parent: eventData.parent
-      };
-      this.logger.debug('[NavigationRenderer] Built crumbsData from parent', crumbsData);
+    } else if (show === 'static') {
+      // Legacy: parent dot-path → display-only label trail
+      const parent = eventData.parent || '';
+      if (!parent) return null;
+      displayLabels = parent.split('.');
+      this.logger.debug('[NavigationRenderer] static (legacy) mode, labels:', displayLabels);
     }
-    
-    const trails = crumbsData.trails || {};
-    this.logger.debug('[NavigationRenderer] Extracted trails', trails);
-    
-    // Filter out internal metadata (_context, _depth_map)
-    const visibleTrails = Object.entries(trails).filter(([key]) => !key.startsWith('_'));
-    this.logger.debug('[NavigationRenderer] Visible trails', visibleTrails);
-    
-    if (visibleTrails.length === 0) {
-      this.logger.debug('[NavigationRenderer] No visible breadcrumb trails');
-      return null; // No breadcrumbs to display
-    }
-    
-    this.logger.debug('[NavigationRenderer] Rendering %s breadcrumb trails', visibleTrails.length);
-    
-    // Helper: build trail items into an <ol>
-    const formatCrumbLabel = (item) => item.replace(/_/g, ' ');
 
-    // Extract readable block name from full scope path (e.g. "@.UI.zProducts.zOS.Events.zUI.zNavigation.Demo_zCrumbs" → "Demo_zCrumbs")
-    const scopeLabel = (scope) => scope.includes('.') ? scope.split('.').pop() : scope;
+    if (!displayLabels || !displayLabels.length) return null;
 
-    const buildTrailOl = (scope, trail) => {
-      const ol = createList(true, { class: 'zBreadcrumb' });
-      
-      if (trail.length === 0) {
-        const li = createListItem({ class: 'zBreadcrumb-item zActive' });
-        li.setAttribute('aria-current', 'page');
-        li.textContent = scopeLabel(scope);
-        ol.appendChild(li);
-      } else {
-        trail.forEach((item, index) => {
-          const isLast = (index === trail.length - 1);
-          const li = createListItem({ 
-            class: isLast ? 'zBreadcrumb-item zActive' : 'zBreadcrumb-item'
-          });
-          
-          if (isLast) {
-            li.setAttribute('aria-current', 'page');
-            li.textContent = formatCrumbLabel(item);
-          } else {
-            // Parent pages - clickable links with navigation
-            const cumulativePath = trail.slice(0, index + 1).join('.');
-            const routePath = '/' + cumulativePath.replace(/\./g, '/');
-            
-            const a = createLink('#', {});
-            a.textContent = formatCrumbLabel(item);
-            a.onclick = async (e) => {
-              e.preventDefault();
-              this.logger.log(`[Breadcrumbs] Navigating to: ${routePath}`);
-              
-              if (this.client && this.client.navigationManager) {
-                try {
-                  await this.client.navigationManager.navigateToRoute(routePath);
-                } catch (error) {
-                  this.logger.error('[Breadcrumbs] Navigation failed:', error);
-                }
-              } else {
-                this.logger.warn('[Breadcrumbs] No navigationManager available');
-              }
-            };
-            li.appendChild(a);
-          }
-          
-          ol.appendChild(li);
-        });
-      }
-      
-      return ol;
-    };
-    
-    // 
-    // SINGLE TRAIL: Return <nav> directly (no wrapper div)
-    // This treats zCrumbs like zH1 - semantic element is the root
-    // 
-    if (visibleTrails.length === 1) {
-      const [scope, trail] = visibleTrails[0];
-      if (!Array.isArray(trail)) return null;
-      
-      const nav = createNav({
-        'aria-label': `${scopeLabel(scope)} breadcrumb`,
-        'class': 'zmb-3'  // Margin on nav directly
+    // Build nav > ol.zBreadcrumb
+    const nav = createNav({ 'aria-label': `${show} breadcrumb`, class: 'zmb-3' });
+    const ol  = createList(true, { class: 'zBreadcrumb' });
+
+    displayLabels.forEach((label, index) => {
+      const isLast = index === displayLabels.length - 1;
+      const li = createListItem({
+        class: isLast ? 'zBreadcrumb-item zActive' : 'zBreadcrumb-item'
       });
-      
-      nav.appendChild(buildTrailOl(scope, trail));
-      this.logger.debug('[NavigationRenderer] Single trail, no wrapper');
-      return nav;
-    }
-    
-    // 
-    // MULTI-TRAIL: Keep container div for multiple navs + scope labels
-    // 
-    const container = createDiv({ class: 'zBreadcrumbs-container zmb-3' });
-    
-    visibleTrails.forEach(([scope, trail]) => {
-      if (!Array.isArray(trail)) return;
-      
-      // Add scope label for multi-trail displays
-      const label = createSpan({ class: 'zText-muted zSmall zFw-bold zD-block' });
-      label.textContent = `${scopeLabel(scope)}:`;
-      label.style.marginBottom = '0.25rem';
-      container.appendChild(label);
-      
-      const nav = createNav({ 'aria-label': `${scope} breadcrumb` });
-      nav.appendChild(buildTrailOl(scope, trail));
-      container.appendChild(nav);
+
+      if (isLast) {
+        li.setAttribute('aria-current', 'page');
+        li.textContent = this._formatLabel(label);
+      } else if (show === 'manual' && navPaths && navPaths[index]) {
+        // manual ancestors: zMenu: true → clickable zLink; zMenu: false → disabled link
+        const zPath = navPaths[index];
+        if (zMenu) {
+          const a = createLink('#', {});
+          a.textContent = this._formatLabel(label);
+          a.onclick = async (e) => {
+            e.preventDefault();
+            this.logger.log(`[Breadcrumbs] zLink → ${zPath}`);
+            if (this.client) {
+              try {
+                if (typeof this.client.zLink === 'function') {
+                  await this.client.zLink(zPath);
+                } else if (this.client.navigationManager) {
+                  const url = this.client._zLinkPathToUrl?.(zPath) || zPath;
+                  await this.client.navigationManager.navigateToRoute(url);
+                }
+              } catch (err) {
+                this.logger.error('[Breadcrumbs] zLink failed:', err);
+              }
+            }
+          };
+          li.appendChild(a);
+        } else {
+          // disabled link — visual breadcrumb, not navigable
+          const a = createLink('#', {
+            class: 'zText-muted',
+            'aria-disabled': 'true',
+            tabindex: '-1'
+          });
+          a.style.pointerEvents = 'none';
+          a.textContent = this._formatLabel(label);
+          li.appendChild(a);
+        }
+      } else if (show === 'structure' && structureSegs) {
+        // structure ancestors: cumulative URL path from folder segments
+        const href = '/' + structureSegs.slice(0, index + 1).join('/');
+        if (zMenu) {
+          // zMenu: true → real navigable link
+          const a = createLink(href, {});
+          a.textContent = this._formatLabel(label);
+          a.onclick = (e) => {
+            e.preventDefault();
+            if (this.client?.navigationManager) {
+              this.client.navigationManager.navigateToRoute(href);
+            } else {
+              window.location.href = href;
+            }
+          };
+          li.appendChild(a);
+        } else {
+          // zMenu: false (default) → disabled link (visual only)
+          const a = createLink(href, {
+            class: 'zText-muted',
+            'aria-disabled': 'true',
+            tabindex: '-1'
+          });
+          a.style.pointerEvents = 'none';
+          a.textContent = this._formatLabel(label);
+          li.appendChild(a);
+        }
+      } else {
+        // session / static ancestors: display-only span
+        const span = createSpan({ class: 'zText-muted' });
+        span.textContent = this._formatLabel(label);
+        li.appendChild(span);
+      }
+
+      ol.appendChild(li);
     });
-    
-    this.logger.debug('[NavigationRenderer] Multi-trail container');
-    return container;
+
+    nav.appendChild(ol);
+    this.logger.debug('[NavigationRenderer] Rendered breadcrumbs (%s mode, %s items)', show, displayLabels.length);
+    return nav;
   }
 
   /**
