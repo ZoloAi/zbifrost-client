@@ -38,6 +38,16 @@ export class ZDisplayOrchestrator {
     this.groupRenderer = new GroupRenderer(client, this.logger, this, this.metadataProcessor);
     this.containerUnwrapper = new ContainerUnwrapper(this.logger);
     this.inputEventHandler = new InputEventHandler(client, this.logger);
+
+    // Map of zfunc requestId → { inputEl, sendResponse } for in-flight input prompts
+    this._pendingZFuncInputs = new Map();
+
+    // Register WebSocket hooks for zFunc execution
+    client.hooks.register('onZFuncInput', (msg) => this._handleZFuncInput(msg));
+    client.hooks.register('onZFuncResponse', (msg) => this._handleZFuncResponse(msg));
+
+    // Map of zfunc requestId → resolve callback (for _executeZFunc promise)
+    this._zfuncResolvers = new Map();
   }
 
   /**
@@ -288,10 +298,16 @@ export class ZDisplayOrchestrator {
     // 
 
     // Track option keys that belong to a ~* menu — skip their sibling content rendering
+    // Include modifier-prefixed variants (^opt, $opt) used for bounce/anchor semantics
     const menuOptionKeys = new Set();
     for (const [k, v] of Object.entries(data)) {
       if (k.startsWith('~') && k.includes('*') && Array.isArray(v)) {
-        v.forEach(opt => typeof opt === 'string' && menuOptionKeys.add(opt));
+        v.forEach(opt => {
+          if (typeof opt !== 'string') return;
+          menuOptionKeys.add(opt);
+          menuOptionKeys.add('^' + opt);
+          menuOptionKeys.add('$' + opt);
+        });
       }
     }
 
@@ -310,10 +326,19 @@ export class ZDisplayOrchestrator {
         // Expand to zMenu structure using sibling content — SSOT: identical to longhand zMenu
         if (key.includes('*') && Array.isArray(value) && value.every(item => typeof item === 'string')) {
           const cleanKey = key.replace(/[~*^$]/g, '').trim();
+          // Track which options came from ^-prefixed keys (bounce semantics in Bifrost)
+          const bounceOptions = new Set(
+            value.filter(opt => typeof opt === 'string' && data['^' + opt] !== undefined)
+          );
           const menuValue = {
             title: cleanKey.replace(/_/g, ' '),
             options: value,
-            ...Object.fromEntries(value.map(opt => [opt, data[opt]]).filter(([, v]) => v !== undefined)),
+            bounceOptions,
+            // Option content may be stored under ^opt ($opt, opt) — try all modifier variants
+            ...Object.fromEntries(value.map(opt => {
+              const val = data[opt] ?? data['^' + opt] ?? data['$' + opt] ?? data['~' + opt];
+              return [opt, val];
+            }).filter(([, v]) => v !== undefined)),
           };
           await this._renderZMenuBlock(cleanKey, menuValue, parentElement, keyPath);
           continue;
@@ -376,6 +401,39 @@ export class ZDisplayOrchestrator {
       // zMenu: route through unified renderer (same path as ~* shorthand)
       if (key === 'zMenu') {
         await this._renderZMenuBlock(key, value, parentElement, keyPath);
+        continue;
+      }
+
+      // zFunc: execute a @zfunc plugin call and render result inline
+      if (key === 'zFunc' || key === 'zfunc') {
+        const funcStr = typeof value === 'string' ? value : String(value);
+        await this._executeZFunc(funcStr, parentElement);
+        continue;
+      }
+
+      // zH0–zH6 shorthand: stored as raw YAML in menu option content (not pre-expanded)
+      const headerShorthand = key.match(/^zH([0-6])$/);
+      if (headerShorthand) {
+        const indent = parseInt(headerShorthand[1]);
+        const label = typeof value === 'string'
+          ? value
+          : (value?.label || value?.content || key.replace(/_/g, ' '));
+        const hEvt = { event: 'header', label, indent };
+        if (value?.color) hEvt.color = value.color;
+        const el = await this.renderZDisplayEvent(hEvt, parentElement);
+        if (el) parentElement.appendChild(el);
+        continue;
+      }
+
+      // zText shorthand: inline text paragraph — render directly, no event dispatch
+      if (key === 'zText' && value) {
+        const content = typeof value === 'string' ? value : (value?.content || '');
+        const color = value?.color;
+        const p = document.createElement('p');
+        p.className = 'zText zmy-1';
+        p.textContent = content;
+        if (color) p.classList.add(`zText-${color.toLowerCase()}`);
+        parentElement.appendChild(p);
         continue;
       }
 
@@ -493,23 +551,20 @@ export class ZDisplayOrchestrator {
           containerDiv.appendChild(formElement);
         }
       } else if (value && typeof value === 'object' && Object.keys(value).length > 0) {
-        {
-          // If it's an object with nested keys (implicit wizard or server-expanded shorthand), recurse.
-          // Python pre-expands all shorthands (singular and plural) before sending.
-          // Singular: {zH1: {event:'header',...}} → recurse → inner key hits value.event path above.
-          // Plural: zBtns/zInputs expanded to individual items by expand_chunk_shorthands (Phase 5).
-          // DEBUG: Log organizational containers
+          // Nested structure — pre-append to parent BEFORE recursing so that any
+          // async children (e.g. _executeZFunc) can find DOM elements via querySelector
+          // or direct reference while the tree is being built.
           if (key.startsWith('_')) {
             this.logger.log(` [NON-GROUP] Processing organizational container: ${key}, nested keys:`, Object.keys(value));
           } else {
             this.logger.debug(`[ZDisplayOrchestrator] Recursing into nested object: %s`, key, Object.keys(value));
           }
-          // Nested structure - render children recursively
+          parentElement.appendChild(containerDiv);
           await this.renderItems(value, containerDiv, keyPath);
           if (key.startsWith('_') && containerDiv.children.length > 0) {
             this.logger.log(`[NON-GROUP] Rendered organizational container ${key} with ${containerDiv.children.length} children`);
           }
-        }
+          continue; // already appended — skip deferred append below
       }
 
       // Append container to parent if it has children OR if it carries its own
@@ -568,6 +623,7 @@ export class ZDisplayOrchestrator {
   async _renderZMenuBlock(menuKey, menuValue, parentElement, keyPath) {
     this.logger.debug('[ZDisplayOrchestrator] Rendering zMenu block:', menuKey);
     const options = Array.isArray(menuValue.options) ? menuValue.options : [];
+    const bounceOptions = menuValue.bounceOptions instanceof Set ? menuValue.bounceOptions : new Set();
     const title = menuValue.title || null;
 
     const containerDiv = document.createElement('div');
@@ -601,6 +657,15 @@ export class ZDisplayOrchestrator {
       containerDiv.appendChild(ph);
     });
 
+    // Reset menu to neutral — deselect all buttons, hide all content
+    const resetMenu = () => {
+      ul.querySelectorAll('button[data-key]').forEach(b => b.classList.remove('active'));
+      options.forEach(k => {
+        const ph = placeholders[k];
+        if (ph) { ph.style.display = 'none'; ph.innerHTML = ''; delete ph.dataset.rendered; }
+      });
+    };
+
     options.forEach((optKey, idx) => {
       const li = document.createElement('li');
       li.className = 'zNav-item';
@@ -612,27 +677,57 @@ export class ZDisplayOrchestrator {
       btn.innerHTML = `<span class="zBadge zBadge-secondary me-2">${idx + 1}</span>${optKey.replace(/_/g, ' ')}`;
 
       btn.addEventListener('click', async () => {
-        ul.querySelectorAll('button[data-key]').forEach(b => b.classList.remove('active'));
-        options.forEach(k => {
-          const ph = placeholders[k];
-          if (ph) { ph.style.display = 'none'; ph.innerHTML = ''; delete ph.dataset.rendered; }
-        });
+        // Guard: prevent re-entry while a zfunc is already in-flight for this option
+        if (btn.dataset.zfuncInFlight === '1') return;
 
+        resetMenu();
         btn.classList.add('active');
 
-        const tail = options.slice(idx);
-        for (const opt of tail) {
-          const ph = placeholders[opt];
-          if (!ph) continue;
-          ph.style.display = 'block';
-          if (menuValue[opt]) {
-            ph.dataset.rendered = '1';
-            try {
-              await this.renderItems({ [opt]: menuValue[opt] }, ph, [...keyPath, menuKey]);
-            } catch (e) {
-              this.logger.error(`[ZDisplayOrchestrator] zMenu option render error (${opt}):`, e);
+        const ph = placeholders[optKey];
+        if (!ph) return;
+        ph.style.display = 'block';
+
+        if (!menuValue[optKey]) return;
+
+        ph.dataset.rendered = '1';
+        const isBounce = bounceOptions.has(optKey);
+
+        btn.dataset.zfuncInFlight = '1';
+        try {
+          // Temporarily override _executeZFunc to capture the zFunc result
+          // so we can decide whether to show the Back button.
+          let zfuncResult = null;
+          const origExecuteZFunc = this._executeZFunc.bind(this);
+          this._executeZFunc = async (funcStr, parentEl) => {
+            const result = await origExecuteZFunc(funcStr, parentEl);
+            zfuncResult = result;
+            return result;
+          };
+
+          await this.renderItems({ [optKey]: menuValue[optKey] }, ph, [...keyPath, menuKey]);
+
+          this._executeZFunc = origExecuteZFunc;
+
+          if (isBounce) {
+            // For ^ bounce options: show zBack button unless zFunc returned 'exit'
+            const shouldBack = zfuncResult === null       // no zFunc (ungated) — always show Back
+              || (zfuncResult !== 'exit' && zfuncResult !== false && zfuncResult !== null);
+
+            if (shouldBack) {
+              this._appendZBackButton(ph, resetMenu, btn);
+            } else {
+              // exit result: hide the content entirely
+              ph.style.display = 'none';
+              ph.innerHTML = '';
+              delete ph.dataset.rendered;
+              btn.classList.remove('active');
             }
           }
+        } catch (e) {
+          this._executeZFunc = origExecuteZFunc;
+          this.logger.error(`[ZDisplayOrchestrator] zMenu option render error (${optKey}):`, e);
+        } finally {
+          delete btn.dataset.zfuncInFlight;
         }
       });
 
@@ -641,6 +736,24 @@ export class ZDisplayOrchestrator {
     });
 
     parentElement.appendChild(containerDiv);
+  }
+
+  /**
+   * Append a "← Back" button to a menu option's content placeholder.
+   * Clicking it resets the menu to neutral (no active option, content hidden).
+   *
+   * @param {HTMLElement} ph         - The option content placeholder div
+   * @param {Function}    resetMenu  - Callback that deselects all options and hides content
+   * @param {HTMLElement} activeBtn  - The currently active menu button (used for aria state)
+   */
+  _appendZBackButton(ph, resetMenu, activeBtn) {
+    const backBtn = document.createElement('button');
+    backBtn.className = 'zBtn zBtn-sm zBtn-outline-secondary zmt-3';
+    backBtn.innerHTML = '← Back to menu';
+    backBtn.addEventListener('click', () => {
+      resetMenu();
+    }, { once: true });
+    ph.appendChild(backBtn);
   }
 
   /**
@@ -996,6 +1109,176 @@ export class ZDisplayOrchestrator {
     }
 
     return element;
+  }
+
+  // ─── zFunc execution ────────────────────────────────────────────────────────
+
+  /**
+   * Execute a @zfunc plugin call via WebSocket and render the result inline.
+   *
+   * Flow:
+   *   1. Render a spinner placeholder in parentElement
+   *   2. Send execute_zfunc { zfunc, requestId } over WebSocket
+   *   3. If the plugin calls input(), the backend emits request_input with
+   *      zfuncRequestId — handled by _handleZFuncInput (renders inline widget)
+   *   4. When the plugin finishes, backend sends execute_zfunc_response —
+   *      handled by _handleZFuncResponse (resolves the promise here)
+   *   5. Replace spinner with result text (or error)
+   *
+   * @param {string} funcStr  - Plugin invocation string, e.g. "&confirm.ask()"
+   * @param {HTMLElement} parentElement - DOM node to append output into
+   */
+  async _executeZFunc(funcStr, parentElement) {
+    if (!funcStr.startsWith('&')) {
+      this.logger.warn('[ZFunc] Skipping non-plugin zFunc value:', funcStr);
+      return;
+    }
+
+    const requestId = `zfunc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    // Spinner placeholder — replaced when response arrives
+    const wrapper = document.createElement('div');
+    wrapper.className = 'zfunc-wrapper zmy-2';
+    wrapper.dataset.zfuncRequestId = requestId;
+
+    const spinner = document.createElement('span');
+    spinner.className = 'zText-muted zSmall';
+    spinner.textContent = '⏳ Running…';
+    wrapper.appendChild(spinner);
+    parentElement.appendChild(wrapper);
+
+    // Register wrapper reference for _handleZFuncInput (direct ref, not DOM query)
+    this._pendingZFuncInputs.set(requestId, wrapper);
+
+    // Register resolve callback — _handleZFuncResponse will call it
+    const responsePromise = new Promise((resolve) => {
+      this._zfuncResolvers.set(requestId, resolve);
+    });
+
+    // Send execute_zfunc to backend
+    try {
+      this.client.connection.send(JSON.stringify({
+        event: 'execute_zfunc',
+        zfunc: funcStr,
+        requestId,
+      }));
+    } catch (err) {
+      this.logger.error('[ZFunc] Failed to send execute_zfunc:', err);
+      wrapper.innerHTML = `<span class="zText-danger zSmall">⚠ Failed to start: ${err.message}</span>`;
+      this._zfuncResolvers.delete(requestId);
+      return;
+    }
+
+    // Wait for backend response (resolved by _handleZFuncResponse)
+    const response = await responsePromise;
+
+    // Clean up pending reference
+    this._pendingZFuncInputs.delete(requestId);
+
+    // Clear spinner / input widget
+    wrapper.innerHTML = '';
+
+    if (response.success) {
+      if (response.result) {
+        const out = document.createElement('p');
+        out.className = 'zfunc-result zmy-1';
+        out.textContent = response.result;
+        wrapper.appendChild(out);
+      }
+    } else {
+      const err = document.createElement('span');
+      err.className = 'zText-danger zSmall';
+      err.textContent = `⚠ ${response.error || 'Unknown error'}`;
+      wrapper.appendChild(err);
+    }
+
+    // Return the plugin result so callers (e.g. _renderZMenuBlock) can decide
+    // whether to show a zBack button or hide the content (bounce vs exit semantics)
+    return response.success ? (response.result ?? null) : null;
+  }
+
+  /**
+   * Handle a request_input event scoped to a zFunc execution.
+   * Renders an inline prompt widget inside the matching zfunc-wrapper div.
+   *
+   * For y/n prompts: two buttons (Yes / No).
+   * For all other prompts: text input + Submit button.
+   *
+   * @param {Object} msg - WebSocket message with { requestId, prompt, zfuncRequestId }
+   */
+  _handleZFuncInput(msg) {
+    const { requestId, prompt, zfuncRequestId } = msg;
+
+    // Find wrapper via stored reference (direct ref avoids DOM query failure when
+    // the wrapper's ancestor container hasn't been appended to the document yet)
+    const wrapper = this._pendingZFuncInputs.get(zfuncRequestId)
+      || document.querySelector(`[data-zfunc-request-id="${zfuncRequestId}"]`);
+    if (!wrapper) {
+      this.logger.warn('[ZFunc] No wrapper found for zfuncRequestId:', zfuncRequestId);
+      return;
+    }
+
+    const sendResponse = (value) => {
+      this.client.connection.send(JSON.stringify({
+        event: 'input_response',
+        requestId,   // backend's input request_id (routes to _pending_inputs)
+        value,
+      }));
+      // Replace widget with "answered" indicator
+      inputArea.innerHTML = `<span class="zText-muted zSmall">↩ ${value}</span>`;
+    };
+
+    // Build input widget
+    const inputArea = document.createElement('div');
+    inputArea.className = 'zfunc-input-area zp-2 zmt-1';
+
+    const promptEl = document.createElement('p');
+    promptEl.className = 'zSmall zmb-1';
+    promptEl.textContent = prompt || 'Input required:';
+    inputArea.appendChild(promptEl);
+
+    // Generic zInput — SSOT: stdin maps to a plain text field regardless of prompt content
+    const row = document.createElement('div');
+    row.className = 'zd-flex zg-2 zalign-items-center';
+
+    const textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.className = 'zForm-control zForm-control-sm';
+    textInput.placeholder = 'Enter value…';
+
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'zBtn zBtn-sm zBtn-primary';
+    submitBtn.textContent = 'Submit';
+
+    const submit = () => sendResponse(textInput.value.trim());
+
+    submitBtn.addEventListener('click', submit, { once: true });
+    textInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submit();
+    }, { once: true });
+
+    row.appendChild(textInput);
+    row.appendChild(submitBtn);
+    inputArea.appendChild(row);
+
+    // Replace spinner with input widget
+    wrapper.innerHTML = '';
+    wrapper.appendChild(inputArea);
+  }
+
+  /**
+   * Handle execute_zfunc_response from backend — resolves the promise in _executeZFunc.
+   *
+   * @param {Object} msg - WebSocket message with { requestId, success, result?, error? }
+   */
+  _handleZFuncResponse(msg) {
+    const resolve = this._zfuncResolvers.get(msg.requestId);
+    if (!resolve) {
+      this.logger.warn('[ZFunc] No resolver found for requestId:', msg.requestId);
+      return;
+    }
+    this._zfuncResolvers.delete(msg.requestId);
+    resolve(msg);
   }
 
 }

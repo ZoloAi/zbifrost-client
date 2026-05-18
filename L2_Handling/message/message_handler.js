@@ -275,6 +275,13 @@ export class MessageHandler {
         return; // Handled internally by zDisplay
       }
 
+      // Handle execute_zfunc_response — resolves promise in ZDisplayOrchestrator._executeZFunc
+      if (message.event === 'execute_zfunc_response') {
+        this.logger.log('[MessageHandler] execute_zfunc_response received:', message.requestId);
+        this.hooks.call('onZFuncResponse', message);
+        return;
+      }
+
       // Handle execute_code_response for zTerminal
       if (message.event === 'execute_code_response') {
         this.logger.log('[MessageHandler] execute_code_response received:', message.requestId);
@@ -293,6 +300,13 @@ export class MessageHandler {
       // Handle request_input for zTerminal interactive input
       if (message.event === 'request_input') {
         this.logger.log('[MessageHandler] request_input received:', message.requestId, message.prompt, 'isPassword:', message.isPassword);
+
+        // zFunc execution: route to inline widget rendered by ZDisplayOrchestrator
+        if (message.zfuncRequestId) {
+          this.hooks.call('onZFuncInput', message);
+          return;
+        }
+
         // Route to TerminalRenderer's static handler
         const TerminalRenderer = window._TerminalRenderer;
         if (TerminalRenderer && TerminalRenderer.handleInputRequest) {
