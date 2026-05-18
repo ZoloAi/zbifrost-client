@@ -383,9 +383,22 @@ export default class TerminalRenderer {
       delete outputArea.dataset.executing;
 
       if (response.success) {
-        // Backend streamed all output in real-time — just clear the spinner
-        // if nothing arrived (truly empty execution).
-        if (outputArea.querySelector('.bi-hourglass-split')) {
+        // zUI mode: output was streamed in real-time via `output` events.
+        // Python mode: output is captured in a buffer and returned in response.output.
+        // Display batch output if present; otherwise fall back to "(no output)" if
+        // the spinner is still showing (meaning nothing was streamed either).
+        if (response.output && response.output.trim()) {
+          if (outputArea.querySelector('.bi-hourglass-split')) {
+            outputArea.innerHTML = '';
+          }
+          const helper = new TerminalRenderer({ log: () => {}, warn: () => {}, error: () => {}, debug: () => {} });
+          for (const line of response.output.split('\n')) {
+            const lineEl = document.createElement('div');
+            lineEl.style.color = '#e0e0e0';
+            lineEl.innerHTML = helper._cleanOutput(line);
+            outputArea.appendChild(lineEl);
+          }
+        } else if (outputArea.querySelector('.bi-hourglass-split')) {
           outputArea.innerHTML = '<span class="zText-muted"><i class="bi bi-info-circle"></i> (no output)</span>';
         }
       } else {
