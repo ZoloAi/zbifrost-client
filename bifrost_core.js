@@ -1329,15 +1329,99 @@ class BifrostCore {
     }
 
     /**
-     * Navigate to a zLink path
-     * @param {string} path - zLink navigation path
+     * Navigate to a zLink path.
+     * Resolves @.UI.* paths to Bifrost routes client-side (no backend walker needed).
+     * @param {string} path - zLink navigation path (@.UI.Folder.zUI.File.Block or raw URL)
      * @returns {Promise<any>}
      */
     async zLink(path) {
+      const url = this._zLinkPathToUrl(path);
+      if (url) {
+        this.logger.log(`[zLink] Navigating to: ${url} (from: ${path})`);
+        return this._navigateToRoute(url);
+      }
+      // Fallback: unknown path format — pass to backend
       return this.send({
+        event: 'dispatch',
         zKey: 'zLink',
         zHorizontal: `zLink(${path})`
       });
+    }
+
+    /**
+     * Intra-file block hop — re-execute a different block from the same file.
+     * Same route, same zVaFile/zVaFolder, different zBlock streamed into the container.
+     * Mirrors CLI zDelta semantics client-side.
+     * @param {string} blockName - target block name ($ prefix already stripped)
+     */
+    async zDelta(blockName) {
+      const zVaFile = this.zuiConfig?.zVaFile;
+      const zVaFolder = this.zuiConfig?.zVaFolder;
+      if (!zVaFile || !zVaFolder) {
+        this.logger.warn(`[zDelta] No zVaFile/zVaFolder in zuiConfig — cannot hop to block: ${blockName}`);
+        return;
+      }
+      // Track current block for zBack before hopping
+      this._prevBlock = this._currentBlock || this.options.zBlock || null;
+      this._currentBlock = blockName;
+      this.logger.log(`[zDelta] Block hop: ${zVaFile} → ${blockName} (prev: ${this._prevBlock})`);
+      return this.send({
+        event: 'execute_walker',
+        zBlock: blockName,
+        zVaFile,
+        zVaFolder
+      });
+    }
+
+    /**
+     * Navigate back to the previous block (intra-file).
+     * Mirrors CLI zBack semantics — pops one level from the block navigation history.
+     * Falls back to browser history.back() if no block history is available.
+     */
+    async zBack() {
+      const prevBlock = this._prevBlock;
+      if (!prevBlock) {
+        this.logger.log('[zBack] No previous block tracked — falling back to browser history');
+        window.history.back();
+        return;
+      }
+      const zVaFile = this.zuiConfig?.zVaFile;
+      const zVaFolder = this.zuiConfig?.zVaFolder;
+      if (!zVaFile || !zVaFolder) {
+        this.logger.warn('[zBack] No zVaFile/zVaFolder — falling back to browser history');
+        window.history.back();
+        return;
+      }
+      this.logger.log(`[zBack] Returning to block: ${prevBlock}`);
+      this._currentBlock = prevBlock;
+      this._prevBlock = null;
+      return this.send({
+        event: 'execute_walker',
+        zBlock: prevBlock,
+        zVaFile,
+        zVaFolder
+      });
+    }
+
+    /**
+     * Convert a zLink path to a Bifrost URL route.
+     * Pattern: @.UI.<Folders>.zUI.<PageName>.<Block> → /<Folders>/<PageName>
+     * @param {string} path
+     * @returns {string|null}
+     */
+    _zLinkPathToUrl(path) {
+      if (!path.startsWith('@.UI.')) return null;
+      const inner = path.slice(5); // strip '@.UI.'
+      const parts = inner.split('.');
+      const zUIIdx = parts.indexOf('zUI');
+      if (zUIIdx === -1) {
+        // Folder-only path: @.UI.zProducts.zOS → /zProducts/zOS
+        return '/' + parts.join('/');
+      }
+      const folderParts = parts.slice(0, zUIIdx);       // e.g. ['Demos']
+      const pageNamePart = parts[zUIIdx + 1] || null;   // e.g. 'zNavigation_demo'
+      if (!pageNamePart) return null;
+      return '/' + [...folderParts, pageNamePart].join('/');
     }
 
     /**
