@@ -197,7 +197,6 @@ export class FormRenderer {
           event: 'form_submit',
           dialogId: dialogId,
           data: {},
-          onSubmit: formContext.onSubmit,
           model: formContext.model,
           table: formContext.table
         });
@@ -438,7 +437,6 @@ export class FormRenderer {
         event: 'form_submit',
         dialogId: dialogId,
         data: data,
-        onSubmit: formContext.onSubmit,
         model: formContext.model,
         table: formContext.table
       });
