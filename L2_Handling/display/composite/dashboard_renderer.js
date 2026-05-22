@@ -82,7 +82,7 @@ export default class DashboardRenderer {
    */
   _createDashboardStructure(sidebar, defaultPanel, panelMeta) {
     // Main container (using primitive)
-    const container = createDiv({ class: 'zContainer' });
+    const container = createDiv({ class: 'zContainer zDash-container' });
 
     // Vertical layout wrapper (using primitive)
     const layout = createDiv({ class: 'zVertical-layout' });
@@ -93,7 +93,7 @@ export default class DashboardRenderer {
     // Content area for panels (using primitive)
     const content = createDiv({
       id: 'dashboard-panel-content',
-      class: 'zTab-content'
+      class: 'zTab-content zDash-panel'
     });
 
     // Assemble structure
