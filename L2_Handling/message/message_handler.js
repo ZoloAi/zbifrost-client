@@ -10,6 +10,30 @@
 // Constants
 import { TIMEOUTS, EVENT_TYPES } from '../../L1_Foundation/constants/bifrost_constants.js';
 
+// zRender op-code decoder — reverse map of render_opcodes.py (op → display handler key)
+// This table contains no business logic, wizard flows, or application routes.
+const _ZRENDER_OPS = {"tx":"text","hd":"header","im":"image","rt":"rich_text","ic":"icon","zu":"zURL","zt":"zTable","er":"error","wr":"warning","su":"success","inf":"info","rs":"read_string","pb":"progress_bar","mn":"zMenu","zd":"zDash","zdl":"zDialog","zi":"zInput","sep":"separator","cod":"code","lnk":"link","bdg":"badge","spn":"spinner","ls":"list","dl":"dl","btn":"button","rb":"read_bool","rp":"read_password","jsn":"json","div":"divider","crd":"card","ztrm":"zTerminal","sel":"selection","zcr":"zCrumbs","pc":"progress_complete","swi":"swiper_init"};
+
+function _decodeRenderNode(node) {
+  if (!node || typeof node !== 'object') return node;
+  if (Array.isArray(node)) return node.map(_decodeRenderNode);
+  // Node with an op code — decode and recurse into children
+  if ('e' in node && _ZRENDER_OPS[node.e]) {
+    const decoded = { event: _ZRENDER_OPS[node.e] };
+    for (const [k, v] of Object.entries(node)) {
+      if (k === 'e') continue;
+      decoded[k] = _decodeRenderNode(v);
+    }
+    return decoded;
+  }
+  // Container / metadata node — recurse into all values
+  const decoded = {};
+  for (const [k, v] of Object.entries(node)) {
+    decoded[k] = _decodeRenderNode(v);
+  }
+  return decoded;
+}
+
 export class MessageHandler {
   constructor(logger, hooks, client = null) {
     this.logger = logger;
@@ -105,6 +129,10 @@ export class MessageHandler {
       // MUST be checked BEFORE response correlation (chunks have _requestId but are NOT responses)
       if (message.event === EVENT_TYPES.RENDER_CHUNK) {
         this.logger.debug('[MessageHandler] Chunk event detected:', message.chunk_num);
+        // Decode zRender op codes back to display event names before handing to renderers
+        if (message.data) {
+          message.data = _decodeRenderNode(message.data);
+        }
         try {
           this.hooks.call('onRenderChunk', message);
         } catch (hookError) {
