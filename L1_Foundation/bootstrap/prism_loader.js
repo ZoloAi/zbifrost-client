@@ -150,7 +150,7 @@ function loadPrismZolo(logger) {
       loadLanguageSequentially(index + 1);
     };
     script.onerror = () => {
-      logger.warn(`Failed to load Prism ${lang}`);
+      logger.debug(`[Prism] language file not found: /static/js/prism-${lang}.js (skipped)`);
       loadLanguageSequentially(index + 1);
     };
     document.head.appendChild(script);

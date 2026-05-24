@@ -312,9 +312,8 @@ class BifrostCore {
       // Phase 2: Extracted to src/bootstrap/cdn_loader.js
       this._loadBootstrapIcons();
 
-      // Prism.js for syntax highlighting is ALWAYS loaded (unchangeable default for zBifrost)
-      // Phase 2: Extracted to src/bootstrap/cdn_loader.js
-      this._loadPrismJS();
+      // Prism.js is lazy-loaded on first code/zTerminal render — not on connect
+      this._prismLoaded = false;
 
       // _zScripts: load immediately (same timing as Prism) so intercept plugins
       // are active before any user interaction. asset_loader.js dedup guard
@@ -661,8 +660,9 @@ class BifrostCore {
     }
 
     /**
-     * Load Prism.js from CDN for syntax highlighting
-     * Phase 5.4: Delegated to AssetLoader
+     * Load Prism.js from CDN for syntax highlighting.
+     * Lazy — called on first code/json/zTerminal render, not on connect().
+     * Guard: caller sets this._prismLoaded = true before calling.
      * @private
      */
     async _loadPrismJS() {

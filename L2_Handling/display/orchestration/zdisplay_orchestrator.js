@@ -918,6 +918,10 @@ export class ZDisplayOrchestrator {
       }
 
       case 'code': {
+        if (!this.client._prismLoaded) {
+          this.client._prismLoaded = true;
+          this.client._loadPrismJS();
+        }
         const codeRenderer = await this.client._ensureCodeRenderer();
         element = codeRenderer.renderCode(eventData);
         this.logger.debug(`[renderZDisplayEvent] Rendered code block (language: ${eventData.language || 'text'})`);
@@ -925,6 +929,10 @@ export class ZDisplayOrchestrator {
       }
 
       case 'json': {
+        if (!this.client._prismLoaded) {
+          this.client._prismLoaded = true;
+          this.client._loadPrismJS();
+        }
         // Render JSON data as a syntax-highlighted code block (language: json).
         const jsonCodeRenderer = await this.client._ensureCodeRenderer();
         const jsonStr = typeof eventData.data === 'string'
@@ -1074,6 +1082,10 @@ export class ZDisplayOrchestrator {
       }
 
       case 'zTerminal': {
+        if (!this.client._prismLoaded) {
+          this.client._prismLoaded = true;
+          this.client._loadPrismJS();
+        }
         // Code execution sandbox with syntax highlighting and Run button
         const terminalRenderer = await this.client._ensureTerminalRenderer();
         element = terminalRenderer.render(eventData);
