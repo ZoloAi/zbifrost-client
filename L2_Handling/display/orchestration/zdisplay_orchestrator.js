@@ -398,6 +398,16 @@ export class ZDisplayOrchestrator {
         continue;
       }
 
+      // zDelta: intra-file block hop — send execute_walker for the named block
+      if (key === 'zDelta') {
+        const blockName = typeof value === 'string' ? value : (value.zDelta || '');
+        if (blockName) {
+          this.logger.debug(`[ZDisplayOrchestrator] zDelta hop: ${blockName}`);
+          this.client.zDelta(blockName);
+        }
+        continue;
+      }
+
       // zMenu: route through unified renderer (same path as ~* shorthand)
       if (key === 'zMenu') {
         await this._renderZMenuBlock(key, value, parentElement, keyPath);
