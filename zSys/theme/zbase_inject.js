@@ -1,35 +1,14 @@
 /**
- * zbase_inject.js — zbifrost-client structural baseline injector
+ * zbase_inject.js — zbifrost-client JS behaviors (tabs, zTheme)
  *
  * Called once during bifrost_core.js startup:
  *   import { injectZBase } from `${BASE_URL}zSys/theme/zbase_inject.js`;
  *   await injectZBase(BASE_URL);
  *
- * What it does:
- *   1. Fetches zbase.css from CDN (same version as bifrost_core.js) and
- *      injects it as a <style> tag into <head> — idempotent, deduped.
- *   2. Exposes window.zTheme with built-in behaviors (tabs, list-group).
- *      No external CDN required. Always available, no true/false flag.
+ * CSS is now injected server-side by route_dispatcher.py as a synchronous
+ * <link rel="stylesheet"> in <head> — no async fetch, no timing races.
+ * This module only exposes window.zTheme (tabs, list-group behaviors).
  */
-
-// ── CSS injection ─────────────────────────────────────────────────────────────
-
-async function _injectCSS(baseUrl) {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('zbifrost-zbase-css')) return; // already injected
-
-  try {
-    const resp = await fetch(`${baseUrl}zSys/theme/zbase.css`);
-    if (!resp.ok) throw new Error(`zbase.css fetch failed: ${resp.status}`);
-    const css = await resp.text();
-    const style = document.createElement('style');
-    style.id = 'zbifrost-zbase-css';
-    style.textContent = css;
-    document.head.appendChild(style);
-  } catch (err) {
-    console.warn('[zbase_inject] Could not load zbase.css:', err.message);
-  }
-}
 
 // ── Tab behavior ──────────────────────────────────────────────────────────────
 
@@ -176,7 +155,7 @@ function _exposeWindowZTheme() {
  *
  * @param {string} baseUrl - CDN base URL (same as bifrost_core.js BASE_URL)
  */
-export async function injectZBase(baseUrl) {
+export async function injectZBase(_baseUrl) {
   _exposeWindowZTheme();
-  await _injectCSS(baseUrl);
+  // CSS is injected server-side — nothing async to do here.
 }
