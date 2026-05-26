@@ -71,6 +71,19 @@ export class CacheManager {
       await this.client.cache.init();
       this.logger.debug('[Cache] Cache orchestrator initialized');
 
+      // Clear rendered-HTML cache on every cold page load.
+      // The rendered cache is designed for SPA navigations within one page
+      // lifetime; persisting it across page reloads causes the dashboard
+      // structure (.zDash-container) to be skipped on 2nd+ navigations.
+      try {
+        if (this.client.cache.rendered?.clear) {
+          await this.client.cache.rendered.clear();
+          this.logger.debug('[Cache] Rendered cache cleared (cold start)');
+        }
+      } catch(e) {
+        this.logger.debug('[Cache] Could not clear rendered cache:', e?.message);
+      }
+
       // Initialize HTTP cache manager for conditional requests
       this.client.httpCache = new HTTPCacheManager(this.client);
       
