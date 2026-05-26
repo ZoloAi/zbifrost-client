@@ -429,6 +429,18 @@ export class MessageHandler {
         return;
       }
 
+      // App-level log event (zLogger / zos.app.log) — output to browser console
+      if (message.event === 'app_log') {
+        const level = (message.level || 'INFO').toUpperCase();
+        const tag   = message.tag ? `[${message.tag}] ` : '';
+        const line  = `${tag}${message.message}`;
+        if      (level === 'ERROR' || level === 'CRITICAL') console.error('[zLog]', line);
+        else if (level === 'WARNING')                        console.warn('[zLog]',  line);
+        else if (level === 'DEBUG')                         console.debug('[zLog]', line);
+        else                                                console.log('[zLog]',   line);
+        return;
+      }
+
       // zFunc execution signal — backend console confirmation, not a UI event
       if (message.event === 'zfunc_exec') {
         if (message.stdout) console.log('[zFunc stdout]', message.stdout);
