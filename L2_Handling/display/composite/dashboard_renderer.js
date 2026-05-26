@@ -1,267 +1,168 @@
 /**
- * DashboardRenderer - Render dashboard with sidebar navigation
+ * DashboardRenderer - Render zDash as zTheme native tab layout
  *
- * Extracted from bifrost_client.js (lines 2270-2423)
- * Refactored to use primitives-first architecture
- *
- * Features:
- * - Sidebar navigation with Bootstrap Icons
- * - Panel switching and loading
- * - Metadata fetching from backend
- * - Active state management
- * - WebSocket-based panel loading
+ * Uses zTheme's tab system:
+ *   - Sidebar: .zNav.zFlex-column.zNav-pills with [data-bs-toggle="tab"] links
+ *   - Content:  .zTab-content > .zTab-pane#panel-{Name} for each panel
+ *   - zTheme.initTabs() wires click ↔ show/hide
+ *   - zTabShown event triggers WS lazy-load on first visit
+ *   - Default panel loads via deferred WS on init
  */
 
-// ─────────────────────────────────────────────────────────────────
-// Imports
-// ─────────────────────────────────────────────────────────────────
-
-// Layer 0: Primitives
 import { createDiv } from '../primitives/generic_containers.js';
-import { createList, createListItem } from '../primitives/lists_primitives.js';
-import { createLink } from '../primitives/interactive_primitives.js';
 
 export default class DashboardRenderer {
-  /**
-   * @param {Object} logger - Logger instance
-   * @param {Object} client - BifrostClient instance (for WebSocket communication)
-   */
   constructor(logger, client) {
     this.logger = logger;
     this.client = client;
   }
 
-  /**
-   * Render dashboard with sidebar navigation
-   * @param {Object} config - Dashboard configuration
-   * @param {string} config.folder - Base folder for panel discovery
-   * @param {Array<string>} config.sidebar - List of panel names
-   * @param {string} config.default - Default panel to load
-   * @param {HTMLElement} targetElement - Target element to render into
-   * @returns {HTMLElement} Dashboard container element
-   */
+  // ── Public API ──────────────────────────────────────────────────────────────
+
   async render(config, targetElement) {
-    const { folder, sidebar, default: defaultPanel } = config;
+    const { folder, sidebar, panels = {}, default: defaultPanel } = config;
 
-    this.logger.log('[DashboardRenderer] Rendering with config:', config);
+    this.logger.log('[DashboardRenderer] Rendering dashboard:', config);
 
-    // Load panel metadata to get icons/labels
-    const panelMeta = await this._loadPanelMetadata(folder, sidebar);
+    const container   = this._buildStructure(sidebar, panels, defaultPanel);
+    const nav         = container.querySelector('.zDash-sidebar');
+    const tabContent  = container.querySelector('.zTab-content');
 
-    // Create dashboard structure using primitives
-    const dashboardContainer = this._createDashboardStructure(sidebar, defaultPanel, panelMeta);
-
-    // Determine how to insert dashboard (preserve existing content or replace)
+    // Insert into DOM before triggering anything async
     if (targetElement) {
-      const existingContent = targetElement.innerHTML.trim();
-      const hasLoadingSpinner = existingContent.includes('zSpinner');
-
-      // If there's real content (not just loading state), preserve it
-      if (existingContent && !hasLoadingSpinner) {
-        this.logger.log('[DashboardRenderer] Preserving existing content from chunk');
-        targetElement.appendChild(dashboardContainer);
-      } else {
-        // No existing content or only spinner, replace normally
-        targetElement.innerHTML = '';
-        targetElement.appendChild(dashboardContainer);
-      }
+      targetElement.appendChild(container);
     }
 
-    // Set up click handlers for sidebar navigation
-    this._setupNavigationHandlers(dashboardContainer, folder);
+    // Let zTheme wire its tab click ↔ show/hide behaviour
+    if (window.zTheme?.initTabs) {
+      window.zTheme.initTabs();
+    }
 
-    // Auto-load default panel — deferred so the container is in the DOM first
-    // (caller may append dashboardContainer after render() returns)
-    setTimeout(() => this._loadDashboardPanel(folder, defaultPanel), 0);
-
-    return dashboardContainer;
-  }
-
-  /**
-   * Create dashboard structure using primitives
-   * @private
-   */
-  _createDashboardStructure(sidebar, defaultPanel, panelMeta) {
-    // Main container (using primitive)
-    const container = createDiv({ class: 'zContainer zDash-container' });
-
-    // Vertical layout wrapper (using primitive)
-    const layout = createDiv({ class: 'zVertical-layout' });
-
-    // Sidebar navigation (using primitives)
-    const nav = this._createSidebar(sidebar, defaultPanel, panelMeta);
-
-    // Content area for panels (using primitive)
-    const content = createDiv({
-      id: 'dashboard-panel-content',
-      class: 'zTab-content zDash-panel'
+    // Lazy-load on tab switch (only if pane not yet loaded)
+    nav?.querySelectorAll('[data-bs-toggle="tab"]').forEach(link => {
+      link.addEventListener('zTabShown', async () => {
+        const panelName = link.dataset.panel;
+        const pane = tabContent?.querySelector(`#panel-${panelName}`);
+        if (pane && !pane.dataset.loaded) {
+          await this._loadPanel(folder, panelName, pane);
+        }
+      });
     });
 
-    // Assemble structure
-    layout.appendChild(nav);
-    layout.appendChild(content);
-    container.appendChild(layout);
+    // Load default panel once the element is in the DOM (next task tick)
+    const defaultPaneName = defaultPanel || (sidebar?.[0] ?? null);
+    if (defaultPaneName) {
+      setTimeout(() => {
+        const pane = tabContent?.querySelector(`#panel-${defaultPaneName}`);
+        if (pane && !pane.dataset.loaded) {
+          this._loadPanel(folder, defaultPaneName, pane);
+        }
+      }, 0);
+    }
 
     return container;
   }
 
-  /**
-   * Create sidebar navigation using primitives
-   * @private
-   */
-  _createSidebar(sidebar, defaultPanel, panelMeta) {
-    // Create nav list (using primitive)
-    const ul = createList(false, {
-      class: 'zNav zNav-pills zFlex-column zDash-sidebar',
-      role: 'tablist'
-    });
+  // ── Private helpers ─────────────────────────────────────────────────────────
 
-    // Create nav items for each panel
-    sidebar.forEach(panelName => {
-      const meta = panelMeta[panelName] || { icon: 'bi-file-text', label: panelName };
-      const isActive = panelName === defaultPanel;
+  _buildStructure(sidebar, panels, defaultPanel) {
+    const container = createDiv({ class: 'zContainer-fluid zDash-container' });
+    const row       = createDiv({ class: 'zRow zG-0' });
 
-      // Create list item (using primitive)
-      const li = createListItem({
-        class: 'zNav-item',
-        role: 'presentation'
-      });
+    // ── Sidebar column ──────────────────────────────────────────────────────
+    const sidebarCol = createDiv({ class: 'zCol-auto' });
+    const nav = document.createElement('nav');
+    nav.className = 'zNav zFlex-column zNav-pills zDash-sidebar';
+    nav.setAttribute('role', 'tablist');
 
-      // Create link (using primitive)
-      const link = createLink('#', {
-        class: `zNav-link ${isActive ? 'zActive' : ''}`,
-        role: 'tab',
-        'aria-selected': isActive ? 'true' : 'false'
-      });
+    // ── Content column ──────────────────────────────────────────────────────
+    const contentCol = createDiv({ class: 'zCol' });
+    const tabContent = createDiv({ class: 'zTab-content zDash-panel', id: 'dashboard-panel-content' });
+
+    // ── Build one nav-link + one tab-pane per sidebar item ──────────────────
+    (sidebar || []).forEach((panelName) => {
+      const isDefault = panelName === defaultPanel;
+      const meta      = panels[panelName] || {};
+      const panelId   = `panel-${panelName}`;
+      const label     = meta.label || panelName.replace(/_/g, ' ');
+
+      // Nav link
+      const link = document.createElement('a');
+      link.className = `zNav-link${isDefault ? ' zActive' : ''}`;
+      link.href = `#${panelId}`;
+      link.setAttribute('data-bs-toggle', 'tab');
+      link.setAttribute('data-bs-target', `#${panelId}`);
+      link.setAttribute('role', 'tab');
+      link.setAttribute('aria-selected', isDefault ? 'true' : 'false');
       link.dataset.panel = panelName;
+      if (!isDefault) link.setAttribute('tabindex', '-1');
 
-      // Add Bootstrap Icon if provided
       if (meta.icon) {
         const icon = document.createElement('i');
-        icon.className = `bi ${meta.icon}`;
+        icon.className = `bi ${meta.icon} zme-2`;
         link.appendChild(icon);
-        link.appendChild(document.createTextNode(' '));
       }
+      link.appendChild(document.createTextNode(label));
+      nav.appendChild(link);
 
-      // Add label text
-      link.appendChild(document.createTextNode(meta.label));
-
-      // Assemble nav item
-      li.appendChild(link);
-      ul.appendChild(li);
-    });
-
-    return ul;
-  }
-
-  /**
-   * Set up click handlers for sidebar navigation
-   * @private
-   */
-  _setupNavigationHandlers(dashboardContainer, folder) {
-    const links = dashboardContainer.querySelectorAll('.zDash-sidebar .zNav-link');
-
-    links.forEach(link => {
-      link.addEventListener('click', async (e) => {
-        e.preventDefault();
-        const panelName = link.dataset.panel;
-
-        // Update active state
-        links.forEach(l => {
-          l.classList.remove('zActive');
-          l.setAttribute('aria-selected', 'false');
-        });
-        link.classList.add('zActive');
-        link.setAttribute('aria-selected', 'true');
-
-        // Load panel content
-        await this._loadDashboardPanel(folder, panelName);
+      // Tab pane (empty – filled by WS on first visit)
+      const pane = createDiv({
+        id: panelId,
+        class: `zTab-pane${isDefault ? ' zActive' : ''}`,
+        role: 'tabpanel',
       });
+      pane.dataset.panel = panelName;
+      tabContent.appendChild(pane);
     });
+
+    sidebarCol.appendChild(nav);
+    contentCol.appendChild(tabContent);
+    row.appendChild(sidebarCol);
+    row.appendChild(contentCol);
+    container.appendChild(row);
+
+    return container;
   }
 
-  /**
-   * Load panel metadata (icons, labels) from backend
-   * @private
-   */
-  async _loadPanelMetadata(folder, sidebar) {
-    const metadata = {};
-
-    for (const panelName of sidebar) {
-      try {
-        // Request panel metadata from backend
-        const zPath = `${folder}.zUI.${panelName}`;
-        const response = await fetch(`/api/dashboard/panel/meta?zPath=${encodeURIComponent(zPath)}`);
-        const data = await response.json();
-
-        if (data.success && data.meta) {
-          metadata[panelName] = {
-            icon: data.meta.panel_icon || 'bi-file-text',
-            label: data.meta.panel_label || panelName
-          };
-        }
-      } catch (e) {
-        this.logger.warn(`[DashboardRenderer] Could not load metadata for ${panelName}:`, e);
-        metadata[panelName] = { icon: 'bi-file-text', label: panelName };
-      }
-    }
-
-    return metadata;
-  }
-
-  /**
-   * Load and render a dashboard panel
-   * @private
-   */
-  async _loadDashboardPanel(folder, panelName) {
-    this.logger.log(`[DashboardRenderer] Loading panel: ${panelName}`);
-
-    const contentArea = document.getElementById('dashboard-panel-content');
-    if (!contentArea) {
-      this.logger.warn('[DashboardRenderer] Content area not found');
+  async _loadPanel(folder, panelName, pane) {
+    if (!this.client?.connection) {
+      this.logger.warn('[DashboardRenderer] No WS connection – cannot load panel', panelName);
       return;
     }
 
-    // Show loading state (using primitive)
-    const spinner = createDiv({ class: 'zSpinner-border', role: 'status' });
-    const spinnerLabel = document.createElement('span');
-    spinnerLabel.className = 'zVisually-hidden';
-    spinnerLabel.textContent = 'Loading...';
-    spinner.appendChild(spinnerLabel);
+    pane.dataset.loaded = 'pending';
 
-    contentArea.innerHTML = '';
-    contentArea.appendChild(spinner);
+    // Show spinner while loading
+    const spinner = createDiv({ class: 'zSpinner-border zSpinner-border-sm zText-muted zm-3', role: 'status' });
+    pane.innerHTML = '';
+    pane.appendChild(spinner);
 
     try {
-      // Request walker execution for the panel
-      const requestData = {
-        event: 'execute_walker',
-        zBlock: panelName,
-        zVaFile: `zUI.${panelName}`,
-        zVaFolder: folder,
-        _renderTarget: 'dashboard-panel-content' // Tell backend where to render
-      };
+      // Ask the chunk renderer to target THIS pane via a custom attribute
+      // The orchestrator checks for #dashboard-panel-content first – we temporarily
+      // give the pane that id so incoming chunks land in the right place.
+      const prevId = pane.id;
+      pane.id = 'dashboard-panel-content';
 
-      // Clear the panel content area to prepare for new chunk rendering
-      contentArea.innerHTML = '';
+      await this.client.connection.send(JSON.stringify({
+        event:        'execute_walker',
+        zBlock:       panelName,
+        zVaFile:      `zUI.${panelName}`,
+        zVaFolder:    folder,
+        _renderTarget: prevId,
+      }));
 
-      // Send the walker execution request via WebSocket (must be JSON string)
-      if (this.client && this.client.connection) {
-        await this.client.connection.send(JSON.stringify(requestData));
-        this.logger.log('[DashboardRenderer] Panel load request sent');
-      } else {
-        throw new Error('WebSocket connection not available');
-      }
+      // Restore after a render cycle (chunks arrive async; the id swap is a hint
+      // for the first chunk – subsequent chunks use querySelector which still finds it)
+      setTimeout(() => {
+        if (pane.id === 'dashboard-panel-content') pane.id = prevId;
+        pane.dataset.loaded = 'done';
+      }, 3000);
 
-    } catch (error) {
-      this.logger.error(`[DashboardRenderer] Error loading panel ${panelName}:`, error);
-
-      // Show error message (using primitive)
-      const errorAlert = createDiv({ class: 'zAlert zAlert-danger' });
-      errorAlert.textContent = 'Failed to load panel';
-      contentArea.innerHTML = '';
-      contentArea.appendChild(errorAlert);
+    } catch (err) {
+      this.logger.error(`[DashboardRenderer] Failed to load panel ${panelName}:`, err);
+      pane.innerHTML = `<div class="zAlert zAlert-danger zm-2">Failed to load ${panelName}</div>`;
+      pane.dataset.loaded = 'error';
     }
   }
 }
-
