@@ -455,10 +455,11 @@ export class ZDisplayOrchestrator {
 
       // zText shorthand: inline text paragraph — render directly, no event dispatch
       if (key === 'zText' && value) {
-        const content = typeof value === 'string' ? value : (value?.content || '');
-        const color = value?.color;
+        const content    = typeof value === 'string' ? value : (value?.content || '');
+        const color      = value?.color;
+        const extraClass = (!Array.isArray(value) && value?._zClass) ? String(value._zClass) : '';
         const p = document.createElement('p');
-        p.className = 'zText zmy-1';
+        p.className = ['zText', 'zmy-1', extraClass].filter(Boolean).join(' ');
         p.textContent = content;
         if (color) p.classList.add(`zText-${color.toLowerCase()}`);
         parentElement.appendChild(p);
