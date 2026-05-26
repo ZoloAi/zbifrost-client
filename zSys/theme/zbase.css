@@ -468,9 +468,65 @@ a { text-decoration: none; color: inherit; }
   .zDash-container .zDialog-form { grid-template-columns: 1fr 1fr; }
 }
 
-/* Mobile ≤600px: sidebar hidden, single-column forms */
+/* Mobile sidebar toggle button — hidden by default (desktop/tablet) */
+.zDash-sidebar-toggle {
+  display: none;
+}
+
+/* Mobile ≤600px: sidebar becomes a toggle-driven drawer */
 @media (max-width: 600px) {
-  .zDash-format-sidebar > .zRow > .zCol-auto { display: none; }
+  /* Container must be relative so the sidebar overlay positions correctly */
+  .zDash-format-sidebar { position: relative; }
+
+  /* Sidebar column hidden by default on mobile */
+  .zDash-format-sidebar > .zRow > .zCol-auto {
+    display: none !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: rgba(10, 14, 39, 0.98);
+    border-bottom: 1px solid rgba(79, 70, 229, 0.2);
+    backdrop-filter: blur(12px);
+  }
+
+  /* Open state: sidebar slides in as a full-width dropdown */
+  .zDash-format-sidebar.zDash-sidebar-open > .zRow > .zCol-auto {
+    display: block !important;
+  }
+  .zDash-format-sidebar.zDash-sidebar-open .zDash-sidebar {
+    flex-direction: column !important;
+    width: 100% !important;
+    padding: 0.5rem 0.75rem;
+    gap: 0.1rem;
+  }
+  /* Push content down when sidebar is open */
+  .zDash-format-sidebar.zDash-sidebar-open > .zRow > .zCol {
+    margin-top: var(--zdash-sidebar-h, 0px);
+  }
+
+  /* Show the toggle button on mobile */
+  .zDash-sidebar-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.75rem 0.75rem 0;
+    padding: 0.45rem 0.85rem;
+    background: rgba(79, 70, 229, 0.15);
+    border: 1px solid rgba(79, 70, 229, 0.3);
+    border-radius: 8px;
+    color: #c7d2fe;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .zDash-sidebar-toggle:hover {
+    background: rgba(79, 70, 229, 0.25);
+    color: #e0e7ff;
+  }
+
   .zDash-panel { padding: 1rem 0.75rem; }
   .zDash-container .zDialog-form { grid-template-columns: 1fr !important; }
   .zDash-container .zInput { font-size: 1rem; }

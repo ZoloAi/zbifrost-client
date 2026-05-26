@@ -38,9 +38,30 @@ export default class DashboardRenderer {
     }
     const nav        = container.querySelector('.zDash-sidebar');
     const tabContent = container.querySelector('.zDash-panel');
+    const toggleBtn  = container.querySelector('.zDash-sidebar-toggle');
 
     if (targetElement) {
       targetElement.appendChild(container);
+    }
+
+    // Wire mobile sidebar toggle (hamburger)
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        container.classList.toggle('zDash-sidebar-open');
+      });
+
+      // Close sidebar when a panel tab is selected
+      nav?.querySelectorAll('[data-bs-toggle="tab"]').forEach(link => {
+        link.addEventListener('click', () => container.classList.remove('zDash-sidebar-open'));
+      });
+
+      // Close sidebar on outside click
+      document.addEventListener('click', (e) => {
+        if (!container.contains(e.target)) {
+          container.classList.remove('zDash-sidebar-open');
+        }
+      });
     }
 
     // Wire zTheme tab show/hide behaviour
@@ -122,7 +143,15 @@ export default class DashboardRenderer {
       tabContent.appendChild(pane);
     });
 
+    // Mobile hamburger — visible only on small viewports via CSS
+    const toggleBtn = document.createElement('button');
+    toggleBtn.className = 'zDash-sidebar-toggle';
+    toggleBtn.setAttribute('aria-label', 'Toggle navigation');
+    toggleBtn.setAttribute('aria-expanded', 'false');
+    toggleBtn.innerHTML = '&#9776; Menu';
+
     sidebarCol.appendChild(nav);
+    contentCol.appendChild(toggleBtn);
     contentCol.appendChild(tabContent);
     row.appendChild(sidebarCol);
     row.appendChild(contentCol);
