@@ -302,7 +302,9 @@ class BifrostCore {
       });
 
       // Inject structural baseline CSS + expose window.zTheme (always-on, no flag)
-      this._injectZBase();
+      // Store promise so connect() waits for CSS before first render (prevents
+      // race condition where UI renders before zbase.css is fetched from CDN).
+      this._zbaseReady = this._injectZBase();
 
       // Bootstrap Icons are ALWAYS loaded (unchangeable default for zBifrost)
       // Phase 2: Extracted to src/bootstrap/cdn_loader.js
@@ -331,9 +333,12 @@ class BifrostCore {
       if (this.options.autoConnect) {
         this._cacheReady.finally(() => {
           this.logger.debug('[Cache] Ready, connecting...');
-          this.connect().catch(err => {
-            this.logger.error('Auto-connect failed:', err);
-            this.hooks.call('onError', { type: 'autoconnect_failed', error: err });
+          // Await CSS injection so zbase.css is applied before the first render
+          (this._zbaseReady || Promise.resolve()).then(() => {
+            this.connect().catch(err => {
+              this.logger.error('Auto-connect failed:', err);
+              this.hooks.call('onError', { type: 'autoconnect_failed', error: err });
+            });
           });
         });
       }
