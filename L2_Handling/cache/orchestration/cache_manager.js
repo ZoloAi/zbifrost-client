@@ -72,14 +72,13 @@ export class CacheManager {
       this.logger.debug('[Cache] Cache orchestrator initialized');
 
       // Clear rendered-HTML cache on every cold page load.
-      // The rendered cache is designed for SPA navigations within one page
-      // lifetime; persisting it across page reloads causes the dashboard
-      // structure (.zDash-container) to be skipped on 2nd+ navigations.
+      // The rendered cache stores panel HTML for SPA tab-switching within one
+      // page lifetime. Persisting it across page reloads (goto()) causes the
+      // dashboard structure (.zDash-container) to be skipped — cached panel
+      // content is injected without the onZDash wrapper being re-built.
       try {
-        if (this.client.cache.rendered?.clear) {
-          await this.client.cache.rendered.clear();
-          this.logger.debug('[Cache] Rendered cache cleared (cold start)');
-        }
+        await this.client.cache.clear('rendered');
+        this.logger.debug('[Cache] Rendered cache cleared (cold start)');
       } catch(e) {
         this.logger.debug('[Cache] Could not clear rendered cache:', e?.message);
       }
