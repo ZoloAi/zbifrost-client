@@ -634,12 +634,15 @@ a { text-decoration: none; color: inherit; }
   margin-bottom: 0.3rem;
 }
 
-/* Inputs & selects */
+/* Inputs & selects — appearance reset required for mobile Chrome/WebKit */
 .zDash-container .zInput {
+  -webkit-appearance: none;
+  appearance: none;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(79, 70, 229, 0.2);
   border-radius: 7px;
   color: #e2e8f0;
+  -webkit-text-fill-color: #e2e8f0;
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   width: 100%;
