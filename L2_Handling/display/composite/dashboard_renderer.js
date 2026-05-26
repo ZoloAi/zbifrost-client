@@ -70,8 +70,9 @@ export default class DashboardRenderer {
     // Set up click handlers for sidebar navigation
     this._setupNavigationHandlers(dashboardContainer, folder);
 
-    // Auto-load default panel
-    await this._loadDashboardPanel(folder, defaultPanel);
+    // Auto-load default panel — deferred so the container is in the DOM first
+    // (caller may append dashboardContainer after render() returns)
+    setTimeout(() => this._loadDashboardPanel(folder, defaultPanel), 0);
 
     return dashboardContainer;
   }

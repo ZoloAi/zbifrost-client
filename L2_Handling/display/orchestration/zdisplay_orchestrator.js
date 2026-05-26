@@ -703,7 +703,8 @@ export class ZDisplayOrchestrator {
       btn.className = 'zNav-link zBtn w-100 text-start zp-2';
       btn.setAttribute('role', 'menuitem');
       btn.dataset.key = optKey;
-      btn.innerHTML = `<span class="zBadge zBadge-secondary me-2">${idx + 1}</span>${optKey.replace(/_/g, ' ')}`;
+      const label = menuValue.labels?.[optKey] ?? optKey.replace(/_/g, ' ');
+      btn.innerHTML = `<span class="zBadge zBadge-secondary me-2">${idx + 1}</span>${label}`;
 
       btn.addEventListener('click', async () => {
         // Guard: prevent re-entry while a zfunc is already in-flight for this option
@@ -1083,10 +1084,14 @@ export class ZDisplayOrchestrator {
       }
 
       case 'zDash': {
-        // Dashboard with sidebar navigation
-        const DashboardRenderer = (await import('./dashboard_renderer.js')).default;
+        // Dashboard with sidebar navigation.
+        // We pass parentElement so DashboardRenderer appends #dashboard-panel-content to the
+        // DOM immediately — the default panel WS request fires INSIDE render(), and by the
+        // time the WS response arrives the element must already be queryable.
+        const DashboardRenderer = (await import('../composite/dashboard_renderer.js')).default;
         const dashRenderer = new DashboardRenderer(this.logger, this.client);
-        element = await dashRenderer.render(eventData, this.targetElement || null);
+        await dashRenderer.render(eventData, parentElement);
+        element = null; // already appended by DashboardRenderer
         this.logger.log('[renderZDisplayEvent] Rendered dashboard element');
         break;
       }
