@@ -181,6 +181,42 @@ const ZDASH_FORMAT_CSS = `
   width: 0;
 }
 
+/* Tablet: sidebar stacks above content */
+@media (max-width: 900px) {
+  .zDash-format-sidebar .zRow {
+    flex-direction: column !important;
+    flex-wrap: wrap !important;
+  }
+  .zDash-format-sidebar .zCol-auto,
+  .zDash-format-sidebar .zCol {
+    width: 100% !important;
+    flex: none !important;
+    min-width: unset !important;
+  }
+  .zDash-format-sidebar .zDash-sidebar {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .zDash-format-sidebar .zDash-sidebar [data-panel] {
+    padding: 0.35rem 0.75rem;
+    border-radius: 4px;
+  }
+}
+
+/* Mobile: hide sidebar, content full width */
+@media (max-width: 600px) {
+  .zDash-format-sidebar .zDash-sidebar {
+    display: none;
+  }
+  .zDash-format-sidebar .zCol {
+    width: 100% !important;
+  }
+}
+
 /* zDash tabs format (future) */
 .zDash-format-tabs.zDash-container {
   display: block;
