@@ -47,11 +47,11 @@ export class AssetLoader {
       return;
     }
 
-    // Extract _zScripts from zuiConfig.zMeta (v1.5.13: Server passes zMeta section from YAML)
-    const zScripts = this.client.zuiConfig?.zMeta?._zScripts || [];
+    // Extract zScripts from zuiConfig.zMeta (renamed from _zScripts in v1.7.26)
+    const zScripts = this.client.zuiConfig?.zMeta?.zScripts || this.client.zuiConfig?.zMeta?._zScripts || [];
     
     if (!Array.isArray(zScripts) || zScripts.length === 0) {
-      this.logger.debug('[AssetLoader] No _zScripts found in YAML metadata');
+      this.logger.debug('[AssetLoader] No zScripts found in YAML metadata');
       return;
     }
 

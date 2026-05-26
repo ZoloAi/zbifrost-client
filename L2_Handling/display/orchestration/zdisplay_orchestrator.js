@@ -358,7 +358,7 @@ export class ZDisplayOrchestrator {
       // Skip ONLY metadata attributes (not terminal-suppressed elements)
       // _zClass, _zStyle, _zHTML, _zId, _zScripts are metadata attributes applied to parent
       // But _Demo_Stack, _Live_Demo_Section are terminal-suppressed elements that SHOULD render in Bifrost
-      const METADATA_KEYS = ['_zClass', '_zStyle', '_zHTML', '_zId', '_zScripts', 'zId'];
+      const METADATA_KEYS = ['_zClass', '_zStyle', '_zHTML', '_zId', 'zScripts', '_zScripts', 'zId'];
       if (METADATA_KEYS.includes(key)) {
         continue;
       }

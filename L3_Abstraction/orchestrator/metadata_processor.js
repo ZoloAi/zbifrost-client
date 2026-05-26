@@ -32,6 +32,7 @@ export class MetadataProcessor {
       '_zStyle',
       '_zHTML',
       '_zId',
+      'zScripts',
       '_zScripts',
       '_zGroup',
       '_zGroupLabel',
