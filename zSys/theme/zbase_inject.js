@@ -155,6 +155,57 @@ function initListGroup() {
   });
 }
 
+// ── zDash format layouts ──────────────────────────────────────────────────────
+// Each .zDash-format-* class owns the structural layout for that format.
+// Apps override visuals via _zClass; they never fight over flex-wrap.
+
+const ZDASH_FORMAT_CSS = `
+/* zDash sidebar format */
+.zDash-format-sidebar.zDash-container {
+  display: flex;
+  min-height: calc(100vh - 60px);
+}
+.zDash-format-sidebar .zRow {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: flex-start !important;
+  flex: 1;
+  margin: 0;
+}
+.zDash-format-sidebar .zCol-auto {
+  flex-shrink: 0;
+}
+.zDash-format-sidebar .zCol {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+}
+
+/* zDash tabs format (future) */
+.zDash-format-tabs.zDash-container {
+  display: block;
+}
+.zDash-format-tabs .zDash-sidebar {
+  display: flex;
+  flex-direction: row;
+  border-bottom: 1px solid rgba(79,70,229,0.2);
+}
+
+/* zDash accordion format (future) */
+.zDash-format-accordion .zRow {
+  flex-direction: column;
+}
+`;
+
+function _injectZDashFormats() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('zbifrost-zdash-formats')) return;
+  const style = document.createElement('style');
+  style.id = 'zbifrost-zdash-formats';
+  style.textContent = ZDASH_FORMAT_CSS;
+  document.head.appendChild(style);
+}
+
 // ── window.zTheme public API ──────────────────────────────────────────────────
 
 function _exposeWindowZTheme() {
@@ -178,5 +229,6 @@ function _exposeWindowZTheme() {
  */
 export async function injectZBase(baseUrl) {
   _exposeWindowZTheme();
+  _injectZDashFormats();
   await _injectCSS(baseUrl);
 }
