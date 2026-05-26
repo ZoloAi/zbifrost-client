@@ -408,6 +408,24 @@ export class ZDisplayOrchestrator {
         continue;
       }
 
+      // zLogger: app-level log — output to browser console (mirrors backend zos.app.log)
+      if (key === 'zLogger') {
+        let msg = '', level = 'INFO';
+        if (typeof value === 'string') {
+          msg = value;
+        } else if (value && typeof value === 'object') {
+          msg   = String(value.message || '');
+          level = String(value.level  || 'INFO').toUpperCase();
+        }
+        if (msg) {
+          if      (level === 'ERROR' || level === 'CRITICAL') console.error('[zLog]', msg);
+          else if (level === 'WARNING')                        console.warn('[zLog]',  msg);
+          else if (level === 'DEBUG')                         console.debug('[zLog]', msg);
+          else                                                console.log('[zLog]',   msg);
+        }
+        continue;
+      }
+
       // zMenu: route through unified renderer (same path as ~* shorthand)
       if (key === 'zMenu') {
         await this._renderZMenuBlock(key, value, parentElement, keyPath);
