@@ -195,7 +195,6 @@ class BifrostCore {
 
       const parsedOptions = {
         autoConnect: options.autoConnect || false,
-        zTheme: options.zTheme || false,
         zIcons: options.zIcons || false,
         targetElement: options.targetElement || 'zVaF',
         autoRequest: autoRequest,
@@ -205,7 +204,6 @@ class BifrostCore {
         debug: options.debug || false,
         token: options.token || null,
         hooks: options.hooks || {},
-        zThemeCDN: options.zThemeCDN || 'https://cdn.jsdelivr.net/gh/ZoloAi/zTheme@main/dist',
         zVaFile: zVaFile,
         zVaFolder: zVaFolder,
         zBlock: zBlock,
@@ -303,10 +301,8 @@ class BifrostCore {
         zBlock: this.options.zBlock
       });
 
-      // Load zTheme from CDN if enabled
-      if (this.options.zTheme) {
-        this._loadZThemeCDN();
-      }
+      // Inject structural baseline CSS + expose window.zTheme (always-on, no flag)
+      this._injectZBase();
 
       // Bootstrap Icons are ALWAYS loaded (unchangeable default for zBifrost)
       // Phase 2: Extracted to src/bootstrap/cdn_loader.js
@@ -631,13 +627,17 @@ class BifrostCore {
      * This method populates it entirely, including connection badge and content area.
      */
     /**
-     * Load zTheme CSS and JS from CDN
+     * Inject structural baseline CSS + expose window.zTheme (always-on).
+     * Replaces the old opt-in zTheme CDN loader.
      * @private
      */
-    async _loadZThemeCDN() {
-      // Phase 9: Use L1 Foundation CDN loader
-      const { loadZThemeCDN } = await import(`${BASE_URL}L1_Foundation/bootstrap/cdn_loader.js`);
-      await loadZThemeCDN(this.options.zThemeCDN, this.logger);
+    async _injectZBase() {
+      try {
+        const { injectZBase } = await import(`${BASE_URL}zSys/theme/zbase_inject.js`);
+        await injectZBase(BASE_URL);
+      } catch (err) {
+        this.logger?.warn('[BifrostClient] zbase_inject failed:', err.message);
+      }
     }
 
     /**

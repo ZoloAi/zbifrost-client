@@ -1,0 +1,420 @@
+/*
+ * zbase.css — zbifrost-client structural baseline
+ *
+ * Always injected by bifrost_core.js on startup. Provides only what the
+ * rendering runtime NEEDS to function: reset, grid, flex, tabs, nav-pills,
+ * spacing helpers, and spinners. No colors. No typography scale. No component
+ * aesthetics — those are the app's responsibility.
+ *
+ * Sections:
+ *   1. Reset
+ *   2. Grid  (zRow / zCol-* / zCol-auto, responsive xs→xl)
+ *   3. Gutters (zG-0 … zG-5)
+ *   4. Flex utilities
+ *   5. Display helpers (.zD-flex, .zD-block, etc.)
+ *   6. Spacing helpers (.zm-*, .zp-*, .zme-*, .zms-*)
+ *   7. Tabs (.zTab-content / .zTab-pane / .zActive)
+ *   8. Nav (.zNav / .zNav-pills / .zFlex-column)
+ *   9. Spinner (.zSpinner-border / .zSpinner-border-sm)
+ *  10. Misc runtime helpers (.zVisually-hidden, .zContainer-fluid)
+ */
+
+/* ─── 1. Reset ─────────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html {
+  font-family: sans-serif;
+  line-height: 1.15;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: rgba(0,0,0,0);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+img, svg { display: block; max-width: 100%; }
+
+a { text-decoration: none; color: inherit; }
+
+/* ─── 2. Grid ──────────────────────────────────────────────────────────────── */
+
+.zRow {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: calc(0.75rem * -1);
+  margin-left:  calc(0.75rem * -1);
+}
+
+[class*="zCol"] {
+  position: relative;
+  width: 100%;
+  padding-right: 0.75rem;
+  padding-left:  0.75rem;
+  flex-shrink: 0;
+}
+
+.zCol      { flex: 1 0 0%; }
+.zCol-auto { flex: 0 0 auto; width: auto; }
+
+.zCol-1  { flex: 0 0 auto; width:  8.33333333%; }
+.zCol-2  { flex: 0 0 auto; width: 16.66666667%; }
+.zCol-3  { flex: 0 0 auto; width: 25%; }
+.zCol-4  { flex: 0 0 auto; width: 33.33333333%; }
+.zCol-5  { flex: 0 0 auto; width: 41.66666667%; }
+.zCol-6  { flex: 0 0 auto; width: 50%; }
+.zCol-7  { flex: 0 0 auto; width: 58.33333333%; }
+.zCol-8  { flex: 0 0 auto; width: 66.66666667%; }
+.zCol-9  { flex: 0 0 auto; width: 75%; }
+.zCol-10 { flex: 0 0 auto; width: 83.33333333%; }
+.zCol-11 { flex: 0 0 auto; width: 91.66666667%; }
+.zCol-12 { flex: 0 0 auto; width: 100%; }
+
+@media (min-width: 576px) {
+  .zCol-sm      { flex: 1 0 0%; }
+  .zCol-sm-auto { flex: 0 0 auto; width: auto; }
+  .zCol-sm-1  { flex: 0 0 auto; width:  8.33333333%; }
+  .zCol-sm-2  { flex: 0 0 auto; width: 16.66666667%; }
+  .zCol-sm-3  { flex: 0 0 auto; width: 25%; }
+  .zCol-sm-4  { flex: 0 0 auto; width: 33.33333333%; }
+  .zCol-sm-5  { flex: 0 0 auto; width: 41.66666667%; }
+  .zCol-sm-6  { flex: 0 0 auto; width: 50%; }
+  .zCol-sm-7  { flex: 0 0 auto; width: 58.33333333%; }
+  .zCol-sm-8  { flex: 0 0 auto; width: 66.66666667%; }
+  .zCol-sm-9  { flex: 0 0 auto; width: 75%; }
+  .zCol-sm-10 { flex: 0 0 auto; width: 83.33333333%; }
+  .zCol-sm-11 { flex: 0 0 auto; width: 91.66666667%; }
+  .zCol-sm-12 { flex: 0 0 auto; width: 100%; }
+}
+
+@media (min-width: 768px) {
+  .zCol-md      { flex: 1 0 0%; }
+  .zCol-md-auto { flex: 0 0 auto; width: auto; }
+  .zCol-md-1  { flex: 0 0 auto; width:  8.33333333%; }
+  .zCol-md-2  { flex: 0 0 auto; width: 16.66666667%; }
+  .zCol-md-3  { flex: 0 0 auto; width: 25%; }
+  .zCol-md-4  { flex: 0 0 auto; width: 33.33333333%; }
+  .zCol-md-5  { flex: 0 0 auto; width: 41.66666667%; }
+  .zCol-md-6  { flex: 0 0 auto; width: 50%; }
+  .zCol-md-7  { flex: 0 0 auto; width: 58.33333333%; }
+  .zCol-md-8  { flex: 0 0 auto; width: 66.66666667%; }
+  .zCol-md-9  { flex: 0 0 auto; width: 75%; }
+  .zCol-md-10 { flex: 0 0 auto; width: 83.33333333%; }
+  .zCol-md-11 { flex: 0 0 auto; width: 91.66666667%; }
+  .zCol-md-12 { flex: 0 0 auto; width: 100%; }
+}
+
+@media (min-width: 992px) {
+  .zCol-lg      { flex: 1 0 0%; }
+  .zCol-lg-auto { flex: 0 0 auto; width: auto; }
+  .zCol-lg-1  { flex: 0 0 auto; width:  8.33333333%; }
+  .zCol-lg-2  { flex: 0 0 auto; width: 16.66666667%; }
+  .zCol-lg-3  { flex: 0 0 auto; width: 25%; }
+  .zCol-lg-4  { flex: 0 0 auto; width: 33.33333333%; }
+  .zCol-lg-5  { flex: 0 0 auto; width: 41.66666667%; }
+  .zCol-lg-6  { flex: 0 0 auto; width: 50%; }
+  .zCol-lg-7  { flex: 0 0 auto; width: 58.33333333%; }
+  .zCol-lg-8  { flex: 0 0 auto; width: 66.66666667%; }
+  .zCol-lg-9  { flex: 0 0 auto; width: 75%; }
+  .zCol-lg-10 { flex: 0 0 auto; width: 83.33333333%; }
+  .zCol-lg-11 { flex: 0 0 auto; width: 91.66666667%; }
+  .zCol-lg-12 { flex: 0 0 auto; width: 100%; }
+}
+
+@media (min-width: 1200px) {
+  .zCol-xl      { flex: 1 0 0%; }
+  .zCol-xl-auto { flex: 0 0 auto; width: auto; }
+  .zCol-xl-1  { flex: 0 0 auto; width:  8.33333333%; }
+  .zCol-xl-2  { flex: 0 0 auto; width: 16.66666667%; }
+  .zCol-xl-3  { flex: 0 0 auto; width: 25%; }
+  .zCol-xl-4  { flex: 0 0 auto; width: 33.33333333%; }
+  .zCol-xl-5  { flex: 0 0 auto; width: 41.66666667%; }
+  .zCol-xl-6  { flex: 0 0 auto; width: 50%; }
+  .zCol-xl-7  { flex: 0 0 auto; width: 58.33333333%; }
+  .zCol-xl-8  { flex: 0 0 auto; width: 66.66666667%; }
+  .zCol-xl-9  { flex: 0 0 auto; width: 75%; }
+  .zCol-xl-10 { flex: 0 0 auto; width: 83.33333333%; }
+  .zCol-xl-11 { flex: 0 0 auto; width: 91.66666667%; }
+  .zCol-xl-12 { flex: 0 0 auto; width: 100%; }
+}
+
+/* ─── 3. Gutters ───────────────────────────────────────────────────────────── */
+
+.zRow.zG-0 { margin-right: 0; margin-left: 0; }
+.zRow.zG-0 > [class*="zCol"] { padding-right: 0; padding-left: 0; }
+
+.zRow.zG-1 { margin-right: -0.25rem; margin-left: -0.25rem; }
+.zRow.zG-1 > [class*="zCol"] { padding-right: 0.25rem; padding-left: 0.25rem; }
+
+.zRow.zG-2 { margin-right: -0.5rem; margin-left: -0.5rem; }
+.zRow.zG-2 > [class*="zCol"] { padding-right: 0.5rem; padding-left: 0.5rem; }
+
+.zRow.zG-3 { margin-right: -0.75rem; margin-left: -0.75rem; }
+.zRow.zG-3 > [class*="zCol"] { padding-right: 0.75rem; padding-left: 0.75rem; }
+
+.zRow.zG-4 { margin-right: -1rem; margin-left: -1rem; }
+.zRow.zG-4 > [class*="zCol"] { padding-right: 1rem; padding-left: 1rem; }
+
+.zRow.zG-5 { margin-right: -1.5rem; margin-left: -1.5rem; }
+.zRow.zG-5 > [class*="zCol"] { padding-right: 1.5rem; padding-left: 1.5rem; }
+
+/* ─── 4. Flex utilities ────────────────────────────────────────────────────── */
+
+.zFlex-row             { flex-direction: row !important; }
+.zFlex-column          { flex-direction: column !important; }
+.zFlex-row-reverse     { flex-direction: row-reverse !important; }
+.zFlex-column-reverse  { flex-direction: column-reverse !important; }
+
+.zFlex-wrap            { flex-wrap: wrap !important; }
+.zFlex-nowrap          { flex-wrap: nowrap !important; }
+
+.zFlex-start           { justify-content: flex-start !important; }
+.zFlex-end             { justify-content: flex-end !important; }
+.zFlex-center          { justify-content: center !important; }
+.zFlex-between         { justify-content: space-between !important; }
+.zFlex-around          { justify-content: space-around !important; }
+.zFlex-evenly          { justify-content: space-evenly !important; }
+
+.zFlex-items-start     { align-items: flex-start !important; }
+.zFlex-items-end       { align-items: flex-end !important; }
+.zFlex-items-center    { align-items: center !important; }
+.zFlex-items-stretch   { align-items: stretch !important; }
+.zFlex-items-baseline  { align-items: baseline !important; }
+
+.zFlex-fill            { flex: 1 1 auto !important; }
+.zFlex-1               { flex: 1 !important; }
+.zFlex-grow-0          { flex-grow: 0 !important; }
+.zFlex-grow-1          { flex-grow: 1 !important; }
+.zFlex-shrink-0        { flex-shrink: 0 !important; }
+.zFlex-shrink-1        { flex-shrink: 1 !important; }
+
+.zGap-0 { gap: 0 !important; }
+.zGap-1 { gap: 0.25rem !important; }
+.zGap-2 { gap: 0.5rem !important; }
+.zGap-3 { gap: 0.75rem !important; }
+.zGap-4 { gap: 1rem !important; }
+.zGap-5 { gap: 1.5rem !important; }
+
+/* ─── 5. Display helpers ───────────────────────────────────────────────────── */
+
+.zD-none   { display: none !important; }
+.zD-block  { display: block !important; }
+.zD-flex   { display: flex !important; }
+.zD-inline { display: inline !important; }
+.zD-inline-block { display: inline-block !important; }
+.zD-inline-flex  { display: inline-flex !important; }
+
+/* ─── 6. Spacing helpers ───────────────────────────────────────────────────── */
+
+.zm-0 { margin: 0 !important; }
+.zm-1 { margin: 0.25rem !important; }
+.zm-2 { margin: 0.5rem !important; }
+.zm-3 { margin: 0.75rem !important; }
+.zm-4 { margin: 1rem !important; }
+.zm-5 { margin: 1.5rem !important; }
+
+.zmt-0 { margin-top: 0 !important; }
+.zmt-1 { margin-top: 0.25rem !important; }
+.zmt-2 { margin-top: 0.5rem !important; }
+.zmt-3 { margin-top: 0.75rem !important; }
+.zmt-4 { margin-top: 1rem !important; }
+.zmt-5 { margin-top: 1.5rem !important; }
+
+.zmb-0 { margin-bottom: 0 !important; }
+.zmb-1 { margin-bottom: 0.25rem !important; }
+.zmb-2 { margin-bottom: 0.5rem !important; }
+.zmb-3 { margin-bottom: 0.75rem !important; }
+.zmb-4 { margin-bottom: 1rem !important; }
+.zmb-5 { margin-bottom: 1.5rem !important; }
+
+.zms-0 { margin-left: 0 !important; }
+.zms-1 { margin-left: 0.25rem !important; }
+.zms-2 { margin-left: 0.5rem !important; }
+.zms-3 { margin-left: 0.75rem !important; }
+.zms-4 { margin-left: 1rem !important; }
+.zms-5 { margin-left: 1.5rem !important; }
+
+.zme-0 { margin-right: 0 !important; }
+.zme-1 { margin-right: 0.25rem !important; }
+.zme-2 { margin-right: 0.5rem !important; }
+.zme-3 { margin-right: 0.75rem !important; }
+.zme-4 { margin-right: 1rem !important; }
+.zme-5 { margin-right: 1.5rem !important; }
+
+.zp-0 { padding: 0 !important; }
+.zp-1 { padding: 0.25rem !important; }
+.zp-2 { padding: 0.5rem !important; }
+.zp-3 { padding: 0.75rem !important; }
+.zp-4 { padding: 1rem !important; }
+.zp-5 { padding: 1.5rem !important; }
+
+.zpt-0 { padding-top: 0 !important; }
+.zpt-1 { padding-top: 0.25rem !important; }
+.zpt-2 { padding-top: 0.5rem !important; }
+.zpt-3 { padding-top: 0.75rem !important; }
+.zpt-4 { padding-top: 1rem !important; }
+.zpt-5 { padding-top: 1.5rem !important; }
+
+.zpb-0 { padding-bottom: 0 !important; }
+.zpb-1 { padding-bottom: 0.25rem !important; }
+.zpb-2 { padding-bottom: 0.5rem !important; }
+.zpb-3 { padding-bottom: 0.75rem !important; }
+.zpb-4 { padding-bottom: 1rem !important; }
+.zpb-5 { padding-bottom: 1.5rem !important; }
+
+.zps-0 { padding-left: 0 !important; }
+.zps-1 { padding-left: 0.25rem !important; }
+.zps-2 { padding-left: 0.5rem !important; }
+.zps-3 { padding-left: 0.75rem !important; }
+.zps-4 { padding-left: 1rem !important; }
+.zps-5 { padding-left: 1.5rem !important; }
+
+.zpe-0 { padding-right: 0 !important; }
+.zpe-1 { padding-right: 0.25rem !important; }
+.zpe-2 { padding-right: 0.5rem !important; }
+.zpe-3 { padding-right: 0.75rem !important; }
+.zpe-4 { padding-right: 1rem !important; }
+.zpe-5 { padding-right: 1.5rem !important; }
+
+/* ─── 7. Tabs ──────────────────────────────────────────────────────────────── */
+
+.zTab-content > .zTab-pane { display: none; }
+.zTab-content > .zActive   { display: block; }
+
+/* Fade animation (opt-in via .zFade) */
+.zTab-pane.zFade {
+  opacity: 0;
+  transition: opacity 0.15s linear;
+}
+.zTab-pane.zFade.zShow { opacity: 1; }
+
+/* ─── 8. Nav / Nav-pills ───────────────────────────────────────────────────── */
+
+.zNav {
+  display: flex;
+  flex-wrap: wrap;
+  padding-left: 0;
+  margin-bottom: 0;
+  list-style: none;
+}
+
+.zNav-link {
+  display: block;
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+
+.zNav-link.zDisabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: default;
+}
+
+/* Pills */
+.zNav-pills .zNav-link {
+  border-radius: 0.375rem;
+}
+
+/* Active state — color set by app CSS, not here */
+.zNav-pills .zNav-link.zActive {
+  font-weight: 500;
+}
+
+/* ─── 9. Spinner ───────────────────────────────────────────────────────────── */
+
+.zSpinner-border {
+  display: inline-block;
+  width: 2rem;
+  height: 2rem;
+  border: 0.25em solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: zSpinner-border-spin 0.75s linear infinite;
+  vertical-align: -0.125em;
+}
+
+.zSpinner-border-sm {
+  width: 1rem;
+  height: 1rem;
+  border-width: 0.2em;
+}
+
+.zSpinner-grow {
+  display: inline-block;
+  width: 2rem;
+  height: 2rem;
+  background-color: currentColor;
+  border-radius: 50%;
+  opacity: 0;
+  animation: zSpinner-grow-pulse 0.75s linear infinite;
+  vertical-align: -0.125em;
+}
+
+.zSpinner-grow-sm { width: 1rem; height: 1rem; }
+
+@keyframes zSpinner-border-spin { to { transform: rotate(360deg); } }
+@keyframes zSpinner-grow-pulse  {
+  0%   { transform: scale(0); opacity: 1; }
+  50%  { opacity: 1; transform: scale(1); }
+  100% { transform: scale(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zSpinner-border, .zSpinner-grow { animation-duration: 1.5s; }
+}
+
+/* ─── 10. Misc runtime helpers ─────────────────────────────────────────────── */
+
+.zContainer-fluid {
+  width: 100%;
+  padding-right: 0.75rem;
+  padding-left: 0.75rem;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.zVisually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0,0,0,0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.zText-muted    { opacity: 0.6; }
+.zText-center   { text-align: center !important; }
+.zText-start    { text-align: left !important; }
+.zText-end      { text-align: right !important; }
+
+.zW-100  { width: 100% !important; }
+.zH-100  { height: 100% !important; }
+.zmx-auto { margin-left: auto !important; margin-right: auto !important; }
+
+.zRounded        { border-radius: 0.375rem !important; }
+.zRounded-circle { border-radius: 50% !important; }
+
+/* Badge (structural — no color) */
+.zBadge {
+  display: inline-block;
+  padding: 0.25em 0.5em;
+  font-size: 0.75em;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: 0.375rem;
+}
