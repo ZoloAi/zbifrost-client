@@ -28,10 +28,14 @@ export default class DashboardRenderer {
   // ── Public API ──────────────────────────────────────────────────────────────
 
   async render(config, targetElement) {
-    const { folder, sidebar, panels = {}, default: defaultPanel, type = 'sidebar' } = config;
+    const { folder, sidebar, panels = {}, default: defaultPanel, type = 'sidebar', _zClass } = config;
     this.logger.log('[DashboardRenderer] render config:', config);
 
     const container  = this._buildStructure(sidebar, panels, defaultPanel, type);
+    // Apply _zClass from zUI onto the container (e.g. _zClass: crm-dashboard)
+    if (_zClass) {
+      _zClass.split(/[\s,]+/).filter(Boolean).forEach(c => container.classList.add(c));
+    }
     const nav        = container.querySelector('.zDash-sidebar');
     const tabContent = container.querySelector('.zDash-panel');
 
