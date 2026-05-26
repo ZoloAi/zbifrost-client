@@ -74,8 +74,12 @@ export default class DashboardRenderer {
   _buildStructure(sidebar, panels, defaultPanel) {
     const container  = createDiv({ class: 'zContainer-fluid zDash-container' });
     const row        = createDiv({ class: 'zRow zG-0' });
+    // Structural layout: sidebar+panel always side-by-side regardless of app CSS
+    row.style.cssText = 'display:flex;flex-wrap:nowrap;align-items:flex-start;';
     const sidebarCol = createDiv({ class: 'zCol-auto' });
+    sidebarCol.style.cssText = 'flex-shrink:0;';
     const contentCol = createDiv({ class: 'zCol' });
+    contentCol.style.cssText = 'flex:1;min-width:0;';
 
     const nav = document.createElement('nav');
     nav.className = 'zNav zFlex-column zNav-pills zDash-sidebar';
