@@ -28,8 +28,6 @@
 html {
   font-family: sans-serif;
   line-height: 1.15;
-  -webkit-text-size-adjust: 100%;
-  -webkit-tap-highlight-color: rgba(0,0,0,0);
 }
 
 body {
@@ -44,6 +42,35 @@ body {
 img, svg { display: block; max-width: 100%; }
 
 a { text-decoration: none; color: inherit; }
+
+/* ─── Custom elements — must be block for layout ───────────────────────────── */
+
+zvaf,
+zNavBar,
+zBifrostBadge { display: block; }
+
+zBifrostBadge {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+/* ─── zBifrostBadge states ─────────────────────────────────────────────────── */
+
+.zBadge-pending { color: #fbbf24; }
+.zBadge-success { color: #34d399; }
+.zBadge-error   { color: #f87171; }
+.zBadge-dot     { border-radius: 50%; background: currentColor; }
+.zIcon          { display: inline-block; width: 0.75em; height: 0.75em; fill: currentColor; }
+
+/* ─── zNavBar structural ───────────────────────────────────────────────────── */
+
+zNavBar .zNavbar         { display: flex; align-items: center; flex-wrap: wrap; }
+zNavBar .zNavbar-collapse { display: flex; align-items: center; flex: 1; }
+zNavBar .zNavbar-nav     { display: flex; list-style: none; margin: 0; padding: 0; }
+zNavBar .zNav-item       { position: relative; }
 
 /* ─── 2. Grid ──────────────────────────────────────────────────────────────── */
 
@@ -406,6 +433,25 @@ a { text-decoration: none; color: inherit; }
 .zRounded        { border-radius: 0.375rem !important; }
 .zRounded-circle { border-radius: 50% !important; }
 
+/* Base button structural (no colors — app/theme sets those) */
+.zBtn {
+  display: inline-block;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: middle;
+  user-select: none;
+  border: 1px solid transparent;
+  text-decoration: none;
+}
+.zBtn:focus { outline: 2px solid rgba(79, 70, 229, 0.5); outline-offset: 2px; }
+
+/* Structural display defaults */
+.zSignal     { display: block; }
+.zCard       { position: relative; }
+.zInputGroup { display: flex; align-items: stretch; }
+.zInputGroup > .zInputGroup-text { display: flex; align-items: center; }
+
 /* Badge (structural — no color) */
 .zBadge {
   display: inline-block;
@@ -634,15 +680,13 @@ a { text-decoration: none; color: inherit; }
   margin-bottom: 0.3rem;
 }
 
-/* Inputs & selects — appearance reset required for mobile Chrome/WebKit */
+/* Inputs & selects */
 .zDash-container .zInput {
-  -webkit-appearance: none;
   appearance: none;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(79, 70, 229, 0.2);
   border-radius: 7px;
   color: #e2e8f0;
-  -webkit-text-fill-color: #e2e8f0;
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   width: 100%;
