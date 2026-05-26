@@ -109,8 +109,11 @@ export class ZDisplayOrchestrator {
         this.logger.debug('[ZDisplayOrchestrator] Chunk contains gate');
       }
 
-      // Check if we're rendering into a dashboard panel (zDash context)
-      const dashboardPanelContent = document.getElementById('dashboard-panel-content');
+      // Check if we're rendering into a dashboard panel (zDash context).
+      // Prefer the active .zTab-pane inside .zDash-panel (zTheme-native tabs),
+      // fall back to the legacy #dashboard-panel-content id.
+      const activeDashPane = document.querySelector('.zDash-panel .zTab-pane.zActive');
+      const dashboardPanelContent = activeDashPane || document.getElementById('dashboard-panel-content');
       const contentDiv = dashboardPanelContent || this.client._zVaFElement;
 
       if (!contentDiv) {
