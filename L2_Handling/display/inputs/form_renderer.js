@@ -493,6 +493,15 @@ export class FormRenderer {
       }
     }
 
+    // If the server requests a full reload (e.g., after login, to rebuild the
+    // RBAC-filtered zDash sidebar with the new session), honour it with a short
+    // delay so the success message is briefly visible before navigation.
+    if (response.reload === true) {
+      this.logger.log('[FormRenderer] Server requested page reload for RBAC sidebar refresh');
+      setTimeout(() => { window.location.reload(); }, 800);
+      return;
+    }
+
     // Refresh navbar after successful submission (e.g., after login)
     // This ensures RBAC-filtered navbar items are updated
     if (this.client && typeof this.client._fetchAndPopulateNavBar === 'function') {
