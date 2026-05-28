@@ -494,14 +494,26 @@ export class FormRenderer {
       }
     }
 
-    // Server-requested navigation (e.g. login → account page).
+    // Server-requested navigation (e.g. login → home page).
     // Converts @. zPaths to URL paths before client-side SPA navigation.
     if (response.navigate) {
       const routePath = convertZPathToURL(response.navigate);
       this.logger.log('[FormRenderer] Server requested navigation to:', routePath);
       setTimeout(() => {
         if (this.client && typeof this.client._navigateToRoute === 'function') {
-          this.client._navigateToRoute(routePath);
+          // Navigate, THEN refresh the navbar — login changed the session, so the
+          // RBAC-filtered nav (zAccount/logout) must rebuild for the new role.
+          // Mirrors the bounce-back path; without it the navbar is stale until reload.
+          this.client._navigateToRoute(routePath).then(() => {
+            if (typeof this.client._fetchAndPopulateNavBar === 'function') {
+              this.logger.log('[FormRenderer] Refreshing navbar after post-login navigation');
+              this.client._fetchAndPopulateNavBar().catch(err => {
+                this.logger.error('[FormRenderer] Failed to refresh navbar:', err);
+              });
+            }
+          }).catch(err => {
+            this.logger.error('[FormRenderer] Navigation failed:', err);
+          });
         } else {
           window.location.href = routePath;
         }
