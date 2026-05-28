@@ -184,19 +184,30 @@ export class MessageHandler {
         // For bounce-back completions (e.g., after login/logout), always navigate to home via client-side nav
         // This avoids double-back issues and ensures correct block loading
         if (message.reason === 'bounce_back_block_completed') {
-          // onSuccess may target any route; default to home for plain bounces.
+          // Refresh NavBar after any bounce (RBAC updates after login/logout).
+          const refreshNav = () => {
+            if (typeof this.client._fetchAndPopulateNavBar === 'function') {
+              this.logger.log('[MessageHandler] Refreshing NavBar after bounce-back');
+              this.client._fetchAndPopulateNavBar().catch(err => {
+                this.logger.error('[MessageHandler] Failed to refresh NavBar:', err);
+              });
+            }
+          };
+
+          // ^ bounce block (no explicit target): return to the previous page.
+          if (message.back) {
+            this.logger.log('[MessageHandler] Bounce-back - returning to previous page');
+            window.history.back();
+            // History navigation re-renders asynchronously; refresh navbar after it settles.
+            setTimeout(refreshNav, 300);
+            return;
+          }
+
+          // Explicit (onSuccess) target, else home for plain bounces.
           const target = message.url || '/';
           this.logger.log('[MessageHandler] Bounce-back - navigating to ' + target + ' via client-side nav');
           if (this.client && typeof this.client._navigateToRoute === 'function') {
-            this.client._navigateToRoute(target).then(() => {
-              // Refresh NavBar after navigation (for RBAC updates after login/logout)
-              if (typeof this.client._fetchAndPopulateNavBar === 'function') {
-                this.logger.log('[MessageHandler] Refreshing NavBar after bounce-back');
-                this.client._fetchAndPopulateNavBar().catch(err => {
-                  this.logger.error('[MessageHandler] Failed to refresh NavBar:', err);
-                });
-              }
-            }).catch(err => {
+            this.client._navigateToRoute(target).then(refreshNav).catch(err => {
               this.logger.error('[MessageHandler] Navigation failed:', err);
             });
           } else {
