@@ -184,10 +184,11 @@ export class MessageHandler {
         // For bounce-back completions (e.g., after login/logout), always navigate to home via client-side nav
         // This avoids double-back issues and ensures correct block loading
         if (message.reason === 'bounce_back_block_completed') {
-          this.logger.log('[MessageHandler] Bounce-back - navigating to home via client-side nav');
+          // onSuccess may target any route; default to home for plain bounces.
+          const target = message.url || '/';
+          this.logger.log('[MessageHandler] Bounce-back - navigating to ' + target + ' via client-side nav');
           if (this.client && typeof this.client._navigateToRoute === 'function') {
-            // Navigate to home
-            this.client._navigateToRoute('/').then(() => {
+            this.client._navigateToRoute(target).then(() => {
               // Refresh NavBar after navigation (for RBAC updates after login/logout)
               if (typeof this.client._fetchAndPopulateNavBar === 'function') {
                 this.logger.log('[MessageHandler] Refreshing NavBar after bounce-back');
@@ -200,7 +201,7 @@ export class MessageHandler {
             });
           } else {
             // Fallback: use window.location (will cause reload)
-            window.location.href = '/';
+            window.location.href = target;
           }
           return;
         }
