@@ -82,9 +82,25 @@ export class NavigationManager {
       if (!res.ok) {
         throw new Error(`Route not found: ${routePath} (${res.status})`);
       }
-      const { zBlock, zVaFile, zVaFolder } = await res.json();
+      const routeConfig = await res.json();
+      const { zBlock, zVaFile, zVaFolder, zMeta } = routeConfig;
 
       this.logger.debug('[ClientNav] Route config', { zVaFile, zVaFolder, zBlock });
+
+      // Inject page-specific zBrush CSS (not loaded by full-page <head> on SPA nav)
+      const brushes = zMeta?.zBrush
+        ? (Array.isArray(zMeta.zBrush) ? zMeta.zBrush : [zMeta.zBrush])
+        : [];
+      brushes.forEach(brush => {
+        const href = `/styles/${brush}.css`;
+        if (!document.querySelector(`link[href="${href}"]`)) {
+          const link = document.createElement('link');
+          link.rel = 'stylesheet';
+          link.href = href;
+          document.head.appendChild(link);
+          this.logger.debug('[ClientNav] Injected zBrush CSS:', href);
+        }
+      });
 
       // Clear current content and show loading state
       if (this.client._zVaFElement) {
