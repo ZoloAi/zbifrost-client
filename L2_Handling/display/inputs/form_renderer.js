@@ -33,6 +33,7 @@
 // Layer 2: Utilities
 import { createElement, clearElement } from '../../../zSys/dom/dom_utils.js';
 import { withErrorBoundary } from '../../../zSys/validation/error_boundary.js';
+import { convertZPathToURL } from '../primitives/link_primitives.js';
 
 // Layer 0: Primitives
 import {
@@ -491,6 +492,21 @@ export class FormRenderer {
         this.formContexts.delete(dialogId);
         this.logger.log('[FormRenderer] Cleaned up form context for:', dialogId);
       }
+    }
+
+    // Server-requested navigation (e.g. login → account page).
+    // Converts @. zPaths to URL paths before client-side SPA navigation.
+    if (response.navigate) {
+      const routePath = convertZPathToURL(response.navigate);
+      this.logger.log('[FormRenderer] Server requested navigation to:', routePath);
+      setTimeout(() => {
+        if (this.client && typeof this.client._navigateToRoute === 'function') {
+          this.client._navigateToRoute(routePath);
+        } else {
+          window.location.href = routePath;
+        }
+      }, 800);
+      return;
     }
 
     // If the server requests a full reload (e.g., after login, to rebuild the
