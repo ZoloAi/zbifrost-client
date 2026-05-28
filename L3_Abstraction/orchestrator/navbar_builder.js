@@ -54,6 +54,22 @@ export class NavBarBuilder {
       toggle.addEventListener('click', (e) => {
         e.preventDefault();
         const isOpen = menu?.classList.contains('zShow');
+
+        // Second click on an already-open dropdown → navigate to the parent page
+        if (isOpen) {
+          const href = toggle.getAttribute('href') || toggle.dataset.navHref;
+          if (href && href !== '#') {
+            menu.classList.remove('zShow');
+            toggle.setAttribute('aria-expanded', 'false');
+            if (client?.navigationManager) {
+              client.navigationManager.navigateToRoute(href);
+            } else {
+              window.location.href = href;
+            }
+          }
+          return;
+        }
+
         // Close all sibling dropdowns
         navEl.querySelectorAll('.zDropdown-menu.zShow').forEach(m => {
           if (m !== menu) {
