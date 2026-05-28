@@ -521,33 +521,6 @@ export class FormRenderer {
       return;
     }
 
-    // No explicit onSuccess → rely on flow: bounce back to the previous page
-    // (login is a detour). Falls back to home when there's no app history.
-    // Sister of the zLogout ^ bounce. Navbar always refreshes for RBAC.
-    if (response.back === true) {
-      this.logger.log('[FormRenderer] No onSuccess - bouncing to previous page');
-      const refreshNav = () => {
-        if (typeof this.client._fetchAndPopulateNavBar === 'function') {
-          this.client._fetchAndPopulateNavBar().catch(err => {
-            this.logger.error('[FormRenderer] Failed to refresh navbar:', err);
-          });
-        }
-      };
-      setTimeout(() => {
-        if (window.history.length > 1) {
-          window.history.back();
-          setTimeout(refreshNav, 300);
-        } else if (this.client && typeof this.client._navigateToRoute === 'function') {
-          this.client._navigateToRoute('/').then(refreshNav).catch(err => {
-            this.logger.error('[FormRenderer] Navigation failed:', err);
-          });
-        } else {
-          window.location.href = '/';
-        }
-      }, 800);
-      return;
-    }
-
     // If the server requests a full reload (e.g., after login, to rebuild the
     // RBAC-filtered zDash sidebar with the new session), honour it with a short
     // delay so the success message is briefly visible before navigation.
