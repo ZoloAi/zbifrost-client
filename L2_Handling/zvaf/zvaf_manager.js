@@ -198,6 +198,24 @@ export class ZVaFManager {
         return;
       }
 
+      // 3A reuse: client-side bounce-back / refresh has no new server round-trip,
+      // so reuse the RBAC-filtered nav_html the server embedded in the page head
+      // (zui-config). The legacy /api/zui/config endpoint was removed (smart
+      // routing + connection_info supersede it) — hitting it 404s and spams the
+      // console. Only fall through to the fetch if no embedded nav_html exists.
+      const embeddedNav = this.zuiConfig?.nav_html || this.client?.zuiConfig?.nav_html;
+      if (embeddedNav) {
+        this.client._zNavBarElement.innerHTML = embeddedNav;
+        NavBarBuilder.wireNavBarEvents(
+          this.client._zNavBarElement.firstElementChild,
+          this.client,
+          this.logger
+        );
+        this.logger.log('[NavBar] NavBar refreshed from embedded zui-config nav_html (3A)');
+        await this.client._enableClientSideNavigation();
+        return;
+      }
+
       // Legacy path: fetch from /api/zui/config
       let freshConfig;
       if (this.client.httpCache) {
