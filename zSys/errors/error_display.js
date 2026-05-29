@@ -14,6 +14,10 @@ export class ErrorDisplay {
 
     this.errors = [];
     this.container = null;
+    // Dedup: collapse repeated identical errors (e.g. WebSocket reconnect loops,
+    // missing _requestId) into ONE toast with a ×N counter. Repeats after the
+    // first go to the console only — dev-accurate without the UX spam.
+    this._active = new Map(); // key -> { el, countEl, count, timer }
 
     if (this.autoCreate) {
       this._createContainer();
@@ -61,6 +65,24 @@ export class ErrorDisplay {
       this._createContainer();
     }
 
+    // ── Dedup ──────────────────────────────────────────────────────────────
+    // Same title+message already on screen → don't stack another toast. Bump its
+    // ×N counter, refresh its auto-dismiss, and log the repeat to the console.
+    const dedupeKey = `${this._getErrorTitle(errorInfo)}::${errorInfo.message || ''}`;
+    const existing = this._active.get(dedupeKey);
+    if (existing && existing.el && existing.el.parentNode) {
+      existing.count += 1;
+      if (existing.countEl) existing.countEl.textContent = ` ×${existing.count}`;
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[Bifrost][repeat suppressed]', dedupeKey, errorInfo);
+      }
+      if (existing.timer) clearTimeout(existing.timer);
+      if (this.autoDismiss) {
+        existing.timer = setTimeout(() => this._dismissError(existing.el), this.autoDismiss);
+      }
+      return;
+    }
+
     // Create error element
     const errorEl = document.createElement('div');
     errorEl.className = 'bifrost-error';
@@ -89,7 +111,7 @@ export class ErrorDisplay {
       align-items: center;
     `;
     title.innerHTML = `
-      <span>[WARN] ${this._getErrorTitle(errorInfo)}</span>
+      <span>[WARN] ${this._getErrorTitle(errorInfo)}<span class="bifrost-error-count" style="font-weight:600;"></span></span>
       <button style="
         background: none;
         border: none;
@@ -136,6 +158,12 @@ export class ErrorDisplay {
     this.container.appendChild(errorEl);
     this.errors.push(errorEl);
 
+    // Register as the active toast for this dedupe key
+    const countEl = title.querySelector('.bifrost-error-count');
+    const entry = { el: errorEl, countEl, count: 1, timer: null, key: dedupeKey };
+    errorEl.dataset.dedupeKey = dedupeKey;
+    this._active.set(dedupeKey, entry);
+
     // Remove oldest error if we exceed max
     if (this.errors.length > this.maxErrors) {
       const oldest = this.errors.shift();
@@ -146,7 +174,7 @@ export class ErrorDisplay {
 
     // Auto-dismiss after timeout
     if (this.autoDismiss) {
-      setTimeout(() => this._dismissError(errorEl), this.autoDismiss);
+      entry.timer = setTimeout(() => this._dismissError(errorEl), this.autoDismiss);
     }
 
     // Add slide-in animation
@@ -164,6 +192,14 @@ export class ErrorDisplay {
 
     // Fade out animation
     errorEl.style.animation = 'fadeOut 0.3s ease-out';
+
+    // Release the dedupe slot so a later occurrence can toast fresh
+    const key = errorEl.dataset ? errorEl.dataset.dedupeKey : null;
+    if (key && this._active.get(key)?.el === errorEl) {
+      const entry = this._active.get(key);
+      if (entry.timer) clearTimeout(entry.timer);
+      this._active.delete(key);
+    }
 
     setTimeout(() => {
       if (errorEl.parentNode) {
@@ -252,6 +288,8 @@ export class ErrorDisplay {
       }
     });
     this.errors = [];
+    this._active.forEach(entry => { if (entry.timer) clearTimeout(entry.timer); });
+    this._active.clear();
   }
 
   /**
