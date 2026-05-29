@@ -109,12 +109,21 @@ export class ZDisplayOrchestrator {
         this.logger.debug('[ZDisplayOrchestrator] Chunk contains gate');
       }
 
+      // Inline zDelegate: a dotted target ($Block.Section) was clicked and we must
+      // render its fragment WITHIN the carrier's parent container (not swap zVaF).
+      // client._inlineDelegate carries {host, restoreNodes}. Takes precedence over
+      // the normal panel/root target. (MVP: single-chunk sections like Change_Photo;
+      // multi-chunk inline delegates are a future refinement.)
+      const inlineDelegate = this.client._inlineDelegate || null;
+
       // Check if we're rendering into a dashboard panel (zDash context).
       // Prefer the active .zTab-pane inside .zDash-panel (zTheme-native tabs),
       // fall back to the legacy #dashboard-panel-content id.
       const activeDashPane = document.querySelector('.zDash-panel .zTab-pane.zActive');
       const dashboardPanelContent = activeDashPane || document.getElementById('dashboard-panel-content');
-      const contentDiv = dashboardPanelContent || this.client._zVaFElement;
+      const contentDiv = inlineDelegate
+        ? inlineDelegate.host
+        : (dashboardPanelContent || this.client._zVaFElement);
 
       if (!contentDiv) {
         throw new Error('zVaF element not initialized. Ensure _initZVaFElements() was called.');
@@ -245,8 +254,17 @@ export class ZDisplayOrchestrator {
 
         // Wire any _zDelegate buttons declared in this chunk
         this._wireDelegates();
+
+        // Inline zDelegate: append a Back affordance that restores the carrier's
+        // original nodes (avatar img + Edit Picture button) in place, then clear
+        // the active delegate so the next render targets the panel/root normally.
+        if (inlineDelegate) {
+          this._appendInlineDelegateBack(targetContainer, inlineDelegate);
+          this.client._inlineDelegate = null;
+        }
       } else {
         this.logger.warn(`[ZDisplayOrchestrator] [WARN] Chunk #${chunk_num} has no YAML data to render`);
+        if (inlineDelegate) this.client._inlineDelegate = null;
       }
 
       // If this is a gate chunk, log that we're waiting for backend
@@ -819,6 +837,28 @@ export class ZDisplayOrchestrator {
       resetMenu();
     }, { once: true });
     ph.appendChild(backBtn);
+  }
+
+  /**
+   * Append a Back affordance for an inline zDelegate. Clicking it restores the
+   * carrier's original child nodes (saved live, so their listeners survive) into
+   * the host container — collapsing the delegated section back to the carrier.
+   * Uses the shared .acct-back-action styling + a stable hook class.
+   * @param {HTMLElement} container - where the delegated fragment was rendered (the host)
+   * @param {{host: HTMLElement, restoreNodes: Node[]}} inlineDelegate
+   */
+  _appendInlineDelegateBack(container, inlineDelegate) {
+    const backBtn = document.createElement('button');
+    backBtn.type = 'button';
+    backBtn.className = 'zBtn acct-back-action acct-inline-back zmt-3';
+    backBtn.innerHTML = '← Back';
+    backBtn.addEventListener('click', () => {
+      const { host, restoreNodes } = inlineDelegate;
+      if (host && Array.isArray(restoreNodes)) {
+        host.replaceChildren(...restoreNodes);
+      }
+    }, { once: true });
+    container.appendChild(backBtn);
   }
 
   /**

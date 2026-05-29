@@ -111,19 +111,30 @@ export default class ButtonRenderer {
 
     // zDelegate dict action — first-class dual-mode "internal rewiring" verb.
     // {zDelegate: "$Block.Sub"} (or {zDelegate: {target: …}}) means: on click,
-    // run the target in place (routeless, AJAX-like). Normalize to the "$target"
-    // string so the existing zDelta click path swaps content without a route
-    // change — the same target the CLI carrier-harvest dispatches.
+    // run the target in place (routeless, AJAX-like). Two flavours, by target shape:
+    //   • DOTTED ($Block.Section) → render the nested section IN PLACE within this
+    //     carrier's parent key container (the way descending into a sub-block feels
+    //     in CLI). Routed to client.zDelegateInline — no panel swap, no crumb push.
+    //   • SINGLE ($Block) → routeless panel swap via the existing zDelta click path
+    //     (used by menu options + Back affordances).
+    let delegateInline = null;
     if (action && typeof action === 'object') {
       if (action.zDelegate !== undefined) {
         const spec = action.zDelegate;
         const target = (spec && typeof spec === 'object')
           ? (spec.target || spec.to || spec.zDelta)
           : spec;
-        action = (typeof target === 'string' && target)
+        const norm = (typeof target === 'string' && target)
           ? (target.startsWith('$') ? target : `$${target.replace(/^[%^~]/, '')}`)
           : null;
-        this.logger.log('[ButtonRenderer] zDelegate → routeless delta to:', action);
+        if (norm && norm.replace(/^\$/, '').includes('.')) {
+          delegateInline = norm;
+          action = null;
+          this.logger.log('[ButtonRenderer] zDelegate (inline, dotted) →', delegateInline);
+        } else {
+          action = norm;
+          this.logger.log('[ButtonRenderer] zDelegate → routeless delta to:', action);
+        }
       } else {
         action = null; // unknown object action — ignore rather than crash
       }
@@ -149,12 +160,27 @@ export default class ButtonRenderer {
         button.style.cssText = cssString;
       }
     }
-    this._attachClickHandler(button, requestId, label, true, type, action);
+    if (delegateInline) {
+      // Inline delegate: render the dotted target section within this carrier's
+      // parent key container, with a Back affordance — no route change, no panel
+      // swap. The carrier itself stays a normal button (no wizard-action wiring).
+      button.dataset.zdelegateInline = delegateInline;
+      button.addEventListener('click', () => {
+        const client = this.client || window.bifrostClient;
+        if (client?.zDelegateInline) {
+          client.zDelegateInline(delegateInline, button);
+        } else {
+          this.logger.warn('[ButtonRenderer] zDelegateInline unavailable on client');
+        }
+      });
+    } else {
+      this._attachClickHandler(button, requestId, label, true, type, action);
 
-    // Mark step-key actions (non-plugin, non-placeholder) for wizard restart handling
-    if (action && action !== '#' && !action.startsWith('&')) {
-      button.dataset.wizardAction = action;
-      this.logger.log('[ButtonRenderer] Added wizard-action:', action, 'to button:', label);
+      // Mark step-key actions (non-plugin, non-placeholder) for wizard restart handling
+      if (action && action !== '#' && !action.startsWith('&')) {
+        button.dataset.wizardAction = action;
+        this.logger.log('[ButtonRenderer] Added wizard-action:', action, 'to button:', label);
+      }
     }
 
     // _zDelegate on a button → delegate label/value to a target input on click

@@ -1379,6 +1379,52 @@ class BifrostCore {
     }
 
     /**
+     * zDelegate (inline) — render a dotted target section ($Block.Section) IN PLACE
+     * within the carrier's parent key container, routeless and AJAX-like. Unlike
+     * zDelta (which swaps the whole zVaF panel + is crumb-aware), this keeps the
+     * surrounding panel intact and injects a Back affordance to restore the carrier.
+     * Mirrors CLI "descend into a sub-block, then bounce back" — the dual-mode SSOT
+     * intent of zDelegate-to-a-KEY. The server already resolves the dotted path to
+     * just that section's fragment; we only redirect WHERE the fragment lands.
+     * @param {string} targetPath - e.g. "$Edit_Profile.Change_Photo"
+     * @param {HTMLElement} carrierEl - the clicked carrier button
+     */
+    async zDelegateInline(targetPath, carrierEl) {
+      const base = String(targetPath).replace(/^[$^~]+/, '').trim();
+      const zVaFile = this.zuiConfig?.zVaFile;
+      const zVaFolder = this.zuiConfig?.zVaFolder;
+      if (!zVaFile || !zVaFolder) {
+        this.logger.warn(`[zDelegateInline] No zVaFile/zVaFolder — cannot delegate: ${base}`);
+        return;
+      }
+      // Host = the carrier's parent KEY container (e.g. the avatar's #Avatar). The
+      // section renders within it, the same way descending into a sub-block reads
+      // in CLI. Fall back to the zVaF root if the carrier is unparented.
+      const host = (carrierEl && carrierEl.parentElement)
+        ? (carrierEl.parentElement.closest('[data-zkey]') || carrierEl.parentElement)
+        : this._zVaFElement;
+      if (!host) {
+        this.logger.warn('[zDelegateInline] No host container — falling back to zDelta');
+        return this.zDelta(base);
+      }
+      // Save the LIVE child nodes (not innerHTML) so restoring the carrier keeps its
+      // event listeners intact. Clearing the host detaches them but the refs survive.
+      this._inlineDelegate = {
+        host,
+        restoreNodes: Array.from(host.childNodes),
+        target: base,
+      };
+      this.logger.log(`[zDelegateInline] ${zVaFile} → ${base} (host: ${host.id || host.getAttribute?.('data-zkey') || 'parent'})`);
+      return this.send({
+        event: 'execute_walker',
+        zBlock: base,
+        zVaFile,
+        zVaFolder,
+        _zDelegateInline: true,   // hint for future first-class server-side wiring
+      });
+    }
+
+    /**
      * Navigate back to the previous block (intra-file).
      * Mirrors CLI zBack semantics — pops one level from the block navigation history.
      * Falls back to browser history.back() if no block history is available.
