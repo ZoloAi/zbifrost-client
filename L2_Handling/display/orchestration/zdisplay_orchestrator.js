@@ -442,6 +442,17 @@ export class ZDisplayOrchestrator {
         continue;
       }
 
+      // zDialog: flat top-level form spec (e.g. the ^Edit_Profile block streams
+      // `zDialog: {title, model, fields, onSubmit, _dialogId}` as a direct key —
+      // not wrapped as value.zDialog). Render it as an inline form. Without this,
+      // the spec falls through to the generic object recursion and paints nothing.
+      if (key === 'zDialog' && value && typeof value === 'object') {
+        const formRenderer = await this.client._ensureFormRenderer();
+        const formElement = formRenderer.renderForm(value);
+        if (formElement) parentElement.appendChild(formElement);
+        continue;
+      }
+
       // zFunc: execute a @zfunc plugin call and render result inline
       if (key === 'zFunc' || key === 'zfunc') {
         const funcStr = typeof value === 'string' ? value : String(value);
@@ -713,12 +724,28 @@ export class ZDisplayOrchestrator {
       btn.className = 'zNav-link zBtn w-100 text-start zp-2';
       btn.setAttribute('role', 'menuitem');
       btn.dataset.key = optKey;
-      const label = menuValue.labels?.[optKey] ?? optKey.replace(/_/g, ' ');
+      // Strip the leading delta/bounce/anchor modifier ($ ^ ~) so the visible
+      // label reads cleanly ("$Edit_Profile" → "Edit Profile"). The raw optKey is
+      // preserved on data-key for selection/resolution.
+      const label = menuValue.labels?.[optKey] ?? optKey.replace(/^[$^~]+/, '').replace(/_/g, ' ');
       btn.innerHTML = `<span class="zBadge zBadge-secondary me-2">${idx + 1}</span>${label}`;
 
       btn.addEventListener('click', async () => {
         // Guard: prevent re-entry while a zfunc is already in-flight for this option
         if (btn.dataset.zfuncInFlight === '1') return;
+
+        // No inline sibling content → the option is a $-reference to a SEPARATE
+        // block (e.g. ~Profile_Actions* → ^Edit_Profile). Mirror CLI menu→block
+        // selection: navigate in place via zDelta (same route, content swap). The
+        // target block carries its own Back affordance (zDelegate $Profile).
+        if (menuValue[optKey] === undefined) {
+          const targetBlock = optKey.replace(/^[$^~]+/, '').trim();
+          if (targetBlock && this.client?.zDelta) {
+            this.logger.log('[ZMenu] option → zDelta block hop:', targetBlock);
+            this.client.zDelta(targetBlock);
+          }
+          return;
+        }
 
         resetMenu();
         btn.classList.add('active');
@@ -726,8 +753,6 @@ export class ZDisplayOrchestrator {
         const ph = placeholders[optKey];
         if (!ph) return;
         ph.style.display = 'block';
-
-        if (!menuValue[optKey]) return;
 
         ph.dataset.rendered = '1';
         const isBounce = bounceOptions.has(optKey);
