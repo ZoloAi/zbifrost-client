@@ -9,12 +9,14 @@
  *                        .zTab-pane#panel-{Name} (one per sidebar item)
  *
  * Tab switching:
- *   - zTheme.initTabs() wires [data-bs-toggle="tab"] → show/hide .zTab-pane
+ *   - The renderer owns click→activate (set .zActive on link + .zTab-pane). It
+ *     does NOT rely on window.zTheme.initTabs(), which can be the host page's
+ *     external theme at render time and leave panes unwired (race).
  *   - zdisplay_orchestrator.js targets .zDash-panel .zTab-pane.zActive for rendering
  *
  * Content loading:
  *   - Default panel: deferred WS execute_walker on init (setTimeout 0)
- *   - Other panels:  lazy-loaded via WS on first zTabShown event
+ *   - Other panels:  lazy-loaded via WS on first click (once per pane)
  */
 
 import { createDiv } from '../primitives/generic_containers.js';
@@ -51,11 +53,6 @@ export default class DashboardRenderer {
         container.classList.toggle('zDash-sidebar-open');
       });
 
-      // Close sidebar when a panel tab is selected
-      nav?.querySelectorAll('[data-bs-toggle="tab"]').forEach(link => {
-        link.addEventListener('click', () => container.classList.remove('zDash-sidebar-open'));
-      });
-
       // Close sidebar on outside click
       document.addEventListener('click', (e) => {
         if (!container.contains(e.target)) {
@@ -64,15 +61,40 @@ export default class DashboardRenderer {
       });
     }
 
-    // Wire zTheme tab show/hide behaviour
-    if (window.zTheme?.initTabs) {
-      window.zTheme.initTabs();
-    }
+    // ── Tab switching + lazy panel load — OWNED by the renderer ───────────────
+    // We deliberately do NOT depend on window.zTheme.initTabs() here. The host
+    // page (zVaF.html) loads its own ztheme.js, so at render time window.zTheme
+    // can be that *external* theme whose initTabs() doesn't wire zBifrost panes;
+    // zBifrost's own initTabs only becomes active after injectZBase swaps the
+    // global in — which races behind this render and leaves links unwired.
+    // Owning the click here makes zDash navigation deterministic regardless of
+    // which theme is on window.zTheme.
+    const links = nav ? [...nav.querySelectorAll('[data-bs-toggle="tab"]')] : [];
 
-    // Lazy-load panel content on first tab switch
-    nav?.querySelectorAll('[data-bs-toggle="tab"]').forEach(link => {
-      link.addEventListener('zTabShown', async () => {
+    const _activatePane = (panelName) => {
+      links.forEach((l) => {
+        const on = l.dataset.panel === panelName;
+        l.classList.toggle('zActive', on);
+        l.setAttribute('aria-selected', on ? 'true' : 'false');
+        if (on) l.removeAttribute('tabindex'); else l.setAttribute('tabindex', '-1');
+      });
+      tabContent?.querySelectorAll('.zTab-pane').forEach((p) => {
+        const on = p.id === `panel-${panelName}`;
+        p.classList.toggle('zActive', on);
+        if (on) {
+          requestAnimationFrame(() => p.classList.add('zShow'));
+        } else {
+          p.classList.remove('zShow');
+        }
+      });
+    };
+
+    links.forEach((link) => {
+      link.addEventListener('click', async (e) => {
+        e.preventDefault();
         const panelName = link.dataset.panel;
+        container.classList.remove('zDash-sidebar-open');
+        _activatePane(panelName);
         const pane = tabContent?.querySelector(`#panel-${panelName}`);
         if (pane && !pane.dataset.loaded) {
           await this._loadPanel(folder, panelName, pane);

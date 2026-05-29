@@ -217,8 +217,27 @@ export class MessageHandler {
           return;
         }
 
-        // For RBAC denials, use history.back() if we have app history
+        // For RBAC denials, prefer an explicit redirect target (SSOT: zRBAC
+        // onDenied / global login route resolved server-side). Falls back to
+        // history.back()/home when no target was provided.
         if (message.reason === 'rbac_denied') {
+          if (message.url) {
+            this.logger.log('[MessageHandler] RBAC denied - redirecting to ' + message.url);
+            if (this.client && typeof this.client._navigateToRoute === 'function') {
+              this.client._navigateToRoute(message.url).then(() => {
+                if (typeof this.client._fetchAndPopulateNavBar === 'function') {
+                  this.client._fetchAndPopulateNavBar().catch(() => {});
+                }
+              }).catch(err => {
+                this.logger.error('[MessageHandler] RBAC redirect failed:', err);
+                window.location.href = message.url;
+              });
+            } else {
+              window.location.href = message.url;
+            }
+            return;
+          }
+
           const hasAppHistory = window.history.length > 2 ||
                                 (window.history.length > 1 && document.referrer.includes(window.location.hostname));
 

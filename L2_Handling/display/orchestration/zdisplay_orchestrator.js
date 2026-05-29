@@ -363,6 +363,13 @@ export class ZDisplayOrchestrator {
         continue;
       }
 
+      // onChange is a declarative event binding (consumed at input render / stamped
+      // server-side into the input as zapi_url), never renderable content. Skip it so
+      // its zAPI/zFunc payload never paints or executes at render time.
+      if (key === 'onChange') {
+        continue;
+      }
+
       this.logger.debug(`Rendering item: ${key}`);
 
       // Check if this value has its own metadata (for nested _zClass support)

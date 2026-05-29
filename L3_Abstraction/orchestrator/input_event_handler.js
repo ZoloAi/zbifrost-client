@@ -203,7 +203,15 @@ export class InputEventHandler {
       if (title) {
         inputAttrs.title = title;
       }
-      
+
+      // Field name (needed for multipart field + stable selectors) and file accept filter.
+      if (eventData.name) {
+        inputAttrs.name = eventData.name;
+      }
+      if (inputType === 'file' && eventData.accept) {
+        inputAttrs.accept = eventData.accept;
+      }
+
       inputElement = createInput(inputType, inputAttrs);
     }
     
@@ -321,8 +329,76 @@ export class InputEventHandler {
       }
     }
     
+    // Declarative zAPI upload: a file input whose block carried onChange.zAPI is
+    // stamped server-side with zapi_url/zapi_method. Bind change → multipart POST
+    // → swap the nearest avatar img. (No zFunc ever reaches the client.)
+    if (inputType === 'file' && eventData.zapi_url) {
+      const fileInput = (element.tagName === 'INPUT' && element.type === 'file')
+        ? element
+        : element.querySelector('input[type=file]');
+      if (fileInput) {
+        this._bindZapiUpload(fileInput, eventData);
+      }
+    }
+
     this.logger.log(`[InputEventHandler] Rendered ${event} ${inputType} (id=${inputId}, aria-describedby=${ariaDescribedBy || 'none'}, condition=${condition || 'none'})`);
     return element;
+  }
+
+  /**
+   * Bind a declarative zAPI file upload to a file input.
+   * On change: POST the selected file as multipart to the server-stamped endpoint,
+   * then on a {ok, data.url} envelope swap the nearest avatar image.
+   * @param {HTMLInputElement} fileInput
+   * @param {Object} eventData - carries zapi_url, zapi_method, zapi_field/name
+   */
+  _bindZapiUpload(fileInput, eventData) {
+    const url = eventData.zapi_url;
+    const method = (eventData.zapi_method || 'POST').toUpperCase();
+    const field = eventData.zapi_field || eventData.name || 'file';
+
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+
+      const form = new FormData();
+      form.append(field, file, file.name);
+
+      try {
+        this.logger.log(`[InputEventHandler] zAPI upload → ${method} ${url} (${file.name}, ${file.size}B)`);
+        const resp = await fetch(url, { method, body: form, credentials: 'same-origin' });
+        let json = null;
+        try { json = await resp.json(); } catch (_) { /* non-JSON */ }
+
+        if (resp.ok && json && json.ok && json.data && json.data.url) {
+          this._swapAvatar(fileInput, json.data.url);
+          this.logger.log(`[InputEventHandler] zAPI upload ok → ${json.data.url}`);
+        } else {
+          const err = (json && json.error) || `HTTP ${resp.status}`;
+          this.logger.error(`[InputEventHandler] zAPI upload failed: ${err}`);
+        }
+      } catch (e) {
+        this.logger.error(`[InputEventHandler] zAPI upload error: ${e}`);
+      }
+    });
+  }
+
+  /**
+   * Swap the nearest avatar image to the freshly uploaded URL.
+   * Prefers an `img.acct-avatar` in the input's ancestry, then falls back globally.
+   * @param {HTMLInputElement} fileInput
+   * @param {string} url - already cache-busted server-side (?v=...)
+   */
+  _swapAvatar(fileInput, url) {
+    let img = null;
+    let anc = fileInput.parentElement;
+    while (anc && anc !== document.body) {
+      const candidate = anc.querySelector('img.acct-avatar');
+      if (candidate) { img = candidate; break; }
+      anc = anc.parentElement;
+    }
+    if (!img) img = document.querySelector('img.acct-avatar');
+    if (img) img.src = url;
   }
 
   /**
