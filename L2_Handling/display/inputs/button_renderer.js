@@ -107,7 +107,27 @@ export default class ButtonRenderer {
     // Extract data (support both direct and nested formats)
     const requestId = data.requestId || data.data?.requestId;
     const label = data.label || data.prompt || data.data?.prompt || 'Click Me';
-    const action = data.action || data.data?.action || null;
+    let action = data.action || data.data?.action || null;
+
+    // zDelegate dict action — first-class dual-mode "internal rewiring" verb.
+    // {zDelegate: "$Block.Sub"} (or {zDelegate: {target: …}}) means: on click,
+    // run the target in place (routeless, AJAX-like). Normalize to the "$target"
+    // string so the existing zDelta click path swaps content without a route
+    // change — the same target the CLI carrier-harvest dispatches.
+    if (action && typeof action === 'object') {
+      if (action.zDelegate !== undefined) {
+        const spec = action.zDelegate;
+        const target = (spec && typeof spec === 'object')
+          ? (spec.target || spec.to || spec.zDelta)
+          : spec;
+        action = (typeof target === 'string' && target)
+          ? (target.startsWith('$') ? target : `$${target.replace(/^[%^~]/, '')}`)
+          : null;
+        this.logger.log('[ButtonRenderer] zDelegate → routeless delta to:', action);
+      } else {
+        action = null; // unknown object action — ignore rather than crash
+      }
+    }
     const rawColor = data.color || data.data?.color || 'primary';
     const color = rawColor.toLowerCase(); // Normalize to lowercase for consistency
     const type = data.type || data.data?.type || 'button'; // Default to 'button' for safety
