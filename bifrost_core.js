@@ -1370,12 +1370,11 @@ class BifrostCore {
       this._prevBlock = this._currentBlock || this.options.zBlock || null;
       this._currentBlock = blockName;
       this.logger.log(`[zDelta] Block hop: ${zVaFile} → ${blockName} (prev: ${this._prevBlock})`);
-      return this.send({
-        event: 'execute_walker',
-        zBlock: blockName,
-        zVaFile,
-        zVaFolder
-      });
+      // execute_walker is fire-and-forget: the server streams chunks, it never
+      // sends a single _requestId-correlated response. Using send() here would
+      // leak a never-resolving callback into messageHandler.callbacks, which then
+      // trips the "response without _requestId" guard on the next real response.
+      this._sendWalker({ event: 'execute_walker', zBlock: blockName, zVaFile, zVaFolder });
     }
 
     /**
@@ -1415,7 +1414,8 @@ class BifrostCore {
         target: base,
       };
       this.logger.log(`[zDelegateInline] ${zVaFile} → ${base} (host: ${host.id || host.getAttribute?.('data-zkey') || 'parent'})`);
-      return this.send({
+      // Fire-and-forget (chunks stream back); see zDelta note on the _requestId guard.
+      this._sendWalker({
         event: 'execute_walker',
         zBlock: base,
         zVaFile,
@@ -1446,12 +1446,30 @@ class BifrostCore {
       this.logger.log(`[zBack] Returning to block: ${prevBlock}`);
       this._currentBlock = prevBlock;
       this._prevBlock = null;
-      return this.send({
-        event: 'execute_walker',
-        zBlock: prevBlock,
-        zVaFile,
-        zVaFolder
-      });
+      // Fire-and-forget (chunks stream back); see zDelta note on the _requestId guard.
+      this._sendWalker({ event: 'execute_walker', zBlock: prevBlock, zVaFile, zVaFolder });
+    }
+
+    /**
+     * Fire-and-forget walker send. execute_walker responses are streamed as chunks
+     * (handled in MessageHandler before response correlation), never a single
+     * _requestId-correlated reply — so we must NOT register a send() callback or it
+     * leaks forever and trips the "response without _requestId" guard. Mirrors the
+     * raw-send pattern already used by autoRequest and ClientNavigationManager.
+     * Attaches the session id (matching MessageHandler.send) so server-side session
+     * sync still works for routeless hops.
+     * @param {Object} payload - execute_walker payload
+     */
+    _sendWalker(payload) {
+      if (!this.isConnected()) {
+        this.logger.warn('[_sendWalker] Not connected — dropping walker request', payload);
+        return;
+      }
+      try {
+        const sid = this.messageHandler?._getSessionIdFromCookie?.();
+        if (sid) payload._sessionId = sid;
+      } catch (_) { /* cookie read is best-effort */ }
+      this.connection.send(JSON.stringify(payload));
     }
 
     /**
