@@ -320,8 +320,15 @@ export class MessageHandler {
         return;
       }
 
-      // If message looks like a response but has no _requestId, log error
-      if ((message.result !== undefined || message.error !== undefined) && this.callbacks.size > 0) {
+      // If a message looks like a BARE request/response (no event type) but carries
+      // no _requestId while callbacks are pending, that's a real backend protocol bug.
+      // Event-typed messages (execute_zfunc_response, execute_code_response,
+      // input_response, …) legitimately carry `result` and route by their own
+      // `event`/`requestId` below — they must NOT trip this guard or it false-fires
+      // on every avatar zInja (execute_zfunc) render.
+      if (!message.event &&
+          (message.result !== undefined || message.error !== undefined) &&
+          this.callbacks.size > 0) {
         this.logger.error(
           'Received response without _requestId! Backend must echo _requestId in all responses.',
           { message, pendingRequests: this.callbacks.size }
