@@ -191,13 +191,17 @@ export default class DashboardRenderer {
     pane.dataset.loaded = 'pending';
     pane.innerHTML = '<div class="zSpinner-border zSpinner-border-sm zText-muted zm-3" role="status"></div>';
 
+    // SSOT render-target: pin the exact pane element so the streamed chunks paint
+    // HERE regardless of DOM timing — no reliance on querySelector('.zActive')
+    // resolving correctly at the moment each chunk arrives.
+    this.client._renderTarget = { el: pane, mode: 'replace', once: false };
+
     try {
       await this.client.connection.send(JSON.stringify({
         event:         'execute_walker',
         zBlock:        panelName,
         zVaFile:       `zUI.${panelName}`,
         zVaFolder:     folder,
-        _renderTarget: 'dashboard-panel-content',
       }));
       setTimeout(() => { pane.dataset.loaded = 'done'; }, 2000);
     } catch (err) {

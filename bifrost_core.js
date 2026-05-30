@@ -1408,10 +1408,15 @@ class BifrostCore {
       }
       // Save the LIVE child nodes (not innerHTML) so restoring the carrier keeps its
       // event listeners intact. Clearing the host detaches them but the refs survive.
-      this._inlineDelegate = {
-        host,
+      // SSOT render-target primitive: zDelegate is the render-target + restore
+      // (once) variant. zDash sets the bare target (no restore). One resolver in
+      // the orchestrator consumes whichever producer set client._renderTarget.
+      this._renderTarget = {
+        el: host,
+        mode: 'replace',
         restoreNodes: Array.from(host.childNodes),
         target: base,
+        once: true,
       };
       this.logger.log(`[zDelegateInline] ${zVaFile} → ${base} (host: ${host.id || host.getAttribute?.('data-zkey') || 'parent'})`);
       // Fire-and-forget (chunks stream back); see zDelta note on the _requestId guard.

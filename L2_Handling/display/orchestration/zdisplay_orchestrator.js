@@ -55,6 +55,9 @@ export class ZDisplayOrchestrator {
    * @param {Object} blockData - Block configuration from YAML
    */
   async renderBlock(blockData) {
+    // Full block render = full navigation; reset any scoped render-target so the
+    // next chunk stream targets the freshly rendered DOM, not a stale pane/host.
+    this.client._renderTarget = null;
     // Use stored reference (set by _initZVaFElements)
     const contentElement = this.client._zVaFElement;
     if (!contentElement) {
@@ -94,6 +97,32 @@ export class ZDisplayOrchestrator {
   }
 
   /**
+   * SSOT render-target resolver — decides WHERE the next walker output paints.
+   * Returns a descriptor: { el, mode: 'replace'|'append', restoreNodes?, once }.
+   *
+   * Priority:
+   *   1. Explicit client._renderTarget (still attached to the DOM) — set by a
+   *      producer: zDelegate inline (host + restoreNodes, once) or zDash panel
+   *      (the exact pane element, persistent).
+   *   2. Auto-detect the active zDash pane (legacy #dashboard-panel-content).
+   *   3. zVaF root.
+   *
+   * Keeping the auto-detect as a fallback means a producer that forgets to set
+   * the target never regresses to a broken render.
+   * @returns {{el: HTMLElement, mode: string, restoreNodes?: Node[], once: boolean}}
+   */
+  _resolveRenderTarget() {
+    const rt = this.client._renderTarget;
+    if (rt && rt.el && document.contains(rt.el)) {
+      return { mode: 'replace', once: false, ...rt };
+    }
+    const pane = document.querySelector('.zDash-panel .zTab-pane.zActive')
+      || document.getElementById('dashboard-panel-content');
+    if (pane) return { el: pane, mode: 'replace', once: false };
+    return { el: this.client._zVaFElement, mode: 'replace', once: false };
+  }
+
+  /**
    * Progressive chunk rendering (Terminal First philosophy)
    * Appends chunks from backend as they arrive, stops at failed gates
    * @param {Object} message - Chunk message from backend
@@ -109,21 +138,13 @@ export class ZDisplayOrchestrator {
         this.logger.debug('[ZDisplayOrchestrator] Chunk contains gate');
       }
 
-      // Inline zDelegate: a dotted target ($Block.Section) was clicked and we must
-      // render its fragment WITHIN the carrier's parent container (not swap zVaF).
-      // client._inlineDelegate carries {host, restoreNodes}. Takes precedence over
-      // the normal panel/root target. (MVP: single-chunk sections like Change_Photo;
-      // multi-chunk inline delegates are a future refinement.)
-      const inlineDelegate = this.client._inlineDelegate || null;
-
-      // Check if we're rendering into a dashboard panel (zDash context).
-      // Prefer the active .zTab-pane inside .zDash-panel (zTheme-native tabs),
-      // fall back to the legacy #dashboard-panel-content id.
-      const activeDashPane = document.querySelector('.zDash-panel .zTab-pane.zActive');
-      const dashboardPanelContent = activeDashPane || document.getElementById('dashboard-panel-content');
-      const contentDiv = inlineDelegate
-        ? inlineDelegate.host
-        : (dashboardPanelContent || this.client._zVaFElement);
+      // SSOT render-target: a single descriptor decides WHERE the chunk paints.
+      // Producers set client._renderTarget — zDelegate inline (host + restore,
+      // once) or zDash panel (the exact pane, persistent). The resolver prefers
+      // it, then auto-detects the active dash pane, then the zVaF root. zDelegate
+      // is just the render-target + restore variant of the same primitive.
+      const renderTarget = this._resolveRenderTarget();
+      const contentDiv = renderTarget.el;
 
       if (!contentDiv) {
         throw new Error('zVaF element not initialized. Ensure _initZVaFElements() was called.');
@@ -135,8 +156,9 @@ export class ZDisplayOrchestrator {
       // Determine the target container for rendering
       let targetContainer = contentDiv;
 
-      // ALWAYS clear loading state on first chunk (regardless of metadata)
-      if (chunk_num === 1) {
+      // Clear loading state on first chunk (skip when the target is append-mode,
+      // e.g. a future accretion surface). Default mode is 'replace'.
+      if (chunk_num === 1 && renderTarget.mode !== 'append') {
         contentDiv.innerHTML = '';
         this.logger.debug('[ZDisplayOrchestrator] Cleared loading state');
       }
@@ -255,16 +277,22 @@ export class ZDisplayOrchestrator {
         // Wire any _zDelegate buttons declared in this chunk
         this._wireDelegates();
 
-        // Inline zDelegate: append a Back affordance that restores the carrier's
-        // original nodes (avatar img + Edit Picture button) in place, then clear
-        // the active delegate so the next render targets the panel/root normally.
-        if (inlineDelegate) {
-          this._appendInlineDelegateBack(targetContainer, inlineDelegate);
-          this.client._inlineDelegate = null;
+        // once-target (zDelegate inline): if it carried restoreNodes, append a Back
+        // affordance that restores the carrier's original nodes (avatar img + Edit
+        // Picture button) in place, then clear the target so the next render
+        // targets the panel/root normally.
+        if (renderTarget.once) {
+          if (Array.isArray(renderTarget.restoreNodes)) {
+            this._appendInlineDelegateBack(targetContainer, {
+              host: renderTarget.el,
+              restoreNodes: renderTarget.restoreNodes,
+            });
+          }
+          this.client._renderTarget = null;
         }
       } else {
         this.logger.warn(`[ZDisplayOrchestrator] [WARN] Chunk #${chunk_num} has no YAML data to render`);
-        if (inlineDelegate) this.client._inlineDelegate = null;
+        if (renderTarget.once) this.client._renderTarget = null;
       }
 
       // If this is a gate chunk, log that we're waiting for backend
