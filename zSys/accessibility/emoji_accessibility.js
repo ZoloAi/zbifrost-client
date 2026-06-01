@@ -15,6 +15,8 @@
  * Version: 1.0.0
  */
 
+import { escapeHtml } from '../dom/encoding_utils.js';
+
 class EmojiAccessibility {
     constructor(logger = console) {
         this.logger = logger;
@@ -133,9 +135,8 @@ class EmojiAccessibility {
      * @returns {string} - Escaped text
      */
     _escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        // SSOT escape (also escapes " / ' — safe for the aria-label attribute)
+        return escapeHtml(text);
     }
     
     /**

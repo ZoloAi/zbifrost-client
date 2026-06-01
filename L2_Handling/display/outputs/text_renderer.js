@@ -70,6 +70,7 @@ import emojiAccessibility from '../../../zSys/accessibility/emoji_accessibility.
 
 // Link primitives: shared URL conversion and type detection (SSOT)
 import { convertZPathToURL, detectLinkType, LINK_TYPE_EXTERNAL } from '../primitives/link_primitives.js';
+import { escapeHtml, safeHref } from '../../../zSys/dom/encoding_utils.js';
 
 // 
 // Text Renderer Class
@@ -228,24 +229,14 @@ export class TextRenderer {
     // Double-backtick spans FIRST: `` `text` `` -> <code>`text`</code>
     // Allows single backticks inside; must precede single-backtick regex
     html = html.replace(/``(.+?)``/g, (match, code) => {
-      const escaped = code
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
+      const escaped = escapeHtml(code);
       const placeholder = `___INLINE_CODE_${inlineCodeBlocks.length}___`;
       inlineCodeBlocks.push(`<code>${escaped}</code>`);
       return placeholder;
     });
     html = html.replace(/`([^`]+)`/g, (match, code) => {
-      // Escape HTML entities AND convert special chars to display literally
-      const escaped = code
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;')
+      // Escape HTML entities (SSOT) AND convert special chars to display literally
+      const escaped = escapeHtml(code)
         .replace(/\n/g, '\\n')   // Convert actual newlines to literal \n for display
         .replace(/\t/g, '\\t');  // Convert actual tabs to literal \t for display
       const placeholder = `___INLINE_CODE_${inlineCodeBlocks.length}___`;
@@ -258,7 +249,11 @@ export class TextRenderer {
     // is already shielded by ___INLINE_CODE_N___ placeholders.
     // Uses shared convertZPathToURL + detectLinkType from link_primitives.js (SSOT).
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)(?:\{([^}]*)\})?/g, (match, text, url, classes) => {
-      const href = convertZPathToURL(url);
+      // Harden against DOM-XSS: block dangerous href schemes + attr-escape the
+      // resolved URL, and HTML-escape the link label (it can carry user content).
+      // Inline markdown markers (**/*/etc.) survive escaping and convert later.
+      const href = safeHref(convertZPathToURL(url));
+      const label = escapeHtml(text);
       const ltype = detectLinkType(url);
       const target = ltype === LINK_TYPE_EXTERNAL ? '_blank' : '_self';
       const rel = (ltype === LINK_TYPE_EXTERNAL && target === '_blank') ? ' rel="noopener noreferrer"' : '';
@@ -267,7 +262,7 @@ export class TextRenderer {
         const sanitized = classes.trim().replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, ' ').trim();
         if (sanitized) classAttr = ` class="${sanitized}"`;
       }
-      return `<a href="${href}" target="${target}"${rel}${classAttr}>${text}</a>`;
+      return `<a href="${href}" target="${target}"${rel}${classAttr}>${label}</a>`;
     });
 
     // Lists: - item / * item (UL) or 1- item (OL) -> <ul class="zList"> / <ol class="zList">

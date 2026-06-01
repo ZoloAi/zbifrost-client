@@ -15,7 +15,8 @@
  * - TIMEOUTS: Request/connection/animation timeouts
  * - COLORS: Semantic color names
  * - SIZES: Component size variants
- * - EVENT_TYPES: DOM and WebSocket event types
+ * - EVENT_TYPES: DOM event names (browser-native)
+ * - PROTOCOL_EVENTS / PROTOCOL_REASONS: zBifrost WebSocket protocol vocabulary (SSOT)
  * - CSS_CLASSES: Common zTheme class names
  * - TYPOGRAPHY: Font weights and styles
  * 
@@ -100,8 +101,8 @@ export const SIZES = {
 // ─────────────────────────────────────────────────────────────────
 // Event Type Constants (80+ occurrences across 18 files)
 // ─────────────────────────────────────────────────────────────────
+// DOM event names (browser-native — used with addEventListener).
 export const EVENT_TYPES = {
-  // DOM Events
   CLICK: 'click',
   CHANGE: 'change',
   SUBMIT: 'submit',
@@ -110,12 +111,61 @@ export const EVENT_TYPES = {
   BLUR: 'blur',
   KEYDOWN: 'keydown',
   KEYUP: 'keyup',
-  
-  // WebSocket Events (zBifrost protocol)
+};
+
+// ─────────────────────────────────────────────────────────────────
+// zBifrost WebSocket Protocol Events (SSOT)
+// ─────────────────────────────────────────────────────────────────
+// Control-plane + display event names that arrive on `message.event`.
+// This is the single source of truth for the client's protocol vocabulary —
+// message_handler dispatch MUST reference these instead of raw string
+// literals. Keep in sync with the server's emitted event names. Render-node
+// *display* ops carried inside a render_chunk are decoded separately via the
+// opcode map (mirror of render_opcodes.py) in message_handler.
+export const PROTOCOL_EVENTS = {
+  // Transport / connection control
   RENDER_CHUNK: 'render_chunk',
   CONNECTION_INFO: 'connection_info',
   NAVIGATE_BACK: 'navigate_back',
   ERROR: 'error',
+
+  // Display / output
+  DISPLAY: 'display',
+  OUTPUT: 'output',
+  ZTABLE: 'zTable',
+  ZDASH: 'zDash',
+  ZMENU: 'zMenu',
+  ZDIALOG: 'zDialog',
+  SWIPER_INIT: 'swiper_init',
+
+  // Progress / spinner
+  PROGRESS_BAR: 'progress_bar',
+  PROGRESS_UPDATE: 'progress_update',
+  PROGRESS_COMPLETE: 'progress_complete',
+  SPINNER_START: 'spinner_start',
+  SPINNER_STOP: 'spinner_stop',
+
+  // Input request / response
+  REQUEST_INPUT: 'request_input',
+  INPUT_REQUEST: 'input_request',
+  INPUT_RESPONSE: 'input_response',
+
+  // Execution / wizard / RBAC
+  EXECUTE_WALKER: 'execute_walker',
+  EXECUTE_ZFUNC_RESPONSE: 'execute_zfunc_response',
+  EXECUTE_CODE_RESPONSE: 'execute_code_response',
+  ZFUNC_EXEC: 'zfunc_exec',
+  WIZARD_GATE_RESULT: 'wizard_gate_result',
+  RBAC_DENIED: 'rbac_denied',
+
+  // Logging
+  APP_LOG: 'app_log',
+};
+
+// navigate_back `reason` discriminators (SSOT).
+export const PROTOCOL_REASONS = {
+  BOUNCE_BACK_COMPLETED: 'bounce_back_block_completed',
+  RBAC_DENIED: 'rbac_denied',
 };
 
 // ─────────────────────────────────────────────────────────────────

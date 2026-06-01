@@ -8,25 +8,47 @@
  */
 
 // Constants
-import { TIMEOUTS, EVENT_TYPES } from '../../L1_Foundation/constants/bifrost_constants.js';
+import { TIMEOUTS, PROTOCOL_EVENTS, PROTOCOL_REASONS } from '../../L1_Foundation/constants/bifrost_constants.js';
 
-// zRender op-code decoder — reverse map of render_opcodes.py (op → display handler key)
-// This table contains no business logic, wizard flows, or application routes.
+// zRender op-code decoder — reverse map of render_opcodes.py EVENT_TO_OP
+// (op → display handler key). This table contains no business logic, wizard
+// flows, or application routes — only the wire-op ⇄ display-event vocabulary.
+//
+// DRIFT WARNING: this is a hand-maintained mirror of the server SSOT at
+// zGuard/zguard/bifrost/zBifrost_modules/render/render_opcodes.py. Keep the
+// entry count in sync (currently 35). If the server adds/renames an op, an
+// unknown opcode will surface via _warnUnknownOpcode() below instead of being
+// silently dropped.
 const _ZRENDER_OPS = {"tx":"text","hd":"header","im":"image","rt":"rich_text","ic":"icon","zu":"zURL","zt":"zTable","er":"error","wr":"warning","su":"success","inf":"info","rs":"read_string","pb":"progress_bar","mn":"zMenu","zd":"zDash","zdl":"zDialog","zi":"zInput","sep":"separator","cod":"code","lnk":"link","bdg":"badge","spn":"spinner","ls":"list","dl":"dl","btn":"button","rb":"read_bool","rp":"read_password","jsn":"json","div":"divider","crd":"card","ztrm":"zTerminal","sel":"selection","zcr":"zCrumbs","pc":"progress_complete","swi":"swiper_init"};
+
+// Surface opcode-mirror drift loudly (once per unknown op) so a server change
+// that this client hasn't mirrored is visible instead of silently swallowed.
+const _warnedOpcodes = new Set();
+function _warnUnknownOpcode(op) {
+  if (_warnedOpcodes.has(op)) return;
+  _warnedOpcodes.add(op);
+  console.warn(
+    `[zRender] Unknown render opcode "${op}" — client opcode map is out of sync ` +
+    `with the server (render_opcodes.py). Node passed through undecoded.`
+  );
+}
 
 function _decodeRenderNode(node) {
   if (!node || typeof node !== 'object') return node;
   if (Array.isArray(node)) return node.map(_decodeRenderNode);
-  // Node with an op code — decode and recurse into children
-  if ('e' in node && _ZRENDER_OPS[node.e]) {
-    const decoded = { event: _ZRENDER_OPS[node.e] };
-    for (const [k, v] of Object.entries(node)) {
-      if (k === 'e') continue;
-      decoded[k] = _decodeRenderNode(v);
+  // Node carrying an op code — decode known ops; flag unknown ones as drift.
+  if ('e' in node && typeof node.e === 'string') {
+    if (_ZRENDER_OPS[node.e]) {
+      const decoded = { event: _ZRENDER_OPS[node.e] };
+      for (const [k, v] of Object.entries(node)) {
+        if (k === 'e') continue;
+        decoded[k] = _decodeRenderNode(v);
+      }
+      return decoded;
     }
-    return decoded;
+    _warnUnknownOpcode(node.e);
   }
-  // Container / metadata node — recurse into all values
+  // Container / metadata node (or undecodable op) — recurse into all values.
   const decoded = {};
   for (const [k, v] of Object.entries(node)) {
     decoded[k] = _decodeRenderNode(v);
@@ -58,9 +80,17 @@ export class MessageHandler {
   }
 
   /**
-   * Extract session ID from HTTP cookie for session sync
+   * Extract session ID from HTTP cookie for session sync (WebSocket/HTTP bridge).
+   *
+   * SECURITY NOTE: this reads `session`/`sessionid` via document.cookie, which only
+   * works when the cookie is NOT HttpOnly. The authoritative session lives in the
+   * server-side store; this value is a best-effort sync hint and MUST NOT be treated
+   * as proof of identity (the server re-validates). Deployments that set HttpOnly
+   * (recommended) will simply get null here and rely on the browser to attach the
+   * cookie to the WS handshake — that is the safer path.
+   *
    * @private
-   * @returns {string|null} Session ID or null if not found
+   * @returns {string|null} Session ID or null if not found / HttpOnly
    */
   _getSessionIdFromCookie() {
     // Parse all cookies
@@ -113,7 +143,7 @@ export class MessageHandler {
       this.logger.debug('[MessageHandler] Received message:', message.event || message.display_event || 'unknown');
       
       // Debug zDialog messages to see full structure
-      if (message.display_event === 'zDialog' || (message.data && message.data.event === 'zDialog')) {
+      if (message.display_event === PROTOCOL_EVENTS.ZDIALOG || (message.data && message.data.event === PROTOCOL_EVENTS.ZDIALOG)) {
         this.logger.log('[MessageHandler] zDialog message structure:', JSON.stringify(message, null, 2));
       }
 
@@ -127,7 +157,7 @@ export class MessageHandler {
 
       // Progressive chunk rendering (zWizard chunked execution for Bifrost)
       // MUST be checked BEFORE response correlation (chunks have _requestId but are NOT responses)
-      if (message.event === EVENT_TYPES.RENDER_CHUNK) {
+      if (message.event === PROTOCOL_EVENTS.RENDER_CHUNK) {
         this.logger.debug('[MessageHandler] Chunk event detected:', message.chunk_num);
         // Decode zRender op codes back to display event names before handing to renderers
         if (message.data) {
@@ -143,7 +173,7 @@ export class MessageHandler {
       }
 
       // Connection info event (session data from backend) - v1.6.0
-      if (message.event === EVENT_TYPES.CONNECTION_INFO) {
+      if (message.event === PROTOCOL_EVENTS.CONNECTION_INFO) {
         this.logger.debug('[MessageHandler] Connection info detected');
         this.hooks.call('onConnectionInfo', message.data);
         // Also trigger onConnected for backward compatibility
@@ -152,7 +182,7 @@ export class MessageHandler {
       }
 
       // Error event from backend (walker execution errors, validation errors, etc.)
-      if (message.event === EVENT_TYPES.ERROR || message.event === 'error') {
+      if (message.event === PROTOCOL_EVENTS.ERROR) {
         this.logger.error('[MessageHandler] Backend error received:', message.message || message.error);
         
         // Clear navigation timeout if active
@@ -177,13 +207,13 @@ export class MessageHandler {
       }
 
       // Navigate back event (^ bounce-back after block completion)
-      if (message.event === EVENT_TYPES.NAVIGATE_BACK) {
+      if (message.event === PROTOCOL_EVENTS.NAVIGATE_BACK) {
         this.logger.log('[MessageHandler] NAVIGATE_BACK EVENT - triggering browser back');
         this.logger.log('[MessageHandler] Reason:', message.reason);
 
         // For bounce-back completions (e.g., after login/logout), always navigate to home via client-side nav
         // This avoids double-back issues and ensures correct block loading
-        if (message.reason === 'bounce_back_block_completed') {
+        if (message.reason === PROTOCOL_REASONS.BOUNCE_BACK_COMPLETED) {
           // Refresh NavBar after any bounce (RBAC updates after login/logout).
           const refreshNav = () => {
             if (typeof this.client._fetchAndPopulateNavBar === 'function') {
@@ -220,7 +250,7 @@ export class MessageHandler {
         // For RBAC denials, prefer an explicit redirect target (SSOT: zRBAC
         // onDenied / global login route resolved server-side). Falls back to
         // history.back()/home when no target was provided.
-        if (message.reason === 'rbac_denied') {
+        if (message.reason === PROTOCOL_REASONS.RBAC_DENIED) {
           if (message.url) {
             this.logger.log('[MessageHandler] RBAC denied - redirecting to ' + message.url);
             if (this.client && typeof this.client._navigateToRoute === 'function') {
@@ -262,14 +292,14 @@ export class MessageHandler {
       }
 
       // Wizard gate result (post-gate steps from wizard_gate_submit)
-      if (message.event === 'wizard_gate_result') {
+      if (message.event === PROTOCOL_EVENTS.WIZARD_GATE_RESULT) {
         this.logger.debug('[MessageHandler] wizard_gate_result received for gate:', message.gateKey);
         this.hooks.call('onWizardGateResult', message);
         return;
       }
 
       // Dashboard event (zDash display event for sidebar navigation)
-      if (message.event === 'zDash') {
+      if (message.event === PROTOCOL_EVENTS.ZDASH) {
         this.logger.debug('[MessageHandler] zDash event detected');
         this.logger.log(' [MessageHandler] Dashboard config:', message);
         this.hooks.call('onZDash', message);
@@ -278,7 +308,7 @@ export class MessageHandler {
 
       // Menu event (menu navigation in Bifrost mode)
       // Note: Backend sends 'zMenu' not 'menu' (matches zDash, zDialog pattern)
-      if (message.event === 'zMenu') {
+      if (message.event === PROTOCOL_EVENTS.ZMENU) {
         this.logger.debug('[MessageHandler] zMenu event detected');
         this.logger.log(' [MessageHandler] Menu config:', message);
         this.hooks.call('onMenu', message);
@@ -286,7 +316,7 @@ export class MessageHandler {
       }
 
       // RBAC denial event (access denied)
-      if (message.event === 'rbac_denied') {
+      if (message.event === PROTOCOL_EVENTS.RBAC_DENIED) {
         this.logger.log(' [MessageHandler] RBAC ACCESS DENIED');
         this.logger.log(' RBAC Access Denied:', message.message);
 
@@ -337,19 +367,19 @@ export class MessageHandler {
       }
 
       // Check for specific event types
-      if (message.event === 'input_response') {
+      if (message.event === PROTOCOL_EVENTS.INPUT_RESPONSE) {
         return; // Handled internally by zDisplay
       }
 
       // Handle execute_zfunc_response — resolves promise in ZDisplayOrchestrator._executeZFunc
-      if (message.event === 'execute_zfunc_response') {
+      if (message.event === PROTOCOL_EVENTS.EXECUTE_ZFUNC_RESPONSE) {
         this.logger.log('[MessageHandler] execute_zfunc_response received:', message.requestId);
         this.hooks.call('onZFuncResponse', message);
         return;
       }
 
       // Handle execute_code_response for zTerminal
-      if (message.event === 'execute_code_response') {
+      if (message.event === PROTOCOL_EVENTS.EXECUTE_CODE_RESPONSE) {
         this.logger.log('[MessageHandler] execute_code_response received:', message.requestId);
         // Route to TerminalRenderer's static handler
         const TerminalRenderer = window._TerminalRenderer;
@@ -364,7 +394,7 @@ export class MessageHandler {
       }
 
       // Handle request_input for zTerminal interactive input
-      if (message.event === 'request_input') {
+      if (message.event === PROTOCOL_EVENTS.REQUEST_INPUT) {
         this.logger.log('[MessageHandler] request_input received:', message.requestId, message.prompt, 'isPassword:', message.isPassword);
 
         // zFunc execution: route to inline widget rendered by ZDisplayOrchestrator
@@ -396,7 +426,7 @@ export class MessageHandler {
       }
 
       // Handle real-time output lines from execute_code execution (e.g. zText / Show_Result steps)
-      if (message.event === 'output') {
+      if (message.event === PROTOCOL_EVENTS.OUTPUT) {
         const TerminalRenderer = window._TerminalRenderer;
         if (TerminalRenderer && TerminalRenderer.handleOutput) {
           TerminalRenderer.handleOutput(message);
@@ -407,9 +437,9 @@ export class MessageHandler {
       // zTable event emitted standalone (non-walker contexts, or fallback).
       // In walker/chunk mode, zTable is now injected inline into render_chunk
       // (see advanced_table.py + message_walker._resolve_zdata_reads).
-      if (message.event === 'zTable') {
+      if (message.event === PROTOCOL_EVENTS.ZTABLE) {
         this.logger.log('[MessageHandler] Standalone zTable event received (non-chunk context)');
-        this.hooks.call('onDisplay', { ...message, display_event: 'zTable' });
+        this.hooks.call('onDisplay', { ...message, display_event: PROTOCOL_EVENTS.ZTABLE });
         return;
       }
 
@@ -417,7 +447,7 @@ export class MessageHandler {
       // - Old: {event: 'display', data: {...}}
       // - New: {display_event: 'success', data: {...}}
       // - Progress: {event: 'progress_bar', ...} → treated as display event
-      if (message.event === 'display' || message.type === 'display' || message.display_event) {
+      if (message.event === PROTOCOL_EVENTS.DISPLAY || message.type === PROTOCOL_EVENTS.DISPLAY || message.display_event) {
         this.logger.debug('[MessageHandler] Display event:', message.display_event);
         try {
           this.hooks.call('onDisplay', message);  // Pass full message with display_event
@@ -429,46 +459,46 @@ export class MessageHandler {
       }
 
       // Progress bar events - also route to display renderer
-      if (message.event === 'progress_bar' || message.event === 'progress_complete') {
-        message.display_event = 'progress_bar';
+      if (message.event === PROTOCOL_EVENTS.PROGRESS_BAR || message.event === PROTOCOL_EVENTS.PROGRESS_COMPLETE) {
+        message.display_event = PROTOCOL_EVENTS.PROGRESS_BAR;
         this.hooks.call('onDisplay', message);
         this.hooks.call('onProgressBar', message);  // Also call specific hook for backwards compat
         return;
       }
 
-      if (message.event === 'input_request' || message.type === 'input_request') {
+      if (message.event === PROTOCOL_EVENTS.INPUT_REQUEST || message.type === PROTOCOL_EVENTS.INPUT_REQUEST) {
         this.hooks.call('onInput', message);
         return;
       }
 
-      if (message.event === 'progress_update') {
+      if (message.event === PROTOCOL_EVENTS.PROGRESS_UPDATE) {
         this.hooks.call('onProgressUpdate', message);
         return;
       }
 
-      if (message.event === 'progress_complete') {
+      if (message.event === PROTOCOL_EVENTS.PROGRESS_COMPLETE) {
         this.hooks.call('onProgressComplete', message);
         return;
       }
 
       // Spinner events
-      if (message.event === 'spinner_start') {
+      if (message.event === PROTOCOL_EVENTS.SPINNER_START) {
         this.hooks.call('onSpinnerStart', message);
         return;
       }
 
-      if (message.event === 'spinner_stop') {
+      if (message.event === PROTOCOL_EVENTS.SPINNER_STOP) {
         this.hooks.call('onSpinnerStop', message);
         return;
       }
 
-      if (message.event === 'swiper_init') {
+      if (message.event === PROTOCOL_EVENTS.SWIPER_INIT) {
         this.hooks.call('onSwiperInit', message);
         return;
       }
 
       // App-level log event (zLogger / zos.app.log) — output to browser console
-      if (message.event === 'app_log') {
+      if (message.event === PROTOCOL_EVENTS.APP_LOG) {
         const level = (message.level || 'INFO').toUpperCase();
         const tag   = message.tag ? `[${message.tag}] ` : '';
         const line  = `${tag}${message.message}`;
@@ -480,7 +510,7 @@ export class MessageHandler {
       }
 
       // zFunc execution signal — backend console confirmation, not a UI event
-      if (message.event === 'zfunc_exec') {
+      if (message.event === PROTOCOL_EVENTS.ZFUNC_EXEC) {
         if (message.stdout) console.log('[zFunc stdout]', message.stdout);
         console.log('[zFunc]', message.spec, '→', message.result, message.success ? '✓' : '✗');
         return;
@@ -510,7 +540,7 @@ export class MessageHandler {
       // Only attach for walker execution requests, not for form submissions
       // (forms don't need session sync until AFTER successful login)
       const sessionId = this._getSessionIdFromCookie();
-      if (sessionId && payload.event === 'execute_walker') {
+      if (sessionId && payload.event === PROTOCOL_EVENTS.EXECUTE_WALKER) {
         payload._sessionId = sessionId;
         this.logger.log('[MessageHandler]  Attached session ID to walker execution');
       }

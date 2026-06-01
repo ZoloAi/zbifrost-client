@@ -10,6 +10,8 @@
  * @layer L1 (Foundation)
  */
 
+import { TIMEOUTS } from '../constants/bifrost_constants.js';
+
 export class WebSocketConnection {
   constructor(url, logger, hooks, options = {}) {
     this.url = url;
@@ -17,7 +19,7 @@ export class WebSocketConnection {
     this.hooks = hooks;
     this.options = {
       autoReconnect: options.autoReconnect !== false,
-      reconnectDelay: options.reconnectDelay || 3000
+      reconnectDelay: options.reconnectDelay || TIMEOUTS.RECONNECT_DELAY
     };
     this.ws = null;
   }

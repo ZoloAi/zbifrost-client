@@ -97,9 +97,33 @@
     async _loadCore(connectionInfo) {
       this._coreLoading = true;
       // 3B: server tells us the authoritative core URL; falls back to local.
-      // If script is cross-origin (CDN), relative paths need an absolute base.
+      // Relative ("/...") resolves against the page origin; absolute URLs are
+      // taken as-is (CDN deployments).
       const rawUrl = connectionInfo.bifrost_core_url || '/bifrost/src/bifrost_core.js';
-      const coreUrl = rawUrl.startsWith('/') ? (window.location.origin + rawUrl) : rawUrl;
+      let coreUrl;
+      try {
+        coreUrl = new URL(rawUrl, window.location.origin).href;
+      } catch (e) {
+        this._coreLoading = false;
+        this.logger.error('Invalid bifrost_core_url, refusing to load core:', rawUrl);
+        return;
+      }
+
+      // Origin pinning: bifrost_core_url arrives over the WebSocket and is therefore
+      // attacker-influenceable if connection_info is spoofed. Only import from the
+      // page origin or an explicitly configured allowlist — never an arbitrary
+      // origin, which would load attacker code into the page context.
+      const allowedOrigins = [window.location.origin, ...(this._opts.coreOriginAllowlist || [])];
+      const coreOrigin = new URL(coreUrl).origin;
+      if (!allowedOrigins.includes(coreOrigin)) {
+        this._coreLoading = false;
+        this.logger.error(
+          `Refusing to load bifrost core from disallowed origin "${coreOrigin}". ` +
+          `Allowed: ${allowedOrigins.join(', ')}. ` +
+          `Set opts.coreOriginAllowlist to permit a trusted CDN.`
+        );
+        return;
+      }
       this.logger.info('Loading core from', coreUrl);
 
       // Close the bootstrap WS cleanly before the core opens its own

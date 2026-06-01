@@ -12,6 +12,7 @@
 import { createHeading, createParagraph } from '../primitives/typography_primitives.js';
 import { createSemanticElement, createLanguagePre } from '../primitives/semantic_element_primitive.js';
 import { convertStyleToString } from '../../../zSys/dom/style_utils.js';
+import { escapeHtml } from '../../../zSys/dom/encoding_utils.js';
 
 export class TypographyRenderer {
   constructor(logger) {
@@ -31,13 +32,8 @@ export class TypographyRenderer {
     // \n (explicit escapes) → <br> (line break)
     const processedText = text.replace(/\x1E/g, ' ');
     
-    // STEP 2: Escape HTML entities for XSS safety
-    const escaped = processedText
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+    // STEP 2: Escape HTML entities for XSS safety (SSOT escapeHtml)
+    const escaped = escapeHtml(processedText);
     
     // STEP 3: Convert explicit \n to <br> tags
     return escaped.replace(/\n/g, '<br>');
