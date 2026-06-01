@@ -111,9 +111,14 @@
 
       // Origin pinning: bifrost_core_url arrives over the WebSocket and is therefore
       // attacker-influenceable if connection_info is spoofed. Only import from the
-      // page origin or an explicitly configured allowlist — never an arbitrary
-      // origin, which would load attacker code into the page context.
-      const allowedOrigins = [window.location.origin, ...(this._opts.coreOriginAllowlist || [])];
+      // page origin, the official jsDelivr CDN (where the canonical client ships),
+      // or an explicitly configured allowlist — never an arbitrary origin, which
+      // would load attacker code into the page context.
+      const allowedOrigins = [
+        window.location.origin,
+        'https://cdn.jsdelivr.net',
+        ...(this._opts.coreOriginAllowlist || []),
+      ];
       const coreOrigin = new URL(coreUrl).origin;
       if (!allowedOrigins.includes(coreOrigin)) {
         this._coreLoading = false;
