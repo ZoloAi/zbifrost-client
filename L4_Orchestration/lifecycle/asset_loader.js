@@ -109,8 +109,9 @@ export class AssetLoader {
       this.logger.debug('[AssetLoader] Prism CSS already loaded');
     }
     
-    // Load custom .zolo theme overrides
-    const zoloTheme = '/static/css/prism-zolo-theme.css';
+    // Load custom .zolo theme overrides — bundled WITH the client (syntax/),
+    // resolved relative to this module so the zlsp palette ships built-in.
+    const zoloTheme = new URL('../../syntax/prism-zolo-theme.css', import.meta.url).href;
     if (!document.querySelector(`link[href="${zoloTheme}"]`)) {
       const link = document.createElement('link');
       link.rel = 'stylesheet';
@@ -181,6 +182,11 @@ export class AssetLoader {
     const zoloLanguages = ['zolo', 'zspark', 'zui', 'zschema', 'zconfig', 'zenv'];
     const totalLanguages = zoloLanguages.length;
 
+    // zolo grammars ship WITH the client (syntax/), not the host app. Resolve
+    // them relative to this module so every zApp gets zolo highlighting for
+    // free — no per-app /static/js/prism-*.js copies required.
+    const syntaxBase = new URL('../../syntax/', import.meta.url).href;
+
     const alreadyLoaded = zoloLanguages.every((lang) => window.Prism?.languages?.[lang]);
     if (alreadyLoaded) {
       this.logger.debug('[AssetLoader] Prism .zolo languages already loaded');
@@ -211,7 +217,7 @@ export class AssetLoader {
       }
 
       const lang = zoloLanguages[index];
-      const path = `/static/js/prism-${lang}.js`;
+      const path = `${syntaxBase}prism-${lang}.js`;
 
       // If language is already registered, continue.
       if (window.Prism?.languages?.[lang]) {
