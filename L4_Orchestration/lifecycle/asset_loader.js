@@ -196,14 +196,13 @@ export class AssetLoader {
     const finishLoad = () => {
       this.logger.debug('[AssetLoader] Prism.js loaded (7 languages + %s .zolo variants)', totalLanguages);
 
-      // Rehighlight any zolo code blocks that were rendered before languages loaded
+      // Rehighlight ALL code blocks rendered before grammars loaded — covers
+      // zolo variants AND stock languages (bash, python, …) from zMD fences.
       if (window.Prism) {
-        const zoloBlocks = document.querySelectorAll(
-          zoloLanguages.map(lang => `pre code.language-${lang}`).join(', ')
-        );
-        if (zoloBlocks.length > 0) {
-          this.logger.debug(`[AssetLoader] Rehighlighting ${zoloBlocks.length} zolo code blocks`);
-          zoloBlocks.forEach(block => {
+        const codeBlocks = document.querySelectorAll('pre code[class*="language-"]');
+        if (codeBlocks.length > 0) {
+          this.logger.debug(`[AssetLoader] Rehighlighting ${codeBlocks.length} code blocks`);
+          codeBlocks.forEach(block => {
             Prism.highlightElement(block);
           });
         }

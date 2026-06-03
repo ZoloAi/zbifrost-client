@@ -1043,6 +1043,12 @@ export class ZDisplayOrchestrator {
       }
 
       case 'rich_text': {
+        // Markdown fenced code blocks (```lang) inside zMD render here, not via
+        // the 'code' event — so kick off Prism the same way when a fence is present.
+        if (!this.client._prismLoaded && typeof eventData.content === 'string' && eventData.content.includes('```')) {
+          this.client._prismLoaded = true;
+          this.client._loadPrismJS();
+        }
         // Use TextRenderer for rich text with markdown parsing
         const textRenderer = await this.client._ensureTextRenderer();
         element = textRenderer.renderRichText(eventData);
