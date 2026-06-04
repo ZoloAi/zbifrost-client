@@ -81,6 +81,22 @@ h0 {
 .zText-danger    { color: var(--color-error,     #E63946); }
 .zText-error     { color: var(--color-error,     #E63946); }
 
+/* ─── Inline code chip — zCLI/info palette, overridable via --color-code ───── */
+/* Any inline <code> (not inside a <pre> block) gets a subtle monospace badge.
+ * Apps override colour with --color-code; block code is left to zCode/Prism. */
+
+code:not(pre code) {
+  font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+  font-size: 0.88em;
+  font-weight: 600;
+  color: var(--color-code, #5CA9FF);
+  background: rgba(92, 169, 255, 0.12);
+  border: 1px solid rgba(92, 169, 255, 0.25);
+  border-radius: 5px;
+  padding: 0.1em 0.4em;
+  letter-spacing: -0.01em;
+}
+
 zBifrostBadge {
   position: fixed;
   bottom: 1rem;
