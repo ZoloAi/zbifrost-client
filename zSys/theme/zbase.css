@@ -41,7 +41,12 @@ body {
 
 img, svg { display: block; max-width: 100%; }
 
-a { text-decoration: none; color: inherit; }
+/* Default link color — zCLI/info palette, overridable via --color-link.
+ * Navbar links and buttons opt out below (they manage their own color). */
+a { text-decoration: none; color: var(--color-link, #5CA9FF); }
+
+zNavBar a,
+.zBtn { color: inherit; }
 
 /* ─── Custom elements — must be block for layout ───────────────────────────── */
 
