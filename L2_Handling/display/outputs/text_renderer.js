@@ -680,12 +680,12 @@ export class TextRenderer {
 
     const isListLine = (line) => {
       const trimmed = line.trimStart();
-      return /^[*-][ \t]/.test(trimmed) ||   // UL: - text or * text
-             /^\d+-[ \t]/.test(trimmed) ||     // OL: 1- text
-             /^[*-]\s*$/.test(trimmed) ||      // empty marker: - alone
+      return /^[-*+][ \t]/.test(trimmed) ||                          // UL: - * + text
+             /^(?:\d+|[ivxlcdmIVXLCDM]+|[A-Za-z])-[ \t]/.test(trimmed) || // OL: 1- a- A- i- I- text
+             /^[-*+]\s*$/.test(trimmed) ||                           // empty marker: - alone
              (listBuffer.length > 0 && line.length > 0 &&
               (line[0] === ' ' || line[0] === '\t') &&
-              /^[*-\d]/.test(trimmed));        // indented continuation
+              /^(?:[-*+]|[A-Za-z0-9])/.test(trimmed));               // indented continuation
     };
 
     for (const line of lines) {
