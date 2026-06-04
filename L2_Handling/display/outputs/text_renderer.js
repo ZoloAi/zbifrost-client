@@ -715,82 +715,73 @@ export class TextRenderer {
   }
 
   /**
-   * Parse a multi-line list block into nested <ul class="zList"> / <ol class="zList"> HTML.
-   * Supports:
-   *   - UL: `- item` / `* item`
-   *   - OL: `1. item`
-   *   - zOS empty-marker nesting: `- ` alone triggers children of prior item
-   *   - Indentation-based nesting (standard markdown)
+   * Parse a multi-line list block into nested <ul/ol class="zList"> HTML.
+   *
+   * The MARKER is the type (authored explicitly) — SSOT with zLSP str_hint and
+   * the zCLI block_extractor:
+   *   Unordered:  -  *  +              → disc / circle / square
+   *   Ordered:    1-  a-  A-  i-  I-   → decimal / lower-alpha / upper-alpha /
+   *                                      lower-roman / upper-roman
+   * A list LEVEL's style is set by the first item at that indent. Nesting is
+   * indentation-driven (a deeper indent opens a child list, shallower pops out).
+   * Ordered token = digits | single letter | roman string (space-guarded).
+   *
    * @param {string} block - Multi-line list content
    * @returns {string} HTML string
    */
   _parseListBlock(block) {
     const rawLines = block.split('\n').filter(l => l !== '');
 
+    // Marker → { tag: 'ul'|'ol', style: <css list-style-type> }
+    const classify = (marker) => {
+      if (marker === '-') return { tag: 'ul', style: 'disc' };
+      if (marker === '*') return { tag: 'ul', style: 'circle' };
+      if (marker === '+') return { tag: 'ul', style: 'square' };
+      if (/^\d+$/.test(marker)) return { tag: 'ol', style: 'decimal' };
+      const upper = marker === marker.toUpperCase();
+      const isRoman = /^[ivxlcdm]+$/.test(marker.toLowerCase());
+      if (marker === 'i' || marker === 'I' || (marker.length > 1 && isRoman)) {
+        return { tag: 'ol', style: upper ? 'upper-roman' : 'lower-roman' };
+      }
+      return { tag: 'ol', style: upper ? 'upper-alpha' : 'lower-alpha' };
+    };
+
+    const RE_UL = /^([-*+])[ \t]+(.*)$/;
+    const RE_OL = /^(\d+|[ivxlcdmIVXLCDM]+|[A-Za-z])-[ \t]+(.*)$/;
+    const RE_EMPTY = /^[-*+]\s*$/;
+
     const tokens = rawLines.map(line => {
       const indent = line.length - line.trimStart().length;
       const stripped = line.trimStart();
-
-      if (/^[*-]\s*$/.test(stripped)) {
-        return { indent, kind: 'empty' };
-      }
-      const olMatch = stripped.match(/^(\d+)-\s+(.*)/);
-      if (olMatch) {
-        return { indent, kind: 'item', listType: 'ol', text: olMatch[2].replace(/\s+$/, '') };
-      }
-      const ulMatch = stripped.match(/^[*-]\s+(.*)/);
-      if (ulMatch) {
-        return { indent, kind: 'item', listType: 'ul', text: ulMatch[1].replace(/\s+$/, '') };
-      }
-      return null;
+      if (RE_EMPTY.test(stripped)) return { indent, kind: 'empty' };
+      let m = stripped.match(RE_UL);
+      if (!m) m = stripped.match(RE_OL);
+      if (!m) return null;
+      const c = classify(m[1]);
+      return { indent, kind: 'item', tag: c.tag, style: c.style, text: m[2].replace(/\s+$/, '') };
     }).filter(Boolean);
 
-    if (!tokens.length) return '';
+    const items = tokens.filter(t => t.kind === 'item');
+    if (!items.length) return '';
 
-    const firstItem = tokens.find(t => t.kind === 'item');
-    const rootType = firstItem?.listType || 'ul';
-    const root = { type: rootType, items: [] };
+    const root = { tag: items[0].tag, style: items[0].style, items: [] };
     const stack = [{ node: root, indent: -1 }];
-    let expectNesting = false;
 
     for (const token of tokens) {
-      if (token.kind === 'empty') {
-        expectNesting = true;
-        continue;
-      }
+      // Empty markers are nesting no-ops (parity with zCLI which skips them);
+      // structure is driven purely by indentation.
+      if (token.kind === 'empty') continue;
 
-      if (expectNesting) {
-        expectNesting = false;
-        const top = stack[stack.length - 1];
-        const items = top.node.items;
-        if (items.length > 0) {
-          const lastItem = items[items.length - 1];
-          if (!lastItem.children) {
-            lastItem.children = { type: token.listType, items: [] };
-          }
-          stack.push({ node: lastItem.children, indent: token.indent });
-          lastItem.children.items.push({ text: token.text, children: null });
-        } else {
-          top.node.items.push({ text: token.text, children: null });
-        }
-        continue;
-      }
-
-      // Indentation-based nesting (SSOT parity with zCLI block_extractor).
-      // A deeper indent opens a child list under the last item; a shallower one
-      // pops back out. Mixed markers nest fine — each child list keeps its own
-      // type (e.g. a `-` sublist under a `1-` parent).
       let top = stack[stack.length - 1];
 
       if (top.indent < 0) {
-        // First item establishes this level's indent.
         top.indent = token.indent;
       } else if (token.indent > top.indent) {
-        const items = top.node.items;
-        if (items.length > 0) {
-          const lastItem = items[items.length - 1];
+        const parentItems = top.node.items;
+        if (parentItems.length > 0) {
+          const lastItem = parentItems[parentItems.length - 1];
           if (!lastItem.children) {
-            lastItem.children = { type: token.listType, items: [] };
+            lastItem.children = { tag: token.tag, style: token.style, items: [] };
           }
           stack.push({ node: lastItem.children, indent: token.indent });
           top = stack[stack.length - 1];
@@ -804,24 +795,15 @@ export class TextRenderer {
       top.node.items.push({ text: token.text, children: null });
     }
 
-    const OL_CASCADE = ['decimal', 'lower-alpha', 'lower-roman'];
-
-    const renderNode = (node, level = 0) => {
-      const tag = node.type;
-      let styleAttr = '';
-      if (tag === 'ol' && level > 0) {
-        const listStyleType = OL_CASCADE[level % OL_CASCADE.length];
-        styleAttr = ` style="list-style-type: ${listStyleType};"`;
-      }
-      let html = `<${tag} class="zList"${styleAttr}>`;
+    const renderNode = (node) => {
+      const styleAttr = node.style ? ` style="list-style-type: ${node.style};"` : '';
+      let html = `<${node.tag} class="zList"${styleAttr}>`;
       for (const item of node.items) {
         html += `<li>${item.text || ''}`;
-        if (item.children) {
-          html += renderNode(item.children, level + 1);
-        }
+        if (item.children) html += renderNode(item.children);
         html += '</li>';
       }
-      html += `</${tag}>`;
+      html += `</${node.tag}>`;
       return html;
     };
 
