@@ -113,6 +113,71 @@ blockquote {
 
 blockquote > p { margin: 0; }
 
+/* ─── Form controls — zInput base (canonical zCloud field) ─────────────────── */
+/* The client tags every rendered field with `.zInput`. These defaults match the
+ * zDash form theme so a field on ANY page (not just dashboards) gets the same
+ * look instead of the raw browser white box. Override via --zinput-* variables
+ * or a higher-specificity app rule. */
+
+.zInput {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--zinput-color, #e2e8f0);
+  background: var(--zinput-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--zinput-border, rgba(79, 70, 229, 0.25));
+  border-radius: var(--zinput-radius, 7px);
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.zInput::placeholder { color: var(--zinput-placeholder, rgba(226, 232, 240, 0.4)); }
+
+.zInput:focus {
+  outline: none;
+  border-color: var(--zinput-focus, var(--color-primary, #6366f1));
+  background: var(--zinput-bg-focus, rgba(255, 255, 255, 0.07));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zinput-focus, var(--color-primary, #6366f1)) 18%, transparent);
+}
+
+.zInput:disabled,
+.zInput[readonly] { opacity: 0.55; cursor: not-allowed; }
+
+textarea.zInput { min-height: 6rem; resize: vertical; }
+select.zInput   { cursor: pointer; }
+
+/* size + type variants */
+.zInput-sm    { padding: 0.3rem 0.55rem; font-size: 0.82rem; }
+.zInput-color { width: 3rem; height: 2.5rem; padding: 0.25rem; cursor: pointer; }
+
+/* field label rendered above an input */
+.zLabel {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--zlabel-color, inherit);
+}
+
+/* input-group affix chips (prefix / suffix) */
+.zInputGroup > .zInputGroup-text {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+  color: var(--zinput-color, #e2e8f0);
+  background: var(--zinput-affix-bg, rgba(79, 70, 229, 0.14));
+  border: 1px solid var(--zinput-border, rgba(79, 70, 229, 0.25));
+  white-space: nowrap;
+}
+.zInputGroup > .zInputGroup-text:first-child { border-radius: 7px 0 0 7px; border-right: 0; }
+.zInputGroup > .zInputGroup-text:last-child  { border-radius: 0 7px 7px 0; border-left: 0; }
+.zInputGroup > .zInput:not(:first-child)      { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.zInputGroup > .zInput:not(:last-child)       { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+
 zBifrostBadge {
   position: fixed;
   bottom: 1rem;
