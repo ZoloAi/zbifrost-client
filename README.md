@@ -41,7 +41,7 @@ syntax/                 — Prism.js grammars for .zolo / zUI / zSchema / zSpark
 The page loads the bootstrap and instantiates it; the server injects the config:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/ZoloAi/zbifrost-client@v1.7.57/bifrost_client.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/ZoloAi/zbifrost-client@v1.7.58/bifrost_client.js"></script>
 <script>
   window.bifrostClient = new BifrostClient(null, { autoConnect: true });
 </script>
@@ -56,7 +56,7 @@ sends `connection_info.bifrost_core_url` over the socket to select the core buil
 Releases are git tags consumed via jsDelivr. Pin an exact tag in production:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/ZoloAi/zbifrost-client@v1.7.57/bifrost_client.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/ZoloAi/zbifrost-client@v1.7.58/bifrost_client.js"></script>
 ```
 
 The matching `bifrost_core.js` version is chosen **server-side** (see the zOS

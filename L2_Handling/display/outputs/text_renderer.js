@@ -776,11 +776,32 @@ export class TextRenderer {
         continue;
       }
 
-      // Pop back to the appropriate indent level
-      while (stack.length > 1 && token.indent < stack[stack.length - 1].indent) {
-        stack.pop();
+      // Indentation-based nesting (SSOT parity with zCLI block_extractor).
+      // A deeper indent opens a child list under the last item; a shallower one
+      // pops back out. Mixed markers nest fine — each child list keeps its own
+      // type (e.g. a `-` sublist under a `1-` parent).
+      let top = stack[stack.length - 1];
+
+      if (top.indent < 0) {
+        // First item establishes this level's indent.
+        top.indent = token.indent;
+      } else if (token.indent > top.indent) {
+        const items = top.node.items;
+        if (items.length > 0) {
+          const lastItem = items[items.length - 1];
+          if (!lastItem.children) {
+            lastItem.children = { type: token.listType, items: [] };
+          }
+          stack.push({ node: lastItem.children, indent: token.indent });
+          top = stack[stack.length - 1];
+        }
+      } else if (token.indent < top.indent) {
+        while (stack.length > 1 && token.indent < stack[stack.length - 1].indent) {
+          stack.pop();
+        }
+        top = stack[stack.length - 1];
       }
-      stack[stack.length - 1].node.items.push({ text: token.text, children: null });
+      top.node.items.push({ text: token.text, children: null });
     }
 
     const OL_CASCADE = ['decimal', 'lower-alpha', 'lower-roman'];
