@@ -244,22 +244,46 @@ export class TextRenderer {
       return placeholder;
     });
 
-    // Links: [text](url){classes} -> <a href="url" class="classes">text</a>
+    // Links: [text](url){attrs} -> <a href="url" target=… class="classes">text</a>
     // MUST run AFTER inline code extraction so `[text](url)` inside backticks
     // is already shielded by ___INLINE_CODE_N___ placeholders.
     // Uses shared convertZPathToURL + detectLinkType from link_primitives.js (SSOT).
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)(?:\{([^}]*)\})?/g, (match, text, url, classes) => {
+    //
+    // The optional {…} brace is an attribute list (kramdown/pandoc-style):
+    //   • target tokens override how the link opens —
+    //       _blank | newtab | new-tab  → new tab
+    //       _self  | sametab | same-tab → same tab
+    //   • every other token is treated as a CSS class.
+    // With no token, target falls back to link type (external → new tab).
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)(?:\{([^}]*)\})?/g, (match, text, url, attrs) => {
       // Harden against DOM-XSS: block dangerous href schemes + attr-escape the
       // resolved URL, and HTML-escape the link label (it can carry user content).
       // Inline markdown markers (**/*/etc.) survive escaping and convert later.
       const href = safeHref(convertZPathToURL(url));
       const label = escapeHtml(text);
       const ltype = detectLinkType(url);
-      const target = ltype === LINK_TYPE_EXTERNAL ? '_blank' : '_self';
-      const rel = (ltype === LINK_TYPE_EXTERNAL && target === '_blank') ? ' rel="noopener noreferrer"' : '';
+
+      // Default target by link type; explicit {…} token wins.
+      let target = ltype === LINK_TYPE_EXTERNAL ? '_blank' : '_self';
+      const classTokens = [];
+      if (attrs && attrs.trim()) {
+        for (const tok of attrs.trim().split(/\s+/)) {
+          const t = tok.toLowerCase();
+          if (t === '_blank' || t === 'newtab' || t === 'new-tab') {
+            target = '_blank';
+          } else if (t === '_self' || t === 'sametab' || t === 'same-tab') {
+            target = '_self';
+          } else {
+            classTokens.push(tok);
+          }
+        }
+      }
+
+      // _blank always carries rel="noopener noreferrer" (security), regardless of source.
+      const rel = target === '_blank' ? ' rel="noopener noreferrer"' : '';
       let classAttr = '';
-      if (classes && classes.trim()) {
-        const sanitized = classes.trim().replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, ' ').trim();
+      if (classTokens.length) {
+        const sanitized = classTokens.join(' ').replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, ' ').trim();
         if (sanitized) classAttr = ` class="${sanitized}"`;
       }
       return `<a href="${href}" target="${target}"${rel}${classAttr}>${label}</a>`;
