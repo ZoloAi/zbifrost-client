@@ -62,6 +62,20 @@ h0 {
   margin-bottom: 0.5rem;
 }
 
+/* ─── zTheme semantic text colors — zCLI parity ───────────────────────────── */
+/* The client maps a header/text `color:` token → `.zText-<token>`. These are
+ * the zOS defaults so `color: PRIMARY` paints in Bifrost without any _zClass,
+ * mirroring zCLI. Apps override by redefining the --color-* variable (the hex
+ * is only a fallback) or with a higher-specificity rule. */
+
+.zText-primary   { color: var(--color-primary,   #A2D46E); }
+.zText-secondary { color: var(--color-secondary, #9370DB); }
+.zText-success   { color: var(--color-success,   #52B788); }
+.zText-info      { color: var(--color-info,      #5CA9FF); }
+.zText-warning   { color: var(--color-warning,   #FFB347); }
+.zText-danger    { color: var(--color-error,     #E63946); }
+.zText-error     { color: var(--color-error,     #E63946); }
+
 zBifrostBadge {
   position: fixed;
   bottom: 1rem;
