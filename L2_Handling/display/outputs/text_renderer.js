@@ -315,7 +315,9 @@ export class TextRenderer {
       
       // Join lines with <br>, treating empty strings as visual line breaks
       const quoteContent = lines.join('<br>');
-      return `\n<blockquote class="zp-3 zmy-3" style="border-left: 4px solid var(--color-primary); background: #f5f5f5;"><p class="zmt-0 zmb-0">${quoteContent}</p></blockquote>\n`;
+      // Clean semantic element — base styling lives in zSys/theme/zbase.css
+      // (zTheme base), not hardcoded here, so it themes per-app and per-mode.
+      return `\n<blockquote><p>${quoteContent}</p></blockquote>\n`;
     });
 
     // Bold: **text** -> <strong>text</strong>
