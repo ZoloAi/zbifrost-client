@@ -289,11 +289,13 @@ export class TextRenderer {
       return `<a href="${href}" target="${target}"${rel}${classAttr}>${label}</a>`;
     });
 
-    // Lists: - item / * item (UL) or 1- item (OL) -> <ul class="zList"> / <ol class="zList">
-    // Includes zOS empty-marker nesting syntax (- alone) and indented children.
+    // Lists -> <ul class="zList"> / <ol class="zList">. The marker is the type:
+    //   UL  - * +              (disc / circle / square; - * + alone = empty nesting)
+    //   OL  1- a- A- i- I-     (decimal / alpha / roman) — token = digits |
+    //                          single letter | roman string, space-guarded.
     // Process before bold/italic to avoid conflicts with * markers.
     html = html.replace(
-      /(?:^|\n)((?:[ \t]*(?:[*-](?:[ \t]+[^\n]*|[ \t]*)|\d+-[ \t]+[^\n]*)(?:\n|$))+)/g,
+      /(?:^|\n)((?:[ \t]*(?:[-*+](?:[ \t]+[^\n]*|[ \t]*)|(?:\d+|[ivxlcdmIVXLCDM]+|[A-Za-z])-[ \t]+[^\n]*)(?:\n|$))+)/g,
       (match, listBlock) => '\n' + this._parseListBlock(listBlock.trimEnd()) + '\n'
     );
 
