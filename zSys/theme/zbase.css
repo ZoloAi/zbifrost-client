@@ -359,6 +359,75 @@ input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:ho
 .zForm-check-disabled { opacity: 0.6; }
 .zForm-check-disabled .zForm-check-label { cursor: not-allowed; }
 
+/* native radios/checkboxes NOT given the custom .zForm-check treatment
+ * (e.g. zSelect radio groups) still pick up the theme color. */
+input[type="radio"], input[type="checkbox"] { accent-color: var(--color-primary, #6366f1); }
+
+/* ─── Select / dropdown — canonical control (matches .zForm-control) ───────── */
+/* The client emits `zSelect` as a native <select class="zSelect">. Give it the
+ * same field look as text inputs plus a themed caret. Element-qualified so a
+ * wrapper carrying `_zClass: zSelect` is NOT mistaken for the control. */
+
+select.zSelect,
+select.zForm-control,
+select.zInput {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.55rem 2.25rem 0.55rem 0.85rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--zinput-color, #e2e8f0);
+  background-color: var(--zinput-bg, rgba(255, 255, 255, 0.14));
+  border: 1.5px solid var(--zinput-border, rgba(255, 255, 255, 0.18));
+  border-radius: var(--zinput-radius, 10px);
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+  /* themed chevron caret (no external asset) */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+}
+
+select.zSelect:focus,
+select.zForm-control:focus,
+select.zInput:focus {
+  outline: none;
+  border-color: var(--zinput-focus, var(--color-primary, #6366f1));
+  background-color: var(--zinput-bg-focus, rgba(255, 255, 255, 0.17));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zinput-focus, var(--color-primary, #6366f1)) 20%, transparent);
+}
+
+select.zSelect:disabled,
+select.zForm-control:disabled,
+select.zInput:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* native option popup — keep legible regardless of page theme */
+select.zSelect option,
+select.zForm-control option,
+select.zInput option { color: #1f2937; background: #fff; }
+select.zSelect option:disabled,
+select.zForm-control option:disabled { color: #9ca3af; }
+
+/* multi-select / sized list box — drop the caret, let it grow */
+select.zSelect[multiple],
+select.zSelect[size],
+select.zForm-control[multiple] {
+  padding-right: 0.85rem;
+  height: auto;
+  background-image: none;
+}
+select.zSelect[multiple] option,
+select.zForm-control[multiple] option { padding: 0.3rem 0.45rem; border-radius: 4px; }
+
+/* size variants */
+select.zSelect.zSelect-lg { padding-top: 0.7rem;  padding-bottom: 0.7rem;  font-size: 1.05rem; }
+select.zSelect.zSelect-sm { padding-top: 0.35rem; padding-bottom: 0.35rem; font-size: 0.82rem; }
+
 zBifrostBadge {
   position: fixed;
   bottom: 1rem;
