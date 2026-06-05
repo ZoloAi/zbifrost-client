@@ -431,6 +431,7 @@ export class InputEventHandler {
     const prompt = eventData.prompt || eventData.label || '';
     const checked = eventData.checked || false;
     const required = eventData.required || false;
+    const disabled = eventData.disabled || false;
     
     // Build checkbox classes from _zClass (defaults to zForm-check-input)
     const checkboxClasses = eventData._zClass || 'zForm-check-input';
@@ -445,6 +446,7 @@ export class InputEventHandler {
     const checkbox = createInput('checkbox', {
       checked: checked,
       required: required,
+      disabled: disabled,
       class: checkboxClasses,
       id: checkboxId
     });
@@ -462,7 +464,7 @@ export class InputEventHandler {
       this.logger.log(`[InputEventHandler] Rendered ${event} checkbox (input-group mode, no wrapper): (id=${checkboxId}, checked=${checked})`);
     } else {
       // Normal mode: Create form check container (Bootstrap-style checkbox)
-      const formCheck = createDiv({ class: 'zForm-check zmb-2' });
+      const formCheck = createDiv({ class: disabled ? 'zForm-check zForm-check-disabled zmb-2' : 'zForm-check zmb-2' });
       
       // Create label for checkbox (wraps around or uses 'for' attribute)
       if (prompt) {

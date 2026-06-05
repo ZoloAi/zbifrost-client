@@ -280,6 +280,85 @@ input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:ho
 .zInputGroup > .zForm-control:not(:last-child),
 .zInputGroup > .zInput:not(:last-child)  { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 
+/* ─── Checkbox / radio — canonical control base (matches .zForm-control) ───── */
+/* The client emits `zCheckbox` / `zSelect` (radio) as a `.zForm-check` row:
+ *   <div class="zForm-check"><input class="zForm-check-input"><label class="zForm-check-label">
+ * Style the box by element type (so an app's `_zClass` override on the input
+ * doesn't strip the look) and theme it via --color-primary, like buttons/fields. */
+
+.zForm-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.zForm-check input[type="checkbox"],
+.zForm-check input[type="radio"],
+.zForm-check-input {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  display: inline-grid;
+  place-content: center;
+  background: var(--zinput-bg, rgba(255, 255, 255, 0.14));
+  border: 1.5px solid var(--zinput-border, rgba(255, 255, 255, 0.3));
+  cursor: pointer;
+  transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
+}
+.zForm-check input[type="checkbox"],
+.zForm-check-input { border-radius: var(--zcheck-radius, 5px); }
+.zForm-check input[type="radio"] { border-radius: 50%; }
+
+/* checked fill — theme primary */
+.zForm-check input[type="checkbox"]:checked,
+.zForm-check input[type="radio"]:checked,
+.zForm-check-input:checked {
+  background: var(--zinput-focus, var(--color-primary, #6366f1));
+  border-color: var(--zinput-focus, var(--color-primary, #6366f1));
+}
+/* checkmark glyph */
+.zForm-check input[type="checkbox"]:checked::after,
+.zForm-check-input:checked::after {
+  content: "";
+  width: 0.32rem;
+  height: 0.6rem;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+/* radio dot */
+.zForm-check input[type="radio"]:checked::after {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.zForm-check input[type="checkbox"]:focus-visible,
+.zForm-check input[type="radio"]:focus-visible,
+.zForm-check-input:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zinput-focus, var(--color-primary, #6366f1)) 30%, transparent);
+}
+
+.zForm-check-label {
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: inherit;
+  user-select: none;
+}
+
+/* disabled — dim box AND label, block interaction (SSOT) */
+.zForm-check input:disabled,
+.zForm-check-input:disabled { opacity: 0.55; cursor: not-allowed; }
+.zForm-check-disabled { opacity: 0.6; }
+.zForm-check-disabled .zForm-check-label { cursor: not-allowed; }
+
 zBifrostBadge {
   position: fixed;
   bottom: 1rem;
