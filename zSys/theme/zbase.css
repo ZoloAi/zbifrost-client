@@ -971,6 +971,41 @@ zNavBar .zNav-link.active {
 }
 .zBtn:focus { outline: 2px solid rgba(79, 70, 229, 0.5); outline-offset: 2px; }
 
+/* ─── Button color variants — canonical fills (theme tokens) ───────────────── */
+/* The renderer maps a zBtn's `color:` (default primary) to .zBtn-{color}; these
+ * give that class an actual fill everywhere — not just inside .zDash-container.
+ * Keyed to --color-* (mirrors .zText-*); apps restyle by redefining the token.
+ * Dashboard keeps its own look via the higher-specificity .zDash-container rule. */
+.zBtn-primary, .zBtn-secondary, .zBtn-success,
+.zBtn-danger, .zBtn-warning, .zBtn-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.05s ease;
+}
+.zBtn-primary:hover, .zBtn-secondary:hover, .zBtn-success:hover,
+.zBtn-danger:hover, .zBtn-warning:hover, .zBtn-info:hover { filter: brightness(0.93); }
+.zBtn-primary:active, .zBtn-secondary:active, .zBtn-success:active,
+.zBtn-danger:active, .zBtn-warning:active, .zBtn-info:active { transform: translateY(1px); }
+.zBtn-primary:disabled, .zBtn-secondary:disabled, .zBtn-success:disabled,
+.zBtn-danger:disabled, .zBtn-warning:disabled, .zBtn-info:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.zBtn-primary   { background: var(--color-primary,   #A2D46E); color: #14210a; }
+.zBtn-secondary { background: var(--color-secondary, #9370DB); color: #ffffff; }
+.zBtn-success   { background: var(--color-success,   #52B788); color: #08291d; }
+.zBtn-danger    { background: var(--color-error,     #E63946); color: #ffffff; }
+.zBtn-warning   { background: var(--color-warning,   #FFB347); color: #3a2400; }
+.zBtn-info      { background: var(--color-info,       #5CA9FF); color: #07243d; }
+
 /* Structural display defaults */
 .zSignal     { display: block; }
 .zCard       { position: relative; }
