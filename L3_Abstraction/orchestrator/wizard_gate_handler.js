@@ -100,40 +100,87 @@ export class WizardGateHandler {
 
     await this.orchestrator.renderItems({ [cleanGateKey]: gateStepValueToRender }, gateWrapper, wizardPath);
 
+    // Collect pre-gate input values keyed by their step name, so the stateless
+    // gate-submit re-execution can seed zHat with everything answered before the
+    // gate (e.g. Ask_Name, Ask_Age) — not just the gate's own value.
+    const collectPreGateValues = () => {
+      const map = {};
+      for (const key of preGateKeys) {
+        const clean = key.replace('!', '');
+        const scope = parentElement.querySelector(`[data-zkey="${clean}"]`);
+        const el = scope ? scope.querySelector('input, textarea, select') : null;
+        if (el) map[clean] = (el.value || '').trim();
+      }
+      return map;
+    };
+
+    // Shared submit action — drives the gate forward via wizard_gate_submit.
+    // Works for both input gates (gate holds the input) and button gates
+    // (gate holds a zBtn like "Continue", inputs live in pre-gate steps).
+    const doGateSubmit = async (triggerBtn, isButtonGate) => {
+      const gateInput = gateWrapper.querySelector('input, textarea, select');
+      let value;
+      if (gateInput) {
+        value = gateInput.value.trim();
+        if (!value) return; // input gate: require a value
+      } else {
+        // Button gate: no input to read — use the button label as a truthy
+        // zHat[gateKey] marker so post-gate `if: zHat[Gate]` conditions pass.
+        value = (triggerBtn && triggerBtn.textContent.trim()) || 'true';
+      }
+
+      const values = collectPreGateValues();
+
+      if (gateInput) gateInput.disabled = true;
+      let restoreLabel = 'Submit';
+      if (triggerBtn) {
+        restoreLabel = triggerBtn.textContent;
+        triggerBtn.disabled = true;
+        if (!isButtonGate) triggerBtn.textContent = '...';
+      }
+
+      try {
+        this.client.connection.send(JSON.stringify({
+          event: 'wizard_gate_submit',
+          wizardPath,
+          gateKey: cleanGateKey,
+          value,
+          values,
+        }));
+      } catch (e) {
+        this.logger.error('[WizardGate] Submit error:', e);
+        if (gateInput) gateInput.disabled = false;
+        if (triggerBtn) { triggerBtn.disabled = false; triggerBtn.textContent = restoreLabel; }
+      }
+    };
+
     // Check if the rendered content already has its own submit mechanism
     // (e.g., zDialog forms have their own submit button inside the form)
     const hasOwnSubmit = gateWrapper.querySelector('button[type="submit"]');
 
-    // Only add gate submit button if content doesn't have its own
-    if (!hasOwnSubmit) {
-      // Shared submit action — used by both default Submit btn and _zDelegate wiring
-      const doGateSubmit = async (submitBtn) => {
-        const input = gateWrapper.querySelector('input, textarea, select');
-        const value = input ? input.value.trim() : '';
-        if (!value) return;
+    // An authored gate button (zBtn → <button class="zBtn">) acts as the gate's
+    // own advance control. Repurpose its click to drive wizard_gate_submit instead
+    // of the orphan input_response that button_renderer wires by default.
+    const authoredBtn = hasOwnSubmit ? null : gateWrapper.querySelector('button.zBtn');
 
-        input.disabled = true;
-        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '...'; }
-
-        try {
-          this.client.connection.send(JSON.stringify({
-            event: 'wizard_gate_submit',
-            wizardPath,
-            gateKey: cleanGateKey,
-            value,
-          }));
-        } catch (e) {
-          this.logger.error('[WizardGate] Submit error:', e);
-          if (input) input.disabled = false;
-          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit'; }
-        }
-      };
-
+    if (hasOwnSubmit) {
+      // zDialog form owns its submit — nothing to inject.
+    } else if (authoredBtn) {
+      // Strip button_renderer's input_response click handler (cloneNode drops
+      // listeners) and own the click so it advances the gate.
+      const freshBtn = authoredBtn.cloneNode(true);
+      authoredBtn.replaceWith(freshBtn);
+      freshBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        doGateSubmit(freshBtn, true);
+      });
+    } else {
+      // Input-only gate (no authored button): inject the default Submit control.
       const submitBtn = document.createElement('button');
       submitBtn.textContent = 'Submit';
       submitBtn.className = 'zBtn zBtn-primary mt-2';
       submitBtn.style.marginTop = '0.5rem';
-      submitBtn.addEventListener('click', () => doGateSubmit(submitBtn));
+      submitBtn.addEventListener('click', () => doGateSubmit(submitBtn, false));
 
       // When _zDelegate is set, hide the default Submit button (delegate takes over)
       // Keep it in the DOM so restartWizardFromGate can find/reset it
