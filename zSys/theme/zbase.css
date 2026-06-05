@@ -7,6 +7,7 @@
  * aesthetics — those are the app's responsibility.
  *
  * Sections:
+ *   0. Base color tokens (SSOT — --color-*)
  *   1. Reset
  *   2. Grid  (zRow / zCol-* / zCol-auto, responsive xs→xl)
  *   3. Gutters (zG-0 … zG-5)
@@ -18,6 +19,20 @@
  *   9. Spinner (.zSpinner-border / .zSpinner-border-sm)
  *  10. Misc runtime helpers (.zVisually-hidden, .zContainer-fluid)
  */
+
+/* ─── 0. Base color tokens — SSOT ──────────────────────────────────────────── */
+/* The canonical zCLI palette, mirrored from zSys/formatting/colors.py. Every
+ * var(--color-*) reference below (zText-*, zBtn-*, fields, blockquote, links)
+ * resolves here so Bifrost output matches the terminal. Apps re-skin by
+ * redefining any of these in a later stylesheet (zCanvas / zBrush). */
+:root {
+  --color-primary:   #A2D46E; /* Intention — the heart of zCLI */
+  --color-secondary: #9370DB; /* Validation — structure & elegance */
+  --color-info:      #5CA9FF; /* Perception — clarity & understanding */
+  --color-success:   #52B788; /* Manifestation — organic & vibrant */
+  --color-warning:   #FFB347; /* Caution — warm & approachable */
+  --color-error:     #E63946; /* Decisive — clear & strong */
+}
 
 /* ─── 1. Reset ─────────────────────────────────────────────────────────────── */
 
@@ -1009,14 +1024,15 @@ zNavBar .zNav-link.active {
   opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; filter: none;
 }
 
-/* Vivid, accessible fills — dark text on the light hues, white on the deep ones.
- * Still token-driven (var) so apps re-skin by redefining --color-*. */
-.zBtn-primary   { background: var(--color-primary,   #8BC34A); color: #122600; }
-.zBtn-secondary { background: var(--color-secondary, #9C6ADE); color: #ffffff; }
-.zBtn-success   { background: var(--color-success,   #1FAE78); color: #ffffff; }
-.zBtn-danger    { background: var(--color-error,     #E5484D); color: #ffffff; }
-.zBtn-warning   { background: var(--color-warning,   #F5A524); color: #3a2400; }
-.zBtn-info      { background: var(--color-info,       #3B96E0); color: #ffffff; }
+/* SSOT fills — keyed to --color-* (same tokens/hexes as .zText-*), so a button
+ * matches a heading of the same color name. Dark text on the light hues
+ * (primary/success/warning/info), white on the deep ones (secondary/danger). */
+.zBtn-primary   { background: var(--color-primary,   #A2D46E); color: #14210a; }
+.zBtn-secondary { background: var(--color-secondary, #9370DB); color: #ffffff; }
+.zBtn-success   { background: var(--color-success,   #52B788); color: #06281c; }
+.zBtn-danger    { background: var(--color-error,     #E63946); color: #ffffff; }
+.zBtn-warning   { background: var(--color-warning,   #FFB347); color: #3a2400; }
+.zBtn-info      { background: var(--color-info,       #5CA9FF); color: #07243d; }
 
 /* Structural display defaults */
 .zSignal     { display: block; }
