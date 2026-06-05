@@ -310,7 +310,7 @@ input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:ho
 }
 .zForm-check input[type="checkbox"],
 .zForm-check-input { border-radius: var(--zcheck-radius, 5px); }
-.zForm-check input[type="radio"] { border-radius: 50%; }
+.zForm-check input[type="radio"] { border-radius: 50%; position: relative; }
 
 /* checked fill — theme primary */
 .zForm-check input[type="checkbox"]:checked,
@@ -329,9 +329,13 @@ input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:ho
   border-width: 0 2px 2px 0;
   transform: rotate(45deg) translate(-1px, -1px);
 }
-/* radio dot */
+/* radio dot — absolutely centered (grid place-content is sub-pixel off on a circle) */
 .zForm-check input[type="radio"]:checked::after {
   content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 0.45rem;
   height: 0.45rem;
   border-radius: 50%;
