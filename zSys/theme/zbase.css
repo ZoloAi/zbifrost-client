@@ -132,8 +132,8 @@ input.zInput, textarea.zInput, select.zInput {
   font-size: 0.95rem;
   line-height: 1.5;
   color: var(--zinput-color, #e2e8f0);
-  background: var(--zinput-bg, rgba(255, 255, 255, 0.11));
-  border: 1.5px solid var(--zinput-border, rgba(255, 255, 255, 0.16));
+  background: var(--zinput-bg, rgba(255, 255, 255, 0.14));
+  border: 1.5px solid var(--zinput-border, rgba(255, 255, 255, 0.18));
   border-radius: var(--zinput-radius, 10px);
   transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
 }
@@ -145,7 +145,7 @@ input.zInput, textarea.zInput, select.zInput {
 input.zInput:focus, textarea.zInput:focus, select.zInput:focus {
   outline: none;
   border-color: var(--zinput-focus, var(--color-primary, #6366f1));
-  background: var(--zinput-bg-focus, rgba(255, 255, 255, 0.14));
+  background: var(--zinput-bg-focus, rgba(255, 255, 255, 0.17));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--zinput-focus, var(--color-primary, #6366f1)) 20%, transparent);
 }
 
