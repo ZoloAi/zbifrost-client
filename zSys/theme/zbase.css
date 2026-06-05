@@ -162,11 +162,15 @@ select.zForm-control,   select.zInput   { cursor: pointer; }
 /* field label rendered above an input */
 .zLabel {
   display: block;
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.2rem;
   font-size: 0.85rem;
   font-weight: 500;
   color: var(--zlabel-color, inherit);
 }
+
+/* The input handler emits a <br> after each label; suppress it so the gap is
+   controlled purely by .zLabel margin-bottom and the field hugs its label. */
+.zLabel + br { display: none; }
 
 /* input-group affix chips (prefix / suffix) */
 .zInputGroup > .zInputGroup-text {
