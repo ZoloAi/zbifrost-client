@@ -17,6 +17,20 @@
 import { TYPOGRAPHY } from '../../L1_Foundation/constants/bifrost_constants.js';
 import { convertStyleToString } from '../../zSys/dom/style_utils.js';
 
+/**
+ * Append a red required marker (*) to a label/legend when the field is required.
+ * SSOT — styled by .zRequired in zbase.css. aria-hidden since `required` already
+ * exposes the constraint to assistive tech via the input element.
+ */
+function appendRequiredMark(labelEl, required) {
+  if (!required || !labelEl) return;
+  const star = document.createElement('span');
+  star.className = 'zRequired';
+  star.textContent = ' *';
+  star.setAttribute('aria-hidden', 'true');
+  labelEl.appendChild(star);
+}
+
 export class InputEventHandler {
   constructor(client, logger) {
     this.client = client;
@@ -92,6 +106,7 @@ export class InputEventHandler {
       // of _zClass. No magic-string branch → consistent label across all fields.
       const label = createLabel(inputId, { class: 'zLabel' });
       label.textContent = prompt;
+      appendRequiredMark(label, required);
       wrapper.appendChild(label);
       // Add line break after label (semantic HTML pattern)
       wrapper.appendChild(document.createElement('br'));
@@ -584,6 +599,7 @@ export class InputEventHandler {
           promptLabel.textContent = prompt;
           promptLabel.style.marginBottom = '0.5rem';
           promptLabel.style.fontWeight = TYPOGRAPHY.FONT_WEIGHTS.MEDIUM;
+          appendRequiredMark(promptLabel, required);
           container.appendChild(promptLabel);
         }
         
@@ -660,6 +676,7 @@ export class InputEventHandler {
         const labelAttrs = labelClass ? { class: labelClass } : {};
         const label = createLabel(baseId, labelAttrs);
         label.textContent = prompt;
+        appendRequiredMark(label, required);
         wrapper.appendChild(label);
         // Add line break after label (semantic HTML pattern)
         wrapper.appendChild(document.createElement('br'));

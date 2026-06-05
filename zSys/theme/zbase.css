@@ -172,6 +172,13 @@ select.zForm-control,   select.zInput   { cursor: pointer; }
    controlled purely by .zLabel margin-bottom and the field hugs its label. */
 .zLabel + br { display: none; }
 
+/* Required-field marker — red asterisk suffix on the label (SSOT). */
+.zRequired {
+  color: var(--zrequired-color, #ef4444);
+  margin-left: 0.15rem;
+  font-weight: 600;
+}
+
 /* input-group affix chips (prefix / suffix) */
 .zInputGroup > .zInputGroup-text {
   display: flex;
