@@ -88,12 +88,9 @@ export class InputEventHandler {
         this.logger.log(`[InputEventHandler] Applied _zClass to wrapper: ${eventData._zClass}`);
       }
       
-      // Use zLabel class for styled inputs, no class for basic semantic HTML
-      // Check if wrapper has zInput class (from _zClass) to determine label styling
-      const hasZInputClass = wrapperClasses && wrapperClasses.includes('zInput');
-      const labelClass = hasZInputClass ? 'zLabel' : '';
-      const labelAttrs = labelClass ? { class: labelClass } : {};
-      const label = createLabel(inputId, labelAttrs);
+      // SSOT — every prompt label is a .zLabel (styled by zbase.css), regardless
+      // of _zClass. No magic-string branch → consistent label across all fields.
+      const label = createLabel(inputId, { class: 'zLabel' });
       label.textContent = prompt;
       wrapper.appendChild(label);
       // Add line break after label (semantic HTML pattern)
