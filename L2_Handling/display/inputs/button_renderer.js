@@ -174,7 +174,8 @@ export default class ButtonRenderer {
         }
       });
     } else {
-      this._attachClickHandler(button, requestId, label, true, type, action);
+      const renderInline = data._renderInline || data.data?._renderInline || false;
+      this._attachClickHandler(button, requestId, label, true, type, action, renderInline);
 
       // Mark step-key actions (non-plugin, non-placeholder) for wizard restart handling
       if (action && action !== '#' && !action.startsWith('&')) {
@@ -298,7 +299,7 @@ export default class ButtonRenderer {
    * @param {string} type - Button type (button, submit, reset)
    * @param {string} action - Optional action string (e.g., "&plugin.func(zHat[0])")
    */
-  _attachClickHandler(button, requestId, originalLabel, value, type = 'button', action = null) {
+  _attachClickHandler(button, requestId, originalLabel, value, type = 'button', action = null, renderInline = false) {
     button.addEventListener('click', (event) => {
       this.logger.log(`[ButtonRenderer]  Button clicked: "${button.textContent}" (type: ${type}, value: ${value}, action: ${action})`);
       this.logger.log(`[ButtonRenderer] Button clicked: ${button.textContent} (type: ${type}, value: ${value}, action: ${action})`);
@@ -359,8 +360,23 @@ export default class ButtonRenderer {
         button.disabled = true; // prevent double-fire
       } else if (requestId) {
         // Interactive button awaiting a backend response (zDialog / zWizard).
-        this.logger.log('[ButtonRenderer] Regular button - sending WebSocket response');
-        this._sendResponse(requestId, value);
+        // A parked wizard gate carries _renderInline: collect the pre-gate
+        // field values, pin the reveal to this button's own container (append),
+        // and send them alongside the truthy value. The button stays dumb — it
+        // just resolves its requestId; the runtime owns the wizard knowledge.
+        if (renderInline) {
+          const ctx = this._collectInlineContext(button);
+          if (ctx.container) {
+            const client = this.client || window.bifrostClient;
+            if (client) {
+              client._renderTarget = { el: ctx.container, mode: 'append', once: true };
+            }
+          }
+          this._sendResponse(requestId, value, ctx.values);
+        } else {
+          this.logger.log('[ButtonRenderer] Regular button - sending WebSocket response');
+          this._sendResponse(requestId, value);
+        }
         button.disabled = true; // prevent double-submission
       } else {
         // Standalone / declarative button: no action and no pending request — a
@@ -379,7 +395,7 @@ export default class ButtonRenderer {
    * @param {string} requestId - Request ID
    * @param {boolean} value - Response value
    */
-  _sendResponse(requestId, value) {
+  _sendResponse(requestId, value, values = null) {
     // Try to get connection from client or global window object
     const connection = this.client?.connection || window.bifrostClient?.connection;
 
@@ -389,16 +405,49 @@ export default class ButtonRenderer {
     }
 
     try {
-      connection.send(JSON.stringify({
-        event: 'input_response',
-        requestId: requestId,
-        value: value
-      }));
+      const payload = { event: 'input_response', requestId, value };
+      if (values && Object.keys(values).length) {
+        payload.values = values;
+      }
+      connection.send(JSON.stringify(payload));
 
-      this.logger.log('[ButtonRenderer] Response sent:', { requestId, value });
+      this.logger.log('[ButtonRenderer] Response sent:', payload);
     } catch (error) {
       this.logger.error('[ButtonRenderer] Failed to send response:', error);
     }
+  }
+
+  /**
+   * Collect inline-reveal context for a parked wizard gate button.
+   *
+   * Walks up to the button's container (nearest [data-zkey] ancestor) and
+   * harvests the value of every field inside it, keyed by each field's own
+   * enclosing [data-zkey] (the wizard step key, e.g. Ask_Name). Generic — the
+   * button forwards nearby field values; the runtime decides their meaning.
+   *
+   * @private
+   * @param {HTMLElement} button
+   * @returns {{container: HTMLElement|null, values: Object}}
+   */
+  _collectInlineContext(button) {
+    const values = {};
+    const container = button.closest('[data-zkey]') || button.parentElement;
+    if (!container) {
+      return { container: null, values };
+    }
+    const fields = container.querySelectorAll(
+      'input.zForm-control, input[type="text"], input[type="email"], ' +
+      'input[type="number"], input[type="password"], textarea, select'
+    );
+    fields.forEach((field) => {
+      const keyEl = field.closest('[data-zkey]');
+      const key = keyEl ? keyEl.getAttribute('data-zkey') : (field.id || field.name);
+      if (key && key !== container.getAttribute('data-zkey')) {
+        values[key] = field.value || '';
+      }
+    });
+    this.logger.log('[ButtonRenderer] Inline gate context:', values);
+    return { container, values };
   }
 
   /**
