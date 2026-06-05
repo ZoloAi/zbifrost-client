@@ -431,22 +431,39 @@ export default class ButtonRenderer {
    */
   _collectInlineContext(button) {
     const values = {};
-    const container = button.closest('[data-zkey]') || button.parentElement;
+    const fieldSel = 'input[type="text"], input[type="email"], input[type="number"], ' +
+      'input[type="password"], input.zForm-control, textarea, select';
+
+    // Climb to the WIZARD container: the gate step's own [data-zkey] wraps only
+    // the button, so we keep walking up until we hit the ancestor [data-zkey]
+    // that actually holds the pre-gate fields (e.g. Types_Demo). That same
+    // ancestor is the in-place reveal target — the post-gate step lands beside
+    // its siblings, not inside the button.
+    let container = null;
+    let node = button.parentElement;
+    while (node) {
+      if (node.getAttribute && node.getAttribute('data-zkey') && node.querySelector(fieldSel)) {
+        container = node;
+        break;
+      }
+      node = node.parentElement;
+    }
+    if (!container) {
+      container = button.closest('[data-zkey]') || button.parentElement;
+    }
     if (!container) {
       return { container: null, values };
     }
-    const fields = container.querySelectorAll(
-      'input.zForm-control, input[type="text"], input[type="email"], ' +
-      'input[type="number"], input[type="password"], textarea, select'
-    );
-    fields.forEach((field) => {
+
+    const containerKey = container.getAttribute('data-zkey');
+    container.querySelectorAll(fieldSel).forEach((field) => {
       const keyEl = field.closest('[data-zkey]');
       const key = keyEl ? keyEl.getAttribute('data-zkey') : (field.id || field.name);
-      if (key && key !== container.getAttribute('data-zkey')) {
+      if (key && key !== containerKey) {
         values[key] = field.value || '';
       }
     });
-    this.logger.log('[ButtonRenderer] Inline gate context:', values);
+    this.logger.log('[ButtonRenderer] Inline gate context:', { container: containerKey, values });
     return { container, values };
   }
 
