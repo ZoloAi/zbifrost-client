@@ -160,16 +160,7 @@ export default class ButtonRenderer {
         button.style.cssText = cssString;
       }
     }
-    // zWizard gate button — a `!` gate's button is the boolean "did the user
-    // proceed?" answer. The backend stamps _wizardPath/_wizardGate so we can
-    // drive the (stateless, path-based) wizard_gate_submit on click, even when
-    // the wizard is embedded as content inside a non-wizard page.
-    const wizardPath = data._wizardPath || data.data?._wizardPath || null;
-    const wizardGate = data._wizardGate || data.data?._wizardGate || null;
-
-    if (wizardPath && wizardGate) {
-      this._attachGateSubmit(button, wizardPath, wizardGate);
-    } else if (delegateInline) {
+    if (delegateInline) {
       // Inline delegate: render the dotted target section within this carrier's
       // parent key container, with a Back affordance — no route change, no panel
       // swap. The carrier itself stays a normal button (no wizard-action wiring).
@@ -380,85 +371,6 @@ export default class ButtonRenderer {
       // NOTE: never rewrite button.textContent on click. The `[ok]` confirmation
       // is a log signal only — rendering it injected text and wiped icon buttons.
     });
-  }
-
-  /**
-   * Wire a zWizard gate button to drive wizard_gate_submit.
-   *
-   * On click: collect pre-gate input values (sibling steps), ensure a hidden
-   * post-gate container exists for the wizard_gate_result render, and send the
-   * gate boolean (true) plus the collected values. The backend re-executes the
-   * post-gate steps statelessly via wizardPath — no paused generator needed.
-   *
-   * @private
-   * @param {HTMLElement} button - Gate button element
-   * @param {string} wizardPath - Dot-path to the zWizard dict from block root
-   * @param {string} gateKey - Clean gate step key (e.g. "Confirm")
-   */
-  _attachGateSubmit(button, wizardPath, gateKey) {
-    button.dataset.wizardGate = gateKey;
-    button.dataset.wizardPath = wizardPath;
-    button.addEventListener('click', (event) => {
-      event.preventDefault();
-      const connection = this.client?.connection || window.bifrostClient?.connection;
-      if (!connection) {
-        this.logger.error('[ButtonRenderer] No connection for gate submit');
-        return;
-      }
-      const values = this._collectGateValues(button);
-      this._ensurePostGateContainer(button, gateKey, wizardPath);
-      button.disabled = true;
-      try {
-        connection.send(JSON.stringify({
-          event: 'wizard_gate_submit',
-          wizardPath,
-          gateKey,
-          value: true,
-          values,
-        }));
-        this.logger.log('[ButtonRenderer] Gate submit sent:', { wizardPath, gateKey, values });
-      } catch (e) {
-        this.logger.error('[ButtonRenderer] Gate submit failed:', e);
-        button.disabled = false;
-      }
-    });
-  }
-
-  /**
-   * Collect pre-gate input values keyed by their step name.
-   * Walks the wizard container (parent of the gate step wrapper) for sibling
-   * [data-zkey] steps holding an input, skipping the gate step itself.
-   * @private
-   * @param {HTMLElement} button - Gate button element
-   * @returns {Object} Map of stepKey → value
-   */
-  _collectGateValues(button) {
-    const map = {};
-    const gateWrap = button.closest('[data-zkey]');
-    const container = gateWrap ? gateWrap.parentElement : button.parentElement;
-    if (!container) return map;
-    container.querySelectorAll('[data-zkey]').forEach((w) => {
-      if (w === gateWrap || (gateWrap && gateWrap.contains(w))) return;
-      const el = w.querySelector('input, textarea, select');
-      if (el) map[w.getAttribute('data-zkey')] = (el.value || '').trim();
-    });
-    return map;
-  }
-
-  /**
-   * Ensure a hidden post-gate container exists so wizard_gate_result has a
-   * render target. Inserted right after the gate step wrapper.
-   * @private
-   */
-  _ensurePostGateContainer(button, gateKey, wizardPath) {
-    if (document.querySelector(`[data-wizard-post-gate="${gateKey}"]`)) return;
-    const gateWrap = button.closest('[data-zkey]') || button.parentElement;
-    if (!gateWrap || !gateWrap.parentElement) return;
-    const post = document.createElement('div');
-    post.setAttribute('data-wizard-post-gate', gateKey);
-    post.setAttribute('data-wizard-path', wizardPath);
-    post.style.display = 'none';
-    gateWrap.parentElement.insertBefore(post, gateWrap.nextSibling);
   }
 
   /**
