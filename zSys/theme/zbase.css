@@ -179,6 +179,41 @@ select.zForm-control,   select.zInput   { cursor: pointer; }
   font-weight: 600;
 }
 
+/* File selector — native file inputs (emitted as .zForm-control) styled to match
+   the theme: muted "no file" text + an indigo pill for the browse button. */
+input[type="file"].zForm-control,
+input[type="file"].zInput {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.9375rem;
+  color: var(--zinput-placeholder, rgba(156, 163, 175, 0.85));
+  line-height: 1.6;
+  cursor: pointer;
+}
+input[type="file"].zForm-control::file-selector-button,
+input[type="file"].zInput::file-selector-button {
+  margin-right: 0.85rem;
+  padding: 0.45rem 1rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--zinput-accent, #4f46e5);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.05s ease;
+}
+input[type="file"].zForm-control::file-selector-button:hover,
+input[type="file"].zInput::file-selector-button:hover {
+  filter: brightness(1.12);
+}
+input[type="file"].zForm-control::file-selector-button:active,
+input[type="file"].zInput::file-selector-button:active {
+  transform: translateY(1px);
+}
+
 /* input-group affix chips (prefix / suffix) */
 .zInputGroup > .zInputGroup-text {
   display: flex;
