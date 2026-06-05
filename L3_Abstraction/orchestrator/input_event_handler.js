@@ -528,7 +528,9 @@ export class InputEventHandler {
     let defaultValue = eventData.default || null;
     const disabled = eventData.disabled || false;
     const required = eventData.required || false;
-    const type = eventData.type || 'dropdown'; // Default to dropdown
+    // `type` (interactive WS path) or `widget_type` (declarative — the zSelect
+    // expander renames type→widget_type). Accept both; default to dropdown.
+    const type = eventData.type || eventData.widget_type || 'dropdown';
     
     // Auto-detect default from [default] suffix if no explicit default provided
     if (defaultValue === null && options.length > 0) {
