@@ -235,9 +235,11 @@ export class InputEventHandler {
       inputGroup.classList.add('zInputGroup');
       
       // Add prefix text before input
+      // Position-specific class (zInputGroup-prefix) lets users restyle the prefix
+      // alone (color/font) without touching the input or the suffix.
       if (prefix) {
         const prefixSpan = document.createElement('span');
-        prefixSpan.classList.add('zInputGroup-text');
+        prefixSpan.classList.add('zInputGroup-text', 'zInputGroup-prefix');
         prefixSpan.textContent = prefix;
         inputGroup.appendChild(prefixSpan);
       }
@@ -246,9 +248,11 @@ export class InputEventHandler {
       inputGroup.appendChild(inputElement);
       
       // Add suffix text after input
+      // Position-specific class (zInputGroup-suffix) lets users restyle the suffix
+      // alone (color/font) without touching the input or the prefix.
       if (suffix) {
         const suffixSpan = document.createElement('span');
-        suffixSpan.classList.add('zInputGroup-text');
+        suffixSpan.classList.add('zInputGroup-text', 'zInputGroup-suffix');
         suffixSpan.textContent = suffix;
         inputGroup.appendChild(suffixSpan);
       }
