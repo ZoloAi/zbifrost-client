@@ -360,8 +360,11 @@ input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:ho
 .zForm-check-disabled .zForm-check-label { cursor: not-allowed; }
 
 /* native radios/checkboxes NOT given the custom .zForm-check treatment
- * (e.g. zSelect radio groups) still pick up the theme color. */
+ * still pick up the theme color (belt-and-braces — groups now emit .zForm-check). */
 input[type="radio"], input[type="checkbox"] { accent-color: var(--color-primary, #6366f1); }
+
+/* radio / checkbox group (zSelect type:radio|checkbox) — legend + row rhythm */
+.zForm-check-group .zLabel { margin-bottom: 0.45rem; }
 
 /* ─── Select / dropdown — canonical control (matches .zForm-control) ───────── */
 /* The client emits `zSelect` as a native <select class="zSelect">. Give it the

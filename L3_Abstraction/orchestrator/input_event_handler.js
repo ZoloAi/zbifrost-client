@@ -591,9 +591,7 @@ export class InputEventHandler {
         // NORMAL MODE: Standard radio/checkbox group with labels
         // Create container
         const container = document.createElement('div');
-        if (elementClasses) {
-          container.className = elementClasses;
-        }
+        container.className = elementClasses ? `${elementClasses} zForm-check-group` : 'zForm-check-group';
         if (eventData._zStyle) {
           const cssString = convertStyleToString(eventData._zStyle, this.logger);
           if (cssString) {
@@ -605,8 +603,7 @@ export class InputEventHandler {
         if (prompt) {
           const promptLabel = document.createElement('div');
           promptLabel.textContent = prompt;
-          promptLabel.style.marginBottom = '0.5rem';
-          promptLabel.style.fontWeight = TYPOGRAPHY.FONT_WEIGHTS.MEDIUM;
+          promptLabel.className = 'zLabel';
           appendRequiredMark(promptLabel, required);
           container.appendChild(promptLabel);
         }
@@ -630,17 +627,19 @@ export class InputEventHandler {
             optionIsDefault = false;
           }
           
-          // Create wrapper div for input + label
+          // Create wrapper div for input + label (canonical .zForm-check row)
+          const rowDisabled = disabled || optionDisabled;
           const optionWrapper = document.createElement('div');
-          optionWrapper.style.marginBottom = '0.5rem';
+          optionWrapper.className = rowDisabled ? 'zForm-check zForm-check-disabled zmb-2' : 'zForm-check zmb-2';
           
           // Create input with per-option disabled state
           const input = createInput(inputType, {
             id: optionId,
             name: groupName,
             value: optionVal,
-            disabled: disabled || optionDisabled, // Component-level OR per-option disabled
-            required: required && index === 0 // Only first input has required
+            disabled: rowDisabled, // Component-level OR per-option disabled
+            required: required && index === 0, // Only first input has required
+            class: 'zForm-check-input'
           });
           
           // Set checked state based on default value
@@ -659,9 +658,8 @@ export class InputEventHandler {
           }
           
           // Create label
-          const label = createLabel(optionId, {});
+          const label = createLabel(optionId, { class: 'zForm-check-label' });
           label.textContent = optionLabel;
-          label.style.marginLeft = '0.5rem';
           
           // Assemble option
           optionWrapper.appendChild(input);
