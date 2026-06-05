@@ -202,12 +202,134 @@ zBifrostBadge {
 .zBadge-dot     { border-radius: 50%; background: currentColor; }
 .zIcon          { display: inline-block; width: 0.75em; height: 0.75em; fill: currentColor; }
 
-/* ─── zNavBar structural ───────────────────────────────────────────────────── */
+/* ─── zNavBar — Bifrost-owned default chrome (token-driven) ─────────────────── */
+/* Structure + a sensible dark visual default. Apps re-skin via --znav-* vars or
+ * a higher-specificity rule — no need to re-declare the whole navbar per app. */
 
-zNavBar .zNavbar         { display: flex; align-items: center; flex-wrap: wrap; }
-zNavBar .zNavbar-collapse { display: flex; align-items: center; flex: 1; }
-zNavBar .zNavbar-nav     { display: flex; list-style: none; margin: 0; padding: 0; }
-zNavBar .zNav-item       { position: relative; }
+zNavBar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: block;
+}
+
+zNavBar .zNavbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.75rem 1.5rem;
+  background: var(--znav-bg, rgba(10, 14, 39, 0.92));
+  border-bottom: 1px solid var(--znav-border, rgba(79, 70, 229, 0.15));
+  backdrop-filter: blur(12px);
+  font-family: var(--znav-font, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+}
+
+zNavBar .zNavbar-brand {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-right: 2rem;
+  color: var(--znav-brand-color, #f9fafb);
+}
+
+zNavBar .zNavbar-toggler {
+  display: none;
+  margin-left: auto;
+  padding: 0.4rem 0.6rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--znav-brand-color, #f9fafb);
+  background: var(--znav-link-hover-bg, rgba(79, 70, 229, 0.15));
+  border: 1px solid var(--znav-border, rgba(79, 70, 229, 0.3));
+  border-radius: 6px;
+}
+
+zNavBar .zNavbar-collapse {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+zNavBar .zNavbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+zNavBar .zNav-item { position: relative; }
+
+zNavBar .zNav-link {
+  display: block;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-radius: 8px;
+  color: var(--znav-link-color, #d1d5db);
+  transition: color 0.2s, background 0.2s;
+}
+
+zNavBar .zNav-link:hover,
+zNavBar .zNav-link.active {
+  color: var(--znav-link-hover-color, #f9fafb);
+  background: var(--znav-link-hover-bg, rgba(79, 70, 229, 0.15));
+}
+
+/* ─── zDropdown (navbar menus) — JS toggles .zShow ─────────────────────────── */
+
+.zDropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 100;
+  min-width: 11rem;
+  padding: 0.4rem 0;
+  background: var(--zdropdown-bg, rgba(20, 25, 45, 0.97));
+  border: 1px solid var(--znav-border, rgba(79, 70, 229, 0.25));
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+}
+.zDropdown-menu.zShow { display: block; }
+
+.zDropdown-item {
+  display: block;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  color: var(--znav-link-color, #d1d5db);
+  transition: color 0.15s, background 0.15s;
+}
+.zDropdown-item:hover {
+  color: var(--znav-link-hover-color, #f9fafb);
+  background: var(--znav-link-hover-bg, rgba(79, 70, 229, 0.15));
+}
+
+/* ─── Mobile hamburger ─────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  zNavBar .zNavbar-toggler { display: block; }
+  zNavBar .zNavbar-collapse {
+    flex-basis: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  zNavBar .zNavbar-collapse:not(.zShow) { display: none; }
+  zNavBar .zNavbar-collapse.zShow { display: flex; padding: 0.5rem 0 0.75rem; }
+  zNavBar .zNavbar-nav { flex-direction: column; width: 100%; gap: 0; }
+  zNavBar .zNav-link { width: 100%; }
+  .zDropdown-menu {
+    position: static;
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    padding-left: 0.75rem;
+    background: var(--znav-link-hover-bg, rgba(79, 70, 229, 0.08));
+  }
+}
 
 /* ─── 2. Grid ──────────────────────────────────────────────────────────────── */
 
