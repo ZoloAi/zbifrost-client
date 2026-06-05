@@ -420,16 +420,33 @@ select.zInput option { color: #1f2937; background: #fff; }
 select.zSelect option:disabled,
 select.zForm-control option:disabled { color: #9ca3af; }
 
-/* multi-select / sized list box — drop the caret, let it grow */
+/* multi-select / sized list box — themed box, no caret, themed inline options */
 select.zSelect[multiple],
 select.zSelect[size],
 select.zForm-control[multiple] {
-  padding-right: 0.85rem;
+  padding: 0.4rem;
   height: auto;
+  min-height: 0;
   background-image: none;
 }
 select.zSelect[multiple] option,
-select.zForm-control[multiple] option { padding: 0.3rem 0.45rem; border-radius: 4px; }
+select.zSelect[size] option,
+select.zForm-control[multiple] option {
+  color: var(--zinput-color, #e2e8f0);
+  background: transparent;
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  margin-bottom: 1px;
+}
+/* selected rows — gradient hack forces the highlight color in Chromium */
+select.zSelect[multiple] option:checked,
+select.zSelect[size] option:checked,
+select.zForm-control[multiple] option:checked {
+  color: #fff;
+  background: linear-gradient(var(--color-primary, #6366f1), var(--color-primary, #6366f1));
+}
+select.zSelect[multiple] option:disabled,
+select.zForm-control[multiple] option:disabled { color: var(--zinput-placeholder, rgba(156, 163, 175, 0.55)); }
 
 /* size variants */
 select.zSelect.zSelect-lg { padding-top: 0.7rem;  padding-bottom: 0.7rem;  font-size: 1.05rem; }

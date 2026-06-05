@@ -692,9 +692,11 @@ export class InputEventHandler {
       const selectElement = document.createElement('select');
       selectElement.id = baseId;
       
-      if (elementClasses) {
-        selectElement.className = elementClasses;
-      }
+      // Always carry the canonical .zSelect base so every dropdown / multi-select
+      // gets themed — even when _zClass overrides it (merge + de-dupe).
+      const selectClassList = elementClasses ? elementClasses.split(/\s+/).filter(Boolean) : [];
+      if (!selectClassList.includes('zSelect')) selectClassList.unshift('zSelect');
+      selectElement.className = selectClassList.join(' ');
       
       if (disabled) {
         selectElement.disabled = true;
