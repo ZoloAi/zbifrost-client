@@ -348,24 +348,28 @@ export default class ButtonRenderer {
 
       // For regular buttons (type="button"), check if it has an action
       if (action && action.startsWith('&')) {
-        this.logger.log(`[ButtonRenderer] Button has plugin action - collecting wizard values`);
         this.logger.log(`[ButtonRenderer]  Button has plugin action: ${action}`);
-        
+
         // Collect wizard input values (look for sibling inputs in same wizard container)
         const collectedValues = this._collectWizardValues(button);
         this.logger.log(`[ButtonRenderer]  Collected wizard values:`, collectedValues);
-        
+
         // Send button action event with collected values
         this._sendButtonAction(requestId, action, collectedValues);
-      } else {
-        // Regular button without action - send standard response
-        this.logger.log(`[ButtonRenderer] Regular button - sending WebSocket response`);
+        button.disabled = true; // prevent double-fire
+      } else if (requestId) {
+        // Interactive button awaiting a backend response (zDialog / zWizard).
+        this.logger.log('[ButtonRenderer] Regular button - sending WebSocket response');
         this._sendResponse(requestId, value);
+        button.disabled = true; // prevent double-submission
+      } else {
+        // Standalone / declarative button: no action and no pending request — a
+        // plain showcase button. Nothing to fire; leave it interactive.
+        this.logger.log('[ButtonRenderer] Button has no action and no pending request — no-op');
       }
 
-      // Disable button after click to prevent double-submission
-      button.disabled = true;
-      button.textContent = `[ok] ${originalLabel}`;
+      // NOTE: never rewrite button.textContent on click. The `[ok]` confirmation
+      // is a log signal only — rendering it injected text and wiped icon buttons.
     });
   }
 
