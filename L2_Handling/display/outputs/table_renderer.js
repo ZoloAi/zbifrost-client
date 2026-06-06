@@ -420,9 +420,11 @@ export class TableRenderer {
           const cellValue = isCellDescriptor ? raw.val : raw;
           const cellClass = isCellDescriptor ? (raw._zClass || null) : null;
 
-          // Cell overrides column — more specific wins entirely
+          // Column class is the BASE (alignment, tint…); a cell descriptor
+          // _zClass LAYERS on top so both apply (e.g. zText-end + zText-success).
+          // On a genuine conflict the later zTheme rule wins — not the cell.
           const colClass = _zColumn?.[column] || null;
-          const combinedClass = cellClass || colClass || null;
+          const combinedClass = [colClass, cellClass].filter(Boolean).join(' ') || null;
 
           const cellContent = this._formatCellValue(cellValue);
           
