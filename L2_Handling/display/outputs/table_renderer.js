@@ -212,6 +212,15 @@ export class TableRenderer {
       wrapper.appendChild(titleElement);
     }
 
+    // Render caption as a description line UNDER the title (not a full-width row
+    // inside the table). Reads like a subtitle: what the table shows / source / date.
+    if (caption) {
+      const captionElement = createElement('p', ['zMuted', 'zMb-3']);
+      captionElement.style.fontSize = '0.875rem';
+      captionElement.textContent = this._decodeUnicodeEscapes(caption);
+      wrapper.appendChild(captionElement);
+    }
+
     // Create responsive table wrapper (zTheme class)
     const tableWrapper = createElement('div', ['zTable-responsive']);
 
@@ -227,16 +236,6 @@ export class TableRenderer {
 
     // Create table element (using Layer 0 primitive)
     const table = createTable({ class: tableClasses.length > 0 ? tableClasses.join(' ') : undefined });
-
-    // Render caption (if provided) - must come before thead per HTML spec
-    if (caption) {
-      const captionElement = document.createElement('caption');
-      captionElement.className = 'zMuted';
-      captionElement.style.padding = '0.5rem';
-      captionElement.style.textAlign = 'left';
-      captionElement.textContent = caption;
-      table.appendChild(captionElement);
-    }
 
     // Render table head (if show_header is true)
     if (show_header && columns.length > 0) {
