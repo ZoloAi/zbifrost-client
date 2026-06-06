@@ -1495,15 +1495,19 @@ export class ZDisplayOrchestrator {
           wrapper.appendChild(bar);
           progressTicker = ticker;
         } else {
-          // type: bar (default) — indeterminate marching marquee.
+          // type: bar (default) — indeterminate marching marquee. style: solid
+          // drops the diagonal stripes for a normal (flat) fill; striped is the
+          // default. The marching motion comes from zProgress--indeterminate
+          // either way, so the bar still reads as "working".
+          const striped = String(spec.style || 'striped').toLowerCase() !== 'solid';
           const progressRenderer = await this.client._ensureProgressBarRenderer();
           const bar = progressRenderer.renderInline({
             progressId: `zfunc-progress-${requestId}`,
             label, color,
             current: 0,
             total: 100,
-            striped: true,
-            animated: true,
+            striped,
+            animated: striped,
             showPercentage: false,  // indeterminate: elapsed time, no fake %
           });
           if (bar) {
