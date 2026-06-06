@@ -1503,3 +1503,25 @@ zNavBar .zNav-link.active {
       rgba(255, 255, 255, 0.28) 75%, transparent 75%, transparent);
 }
 .zProgress-bar-animated { animation: zProgress-flow 0.9s linear infinite; }
+
+/* Indeterminate "executing" marquee — opaque work of UNKNOWN length (a zFunc /
+   zBtn plugin call). A partial fill chunk marches across the track: the web twin
+   of the zCLI lit-window marquee that parks on the EXECUTE stage. It reads as
+   "zOS is working" and NEVER sits at 100% — so a full bar only ever means done.
+   Completion is signalled by the bar being replaced with the result. */
+.zProgress--indeterminate { overflow: hidden; }
+.zProgress--indeterminate > .zProgress-bar {
+  width: 42% !important;
+  transition: none;
+  animation: zProgress-flow 0.9s linear infinite,
+             zProgress-march 1.25s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes zProgress-march {
+  from { transform: translateX(-115%); }
+  to   { transform: translateX(258%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zProgress--indeterminate > .zProgress-bar {
+    animation: none; transform: none; width: 60% !important;
+  }
+}

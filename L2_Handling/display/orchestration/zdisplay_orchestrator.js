@@ -1439,13 +1439,14 @@ export class ZDisplayOrchestrator {
     wrapper.className = 'zfunc-wrapper zmy-2';
     wrapper.dataset.zfuncRequestId = requestId;
 
-    // zProgress sibling → swap the text spinner for a live, indeterminate bar.
-    // The client can't know the backend's duration, so the bar FILLS once from
-    // 0→100 (a satisfying "starting" sweep) and then PARKS full, where the
-    // perpetual diagonal stripes carry the "zOS is still working" signal — the
-    // Bifrost analog of the zCLI bar parking on the EXECUTE stage. An elapsed
-    // counter ticks alongside (elapsed, never ETA — we never fake a percentage).
-    // Everything clears with the wrapper when the response lands.
+    // zProgress sibling → swap the text spinner for a live, INDETERMINATE bar.
+    // Bifrost sends one execute_zfunc and gets one response — the plugin runs
+    // server-side as a black box, with nothing observable in between. So we never
+    // fake a fill (a full bar would read "done" while work is still running).
+    // Instead a marquee chunk marches across (the web twin of the zCLI EXECUTE
+    // marquee): it reads as "zOS is working", never sits at 100%, and is replaced
+    // by the result the instant work truly completes. An elapsed counter ticks
+    // alongside (elapsed, never ETA). Everything clears with the wrapper.
     let progressTicker = null;
     if (progressSpec) {
       const spec = (typeof progressSpec === 'object') ? progressSpec : {};
@@ -1455,7 +1456,7 @@ export class ZDisplayOrchestrator {
           progressId: `zfunc-progress-${requestId}`,
           label: spec.label || 'Working…',
           color: spec.color || 'primary',
-          current: 0,             // start empty — fill to full below
+          current: 0,
           total: 100,
           striped: true,
           animated: true,
@@ -1464,15 +1465,9 @@ export class ZDisplayOrchestrator {
         if (bar) {
           wrapper.appendChild(bar);
 
-          // Fill 0 → 100 once with an eased sweep, then leave it full with the
-          // stripes flowing. Two frames so the browser paints width:0 first.
-          const barFill = bar.querySelector('[data-bar="progress-bar"]');
-          if (barFill) {
-            barFill.style.transition = 'width 1.1s cubic-bezier(0.22, 1, 0.36, 1)';
-            requestAnimationFrame(() => requestAnimationFrame(() => {
-              barFill.style.width = '100%';
-            }));
-          }
+          // Switch the track to the marching-marquee indeterminate animation.
+          const track = bar.querySelector('.zProgress');
+          if (track) track.classList.add('zProgress--indeterminate');
 
           const info = bar.querySelector('[data-info="progress-info"]');
           const t0 = Date.now();
