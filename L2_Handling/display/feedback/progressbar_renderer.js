@@ -182,6 +182,18 @@ export default class ProgressBarRenderer {
       animated = true;
     }
 
+    // Re-render of a bar we already drew (a wizard advancing past its gate
+    // re-emits the SAME progressId at 100%). Update it in place and return null
+    // so the caller never appends a duplicate — the existing node animates to its
+    // new width where it sits (the bar stays at the top of the wizard).
+    if (event.progressId && this._activeProgressBars.has(event.progressId)) {
+      const existing = this._activeProgressBars.get(event.progressId).element;
+      if (existing && document.contains(existing)) {
+        this._updateProgressBar(existing, current, total, showPercentage, eta, showETA);
+        return null;
+      }
+    }
+
     const element = this._createProgressBarContainer(
       progressId, label, current, total,
       showPercentage, showETA, eta, color, striped, animated, height
