@@ -1487,19 +1487,21 @@ export class ZDisplayOrchestrator {
       const spec = (typeof progressSpec === 'object') ? progressSpec : {};
       const label = spec.label || 'Working…';
       const color = spec.color || 'primary';
+      const ptype = String(spec.type || 'marquee').toLowerCase();
       try {
-        if (String(spec.type || 'bar').toLowerCase() === 'spinner') {
+        if (ptype === 'spinner') {
           // type: spinner — the zCLI glyph cascades to the canonical CSS border
           // spinner (zTheme). Honest indeterminate motion + elapsed, no fake %.
           const { bar, ticker } = this._buildSpinnerProgress(label, color);
           wrapper.appendChild(bar);
           progressTicker = ticker;
         } else {
-          // type: bar (default) — indeterminate marching marquee. style: solid
-          // drops the diagonal stripes for a normal (flat) fill; striped is the
-          // default. The marching motion comes from zProgress--indeterminate
-          // either way, so the bar still reads as "working".
-          const striped = String(spec.style || 'striped').toLowerCase() !== 'solid';
+          // An action's duration is opaque to the client, so both bar-family
+          // types march indeterminately (motion = working, no fake %). The look
+          // differs: marquee sweeps with diagonal stripes (spinner-like); bar is
+          // a clean solid fill. A determinate fill that truly "slowly fills" is
+          // the wizard's job (streamed current/total → _updateProgressBar).
+          const striped = (ptype === 'marquee');
           const progressRenderer = await this.client._ensureProgressBarRenderer();
           const bar = progressRenderer.renderInline({
             progressId: `zfunc-progress-${requestId}`,
