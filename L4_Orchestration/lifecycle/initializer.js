@@ -81,6 +81,15 @@ export class Initializer {
   }
 
   /**
+   * Update badge with bifrost render status (Rendering k/N → connected)
+   * @param {Object} opts - { current, total, done }
+   */
+  async updateRenderState(opts) {
+    await this.client._ensureZVaFManager();
+    return this.client.zvafManager.updateRenderState(opts);
+  }
+
+  /**
    * Populate navbar from embedded config
    * Uses zuiConfig from server, fetches fresh on auth change
    */

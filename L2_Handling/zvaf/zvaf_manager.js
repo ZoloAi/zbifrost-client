@@ -138,6 +138,34 @@ export class ZVaFManager {
   }
 
   /**
+   * Update the badge with bifrost RENDER status (distinct from connection state).
+   *
+   * This is the zOS↔user "page is painting" contract: as the runtime streams a
+   * page in, the badge reads "Rendering k/N", then snaps back to the connected
+   * state when the last section lands. It reuses the same pending/success chip —
+   * no new chrome, no layout impact.
+   *
+   * @param {Object} opts
+   * @param {number} [opts.current] - Sections painted so far
+   * @param {number} [opts.total]   - Total sections in this render
+   * @param {boolean} [opts.done]   - Render finished → restore connected state
+   */
+  updateRenderState({ current = 0, total = 0, done = false } = {}) {
+    if (done) {
+      this.updateBadgeState('connected');
+      return;
+    }
+    const badge = this.client._zConnectionBadge;
+    if (!badge) return;
+    const badgeText = badge.querySelector('.zBadge-text');
+    if (!badgeText) return;
+
+    badge.classList.remove('zBadge-success', 'zBadge-error');
+    badge.classList.add('zBadge-pending');
+    badgeText.textContent = total > 0 ? `Rendering ${current}/${total}` : 'Rendering…';
+  }
+
+  /**
    * Populate navbar from embedded config.
    * 3A: Prefers server-built nav_html; falls back to array-based builder.
    */

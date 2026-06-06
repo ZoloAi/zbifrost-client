@@ -208,7 +208,39 @@ export class ZDisplayOrchestrator {
             this.logger.debug(`[ZDisplayOrchestrator] ${key}:`, typeof value);
           }
         }
-        await this.renderItems(data, targetContainer);
+        // Progressive section render: a zOS page is a list of top-level sections,
+        // and we know the count from the declarative structure. Paint them one at
+        // a time, yielding to the browser between each, and report progress on the
+        // badge ("Rendering k/N"). The page visibly paints in — and the user feels
+        // it loading, which is the point.
+        //
+        // Guarded: only the plain "section list" shape is safe to split. Gated
+        // wizards (whole-dict gate detection), root-level ~menus (option content
+        // lives in sibling keys), and grouped blocks must render holistically — so
+        // they keep the exact current path. Single-section chunks aren't worth it.
+        const _topKeys = Object.keys(data).filter(k => !k.startsWith('_'));
+        const _meta = this.metadataProcessor.extractMetadata(data);
+        const _canSplit = _topKeys.length > 1
+          && !this.wizardGateHandler.detectGateStep(data)
+          && !this.groupRenderer.shouldRenderAsGroup(_meta)
+          && !_topKeys.some(k => k.startsWith('~'));
+
+        if (_canSplit) {
+          const _total = _topKeys.length;
+          let _done = 0;
+          for (const _k of _topKeys) {
+            await this.renderItems({ [_k]: data[_k] }, targetContainer);
+            _done += 1;
+            try { await this.client._updateRenderState({ current: _done, total: _total }); }
+            catch (_e) { /* badge is best-effort chrome — never block render */ }
+            // Yield so the section paints and the badge updates before the next.
+            await new Promise(r => requestAnimationFrame(() => r()));
+          }
+          // Page painted in full → snap the badge back to the connected state.
+          try { await this.client._updateRenderState({ done: true }); } catch (_e) { /* best-effort */ }
+        } else {
+          await this.renderItems(data, targetContainer);
+        }
         this._pendingGateKey = null;
         this.logger.log(`[ZDisplayOrchestrator] Chunk #${chunk_num} rendered from YAML (${keys.length} keys)`);
         

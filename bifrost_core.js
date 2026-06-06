@@ -757,6 +757,11 @@ class BifrostCore {
       return this.initializer.updateBadgeState(state);
     }
 
+    async _updateRenderState(opts) {
+      await this._ensureInitializer();
+      return this.initializer.updateRenderState(opts);
+    }
+
     async _populateNavBar() {
       await this._ensureInitializer();
       return this.initializer.populateNavBar();
