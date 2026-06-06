@@ -1438,22 +1438,47 @@ zNavBar .zNav-link.active {
 .zProgress-container .zFw-bold     { font-weight: 600; color: var(--zprogress-label, #e5e7eb); }
 .zProgress-container .zText-muted  { color: var(--zprogress-info, rgba(229, 231, 235, 0.6)); }
 
-/* Track — the rail behind the fill. */
+/* Track — the rail behind the fill. Inset shadow gives the pill real depth. */
 .zProgress {
   width: 100%;
   height: 1rem;                 /* default; renderer may override inline via height prop */
-  background: var(--zprogress-track, rgba(255, 255, 255, 0.12));
+  background: var(--zprogress-track, rgba(255, 255, 255, 0.07));
   border-radius: 999px;
   overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
-/* Fill — the moving bar. Width animates smoothly to its new value. */
+/* Fill — the moving bar. It carries a solid tint (zBg-{color}) PLUS two layered
+   overlays: a fixed top gloss for a glossy 3-D pill, and a diagonal sheen that
+   is ALWAYS running — so the bar reads as alive even when the value is static.
+   Width animates with a soft ease when it does change. */
 .zProgress-bar {
   height: 100%;
   width: 0;
   background-color: var(--color-primary, #A2D46E);  /* default; zBg-{color} overrides */
+  background-image:
+    linear-gradient(to bottom,
+      rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.04) 48%, rgba(0, 0, 0, 0.10)),
+    linear-gradient(-45deg,
+      rgba(255, 255, 255, 0.16) 25%, transparent 25%,
+      transparent 50%, rgba(255, 255, 255, 0.16) 50%,
+      rgba(255, 255, 255, 0.16) 75%, transparent 75%, transparent);
+  background-size: 100% 100%, 1.15rem 1.15rem;
+  background-repeat: no-repeat, repeat;
   border-radius: inherit;
-  transition: width 0.4s ease;
+  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: zProgress-flow 0.9s linear infinite;
+}
+
+/* The diagonal sheen scrolls; the gloss layer stays put (position pinned). */
+@keyframes zProgress-flow {
+  from { background-position: 0 0, 1.15rem 0; }
+  to   { background-position: 0 0, 0 0; }
+}
+
+/* Respect reduced-motion: keep the look, drop the perpetual scroll. */
+@media (prefers-reduced-motion: reduce) {
+  .zProgress-bar { animation: none; }
 }
 
 /* `color` property → fill color. Bar-scoped (.zProgress-bar.zBg-*) so it always
@@ -1466,18 +1491,15 @@ zNavBar .zNav-link.active {
 .zProgress-bar.zBg-danger,
 .zProgress-bar.zBg-error     { background-color: var(--color-error,     #E63946); }
 
-/* Striped / animated variants (indeterminate or "working" states). */
+/* Indeterminate / "working" state — bolder stripes (renderer adds these when a
+   bar has no total). Reuses the same flow animation. */
 .zProgress-bar-striped {
-  background-image: linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.18) 25%, transparent 25%,
-    transparent 50%, rgba(255, 255, 255, 0.18) 50%,
-    rgba(255, 255, 255, 0.18) 75%, transparent 75%, transparent
-  );
-  background-size: 1rem 1rem;
+  background-image:
+    linear-gradient(to bottom,
+      rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.04) 48%, rgba(0, 0, 0, 0.10)),
+    linear-gradient(-45deg,
+      rgba(255, 255, 255, 0.28) 25%, transparent 25%,
+      transparent 50%, rgba(255, 255, 255, 0.28) 50%,
+      rgba(255, 255, 255, 0.28) 75%, transparent 75%, transparent);
 }
-.zProgress-bar-animated { animation: zProgress-stripes 1s linear infinite; }
-@keyframes zProgress-stripes {
-  from { background-position: 1rem 0; }
-  to   { background-position: 0 0; }
-}
+.zProgress-bar-animated { animation: zProgress-flow 0.9s linear infinite; }
