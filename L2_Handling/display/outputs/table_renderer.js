@@ -215,12 +215,14 @@ export class TableRenderer {
     // Create responsive table wrapper (zTheme class)
     const tableWrapper = createElement('div', ['zTable-responsive']);
 
-    // Build table classes - NO automatic zTable injection (2026-01-28)
-    // User must explicitly declare _zClass: zTable if they want zTheme styling
-    // This keeps the table as pure semantic HTML by default
-    const tableClasses = [];
+    // zTable styling is BUILT IN — the event is always themed, no opt-in needed.
+    // Any _zClass / class from the .zolo is appended on top for extra modifiers
+    // (deduped so an explicit `_zClass: zTable` never doubles up).
+    const tableClasses = ['zTable'];
     if (customClass) {
-      tableClasses.push(customClass);
+      for (const c of String(customClass).split(/\s+/)) {
+        if (c && c !== 'zTable') tableClasses.push(c);
+      }
     }
 
     // Create table element (using Layer 0 primitive)
