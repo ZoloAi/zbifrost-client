@@ -1140,6 +1140,17 @@ export class ZDisplayOrchestrator {
         break;
       }
 
+      case 'progress_bar':
+      case 'progress_complete': {
+        // Declarative zProgress (expands to {event: progress_bar}). Build inline
+        // and return the node — the same place/return contract as image/table —
+        // so it renders in the page flow instead of self-appending to <body>.
+        const progressRenderer = await this.client._ensureProgressBarRenderer();
+        element = progressRenderer.renderInline(eventData);
+        this.logger.debug('[renderZDisplayEvent] Rendered progress bar (inline)');
+        break;
+      }
+
       case 'list': {
         // Use modular ListRenderer for lists
         const listRenderer = await this.client._ensureListRenderer();

@@ -82,8 +82,6 @@ export default class ProgressBarRenderer {
       label = 'Processing...',
       current = 0,
       total = 100,
-      showPercentage = true,
-      showETA = true,
       eta = null,
       color = 'primary',
       container = '#app',
@@ -91,6 +89,10 @@ export default class ProgressBarRenderer {
       animated = false,
       height = 'md'
     } = event;
+
+    // Accept backend snake_case (show_percentage / show_eta) as well as camelCase.
+    const showPercentage = event.showPercentage ?? event.show_percentage ?? true;
+    const showETA = event.showETA ?? event.show_eta ?? false;
 
     this.logger.log('[ProgressBarRenderer] Rendering progress:', {
       progressId,
@@ -120,8 +122,13 @@ export default class ProgressBarRenderer {
         height
       );
 
-      // Find target container
-      const targetElement = document.querySelector(container) || document.body;
+      // Find target container. The backend default is the literal "default"
+      // (not a selector) — treat that (and any unresolved selector) as the app
+      // root so a streamed bar lands in the page flow, never orphaned on <body>.
+      const selector = (container && container !== 'default') ? container : '#app';
+      const targetElement = document.querySelector(selector)
+        || document.querySelector('#app')
+        || document.body;
       targetElement.appendChild(progressContainer);
 
       // Track active progress bar
@@ -139,6 +146,55 @@ export default class ProgressBarRenderer {
 
     this.logger.log('[ProgressBarRenderer] Progress updated successfully');
     return progressContainer;
+  }
+
+  /**
+   * Build a progress bar element WITHOUT appending it (inline/declarative use).
+   *
+   * The orchestrator's renderZDisplayEvent() switch returns a node that the
+   * caller places in the page flow — same contract as image/table renderers.
+   * We still register the bar by progressId so a later streamed update (a wizard
+   * advancing, same id) finds and animates this exact element in place.
+   *
+   * Accepts both camelCase (showPercentage) and the backend's snake_case
+   * (show_percentage); leaving `total` off yields an indeterminate striped bar.
+   * @param {Object} event - Progress bar event (declarative or streamed)
+   * @returns {HTMLElement} Progress bar container element (not yet attached)
+   */
+  renderInline(event) {
+    const {
+      progressId = `progress-${Date.now()}`,
+      label = 'Processing...',
+      current = 0,
+      color = 'primary',
+      height = 'md',
+      eta = null
+    } = event;
+
+    const showPercentage = event.showPercentage ?? event.show_percentage ?? true;
+    const showETA = event.showETA ?? event.show_eta ?? false;
+
+    // Indeterminate (no total) → a full striped/animated bar that reads as "working".
+    let { total, striped = false, animated = false } = event;
+    if (!total) {
+      total = 100;
+      striped = true;
+      animated = true;
+    }
+
+    const element = this._createProgressBarContainer(
+      progressId, label, current, total,
+      showPercentage, showETA, eta, color, striped, animated, height
+    );
+
+    // Register so streamed updates (same progressId) update this node in place.
+    this._activeProgressBars.set(progressId, {
+      element,
+      label,
+      startTime: Date.now()
+    });
+
+    return element;
   }
 
   /**
