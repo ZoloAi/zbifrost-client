@@ -540,11 +540,16 @@ export class ZDisplayOrchestrator {
       }
 
       // zFunc: execute a @zfunc plugin call and render result inline.
-      // A sibling `zProgress` (true | {label,color}) turns the ⏳ spinner into a
-      // live indeterminate bar for the duration of the backend call.
+      // Two grammars, parsed identically:
+      //   sibling — zFunc: &plugin()  +  zProgress: true   (zProgress on `data`)
+      //   nested  — zFunc: { src: &plugin(), zProgress: true|{label,color} }
+      // A zProgress (true | {label,color}) turns the ⏳ spinner into a live
+      // indeterminate bar for the duration of the backend call.
       if (key === 'zFunc' || key === 'zfunc') {
-        const funcStr = typeof value === 'string' ? value : String(value);
-        await this._executeZFunc(funcStr, parentElement, data.zProgress ?? null);
+        const isObj    = value && typeof value === 'object' && !Array.isArray(value);
+        const funcStr  = isObj ? String(value.src ?? '') : String(value);
+        const progress = (isObj ? value.zProgress : undefined) ?? data.zProgress ?? null;
+        await this._executeZFunc(funcStr, parentElement, progress);
         continue;
       }
 
