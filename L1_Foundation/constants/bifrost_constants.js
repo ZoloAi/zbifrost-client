@@ -127,6 +127,7 @@ export const PROTOCOL_EVENTS = {
   RENDER_CHUNK: 'render_chunk',
   CONNECTION_INFO: 'connection_info',
   NAVIGATE_BACK: 'navigate_back',
+  OPEN_URL: 'open_url',
   ERROR: 'error',
 
   // Display / output

@@ -425,6 +425,18 @@ export class MessageHandler {
         return;
       }
 
+      // Open a served resource in a new browser tab. Emitted by the server when
+      // a zTerminal swap-run (zOrigin=zBifrost) delegates an 'open' to the client
+      // instead of launching on the server (TRUST #35 — server never opens GUIs
+      // for remote visitors; the open happens in THIS browser).
+      if (message.event === PROTOCOL_EVENTS.OPEN_URL) {
+        if (message.url) {
+          this.logger.log('[MessageHandler] open_url received — opening new tab:', message.url);
+          window.open(message.url, '_blank', 'noopener,noreferrer');
+        }
+        return;
+      }
+
       // Handle real-time output lines from execute_code execution (e.g. zText / Show_Result steps)
       if (message.event === PROTOCOL_EVENTS.OUTPUT) {
         const TerminalRenderer = window._TerminalRenderer;
