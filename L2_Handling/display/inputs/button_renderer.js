@@ -175,7 +175,12 @@ export default class ButtonRenderer {
       });
     } else {
       const renderInline = data._renderInline || data.data?._renderInline || false;
-      this._attachClickHandler(button, requestId, label, true, type, action, renderInline);
+      // zProgress action-property (nested in the zBtn): a live bar that appears
+      // ONLY AFTER the click, for the duration of the plugin action. Unlike a
+      // zFunc (which auto-runs on render and shows its bar immediately), a button
+      // is dormant until pressed — so the bar is wired into the click, not here.
+      const progressSpec = data.zProgress ?? data.data?.zProgress ?? null;
+      this._attachClickHandler(button, requestId, label, true, type, action, renderInline, progressSpec);
 
       // Mark step-key actions (non-plugin, non-placeholder) for wizard restart handling
       if (action && action !== '#' && !action.startsWith('&')) {
@@ -299,7 +304,7 @@ export default class ButtonRenderer {
    * @param {string} type - Button type (button, submit, reset)
    * @param {string} action - Optional action string (e.g., "&plugin.func(zHat[0])")
    */
-  _attachClickHandler(button, requestId, originalLabel, value, type = 'button', action = null, renderInline = false) {
+  _attachClickHandler(button, requestId, originalLabel, value, type = 'button', action = null, renderInline = false, progressSpec = null) {
     button.addEventListener('click', (event) => {
       this.logger.log(`[ButtonRenderer]  Button clicked: "${button.textContent}" (type: ${type}, value: ${value}, action: ${action})`);
       this.logger.log(`[ButtonRenderer] Button clicked: ${button.textContent} (type: ${type}, value: ${value}, action: ${action})`);
@@ -350,6 +355,21 @@ export default class ButtonRenderer {
       // For regular buttons (type="button"), check if it has an action
       if (action && action.startsWith('&')) {
         this.logger.log(`[ButtonRenderer]  Button has plugin action: ${action}`);
+
+        // zProgress on the button → run the plugin through the zFunc transport,
+        // which owns the live-bar lifecycle (indeterminate bar + elapsed, cleared
+        // on the correlated response). This gives the "bar only after click"
+        // behavior for free and keeps the plugin/probe/backend path identical to
+        // a zFunc call. Plain buttons (no zProgress) keep the button_action path.
+        const client = this.client || window.bifrostClient;
+        const orch = client?.zDisplayOrchestrator;
+        if (progressSpec && orch && typeof orch._executeZFunc === 'function') {
+          this.logger.log('[ButtonRenderer] zProgress button — routing via _executeZFunc');
+          button.disabled = true;
+          const host = button.parentElement || button;
+          orch._executeZFunc(action, host, progressSpec);
+          return;
+        }
 
         // Collect wizard input values (look for sibling inputs in same wizard container)
         const collectedValues = this._collectWizardValues(button);
