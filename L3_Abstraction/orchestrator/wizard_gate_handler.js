@@ -52,10 +52,25 @@ export class WizardGateHandler {
    */
   async renderWizardGated(data, parentElement, gateKey, wizardPath) {
     const cleanGateKey = gateKey.replace('!', '');
-    const allStepKeys = Object.keys(data).filter(k => !k.startsWith('_'));
+    // zProgress is wizard CHROME (a progress readout), not a step. Exclude it from
+    // the step list so it never renders inline as a mis-positioned step, then draw
+    // it once at the top with the wizard's own step math injected: total = real
+    // steps, current = the step we're on (the gate). Placement is the wiring.
+    const allStepKeys = Object.keys(data).filter(k => !k.startsWith('_') && k !== 'zProgress');
     const gateIdx = allStepKeys.indexOf(gateKey);
     const preGateKeys = allStepKeys.slice(0, gateIdx);
     const postGateKeys = allStepKeys.slice(gateIdx + 1);
+
+    if (data.zProgress) {
+      const inner = (data.zProgress && data.zProgress.zDisplay) ? data.zProgress.zDisplay : data.zProgress;
+      const progEvent = {
+        event: 'progress_bar',
+        ...inner,
+        current: gateIdx >= 0 ? gateIdx + 1 : 1,
+        total: allStepKeys.length
+      };
+      await this.orchestrator.renderItems({ zProgress: { zDisplay: progEvent } }, parentElement, wizardPath);
+    }
 
     // Render pre-gate steps
     for (const key of preGateKeys) {
