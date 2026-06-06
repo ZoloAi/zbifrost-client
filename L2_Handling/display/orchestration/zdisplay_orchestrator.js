@@ -1450,15 +1450,11 @@ export class ZDisplayOrchestrator {
 
     const lbl = document.createElement('span');
     lbl.className = 'zSpinner-label zText-muted';
-    const t0 = Date.now();
-    lbl.textContent = `${label} · 0s`;
-    const ticker = setInterval(() => {
-      lbl.textContent = `${label} · ${Math.round((Date.now() - t0) / 1000)}s`;
-    }, 1000);
+    lbl.textContent = label;  // STEPS/percent only — never seconds
 
     row.appendChild(spin);
     row.appendChild(lbl);
-    return { bar: row, ticker };
+    return { bar: row };
   }
 
   async _executeZFunc(funcStr, parentElement, progressSpec = null) {
@@ -1474,61 +1470,22 @@ export class ZDisplayOrchestrator {
     wrapper.className = 'zfunc-wrapper zmy-2';
     wrapper.dataset.zfuncRequestId = requestId;
 
-    // zProgress sibling → swap the text spinner for a live, INDETERMINATE bar.
-    // Bifrost sends one execute_zfunc and gets one response — the plugin runs
-    // server-side as a black box, with nothing observable in between. So we never
-    // fake a fill (a full bar would read "done" while work is still running).
-    // Instead a marquee chunk marches across (the web twin of the zCLI EXECUTE
-    // marquee): it reads as "zOS is working", never sits at 100%, and is replaced
-    // by the result the instant work truly completes. An elapsed counter ticks
-    // alongside (elapsed, never ETA). Everything clears with the wrapper.
-    let progressTicker = null;
+    // zProgress sibling → an honest "working" indicator while the plugin runs.
+    // A Bifrost action is one execute_zfunc → one response: the plugin runs
+    // server-side as a black box with nothing observable in between, so there are
+    // no intermediate STEPS to fill here (step-fill comes from the probe and is
+    // streamed for multi-stop journeys like the wizard). Never a fake percent,
+    // never seconds — just a spinner that clears to the result.
+    const progressTicker = null;
     if (progressSpec) {
       const spec = (typeof progressSpec === 'object') ? progressSpec : {};
       const label = spec.label || 'Working…';
       const color = spec.color || 'primary';
-      const ptype = String(spec.type || 'marquee').toLowerCase();
       try {
-        if (ptype === 'spinner') {
-          // type: spinner — the zCLI glyph cascades to the canonical CSS border
-          // spinner (zTheme). Honest indeterminate motion + elapsed, no fake %.
-          const { bar, ticker } = this._buildSpinnerProgress(label, color);
-          wrapper.appendChild(bar);
-          progressTicker = ticker;
-        } else {
-          // An action's duration is opaque to the client, so both bar-family
-          // types march indeterminately (motion = working, no fake %). The look
-          // differs: marquee sweeps with diagonal stripes (spinner-like); bar is
-          // a clean solid fill. A determinate fill that truly "slowly fills" is
-          // the wizard's job (streamed current/total → _updateProgressBar).
-          const striped = (ptype === 'marquee');
-          const progressRenderer = await this.client._ensureProgressBarRenderer();
-          const bar = progressRenderer.renderInline({
-            progressId: `zfunc-progress-${requestId}`,
-            label, color,
-            current: 0,
-            total: 100,
-            striped,
-            animated: striped,
-            showPercentage: false,  // indeterminate: elapsed time, no fake %
-          });
-          if (bar) {
-            wrapper.appendChild(bar);
-            const track = bar.querySelector('.zProgress');
-            if (track) track.classList.add('zProgress--indeterminate');
-
-            const info = bar.querySelector('[data-info="progress-info"]');
-            const t0 = Date.now();
-            if (info) {
-              info.textContent = '0s';
-              progressTicker = setInterval(() => {
-                info.textContent = `${Math.round((Date.now() - t0) / 1000)}s`;
-              }, 1000);
-            }
-          }
-        }
+        const { bar } = this._buildSpinnerProgress(label, color);
+        wrapper.appendChild(bar);
       } catch (err) {
-        this.logger.warn('[ZFunc] Progress indicator unavailable, using spinner:', err);
+        this.logger.warn('[ZFunc] Progress indicator unavailable:', err);
       }
     }
 
