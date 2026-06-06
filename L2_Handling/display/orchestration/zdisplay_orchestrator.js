@@ -1470,20 +1470,36 @@ export class ZDisplayOrchestrator {
     wrapper.className = 'zfunc-wrapper zmy-2';
     wrapper.dataset.zfuncRequestId = requestId;
 
-    // zProgress sibling → an honest "working" indicator while the plugin runs.
-    // A Bifrost action is one execute_zfunc → one response: the plugin runs
-    // server-side as a black box with nothing observable in between, so there are
-    // no intermediate STEPS to fill here (step-fill comes from the probe and is
-    // streamed for multi-stop journeys like the wizard). Never a fake percent,
-    // never seconds — just a spinner that clears to the result.
+    // zProgress sibling → render the SAME probe count, two looks (no marquee, no
+    // seconds — steps/percent only). The probe walks zDispatch → zFunc, so a
+    // direct action is 2 stops: dispatch lands the moment we send, then the
+    // plugin runs server-side as a black box until the response. So the bar sits
+    // at 1/2 (50%) while it runs — exactly like zCLI — and clears to the result.
+    //   - type: bar (default) → a real, determinate progress bar.
+    //   - type: spinner       → an animated glyph.
     const progressTicker = null;
     if (progressSpec) {
       const spec = (typeof progressSpec === 'object') ? progressSpec : {};
       const label = spec.label || 'Working…';
       const color = spec.color || 'primary';
+      const ptype = String(spec.type || 'bar').toLowerCase();
       try {
-        const { bar } = this._buildSpinnerProgress(label, color);
-        wrapper.appendChild(bar);
+        if (ptype === 'spinner') {
+          const { bar } = this._buildSpinnerProgress(label, color);
+          wrapper.appendChild(bar);
+        } else {
+          const progressRenderer = await this.client._ensureProgressBarRenderer();
+          const bar = progressRenderer.renderInline({
+            progressId: `zfunc-progress-${requestId}`,
+            label, color,
+            current: 1,      // dispatch cleared
+            total: 2,        // zDispatch → zFunc (probe stops)
+            striped: false,
+            animated: false,
+            showPercentage: true,  // percent, never seconds
+          });
+          if (bar) wrapper.appendChild(bar);
+        }
       } catch (err) {
         this.logger.warn('[ZFunc] Progress indicator unavailable:', err);
       }
