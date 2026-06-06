@@ -348,6 +348,20 @@ export default class ProgressBarRenderer {
     const progressBar = container.querySelector('[data-bar="progress-bar"]');
     if (progressBar) {
       const percentage = Math.min(100, Math.max(0, (current / total) * 100));
+
+      // Step-oriented vs time-oriented. A real step landing (finite total,
+      // still in progress) means this is determinate progress — it should
+      // "just slowly fill", not borrow the indeterminate/time treatment. Drop
+      // the marching marquee + flowing stripes so only the smooth width
+      // transition (zbase: width 0.45s) shows. Time/indeterminate bars never
+      // reach here with current < total, so they keep their motion.
+      const determinate = Number.isFinite(total) && total > 0 && current < total;
+      if (determinate) {
+        const track = container.querySelector('.zProgress');
+        if (track) track.classList.remove('zProgress--indeterminate');
+        progressBar.classList.remove('zProgress-bar-striped', 'zProgress-bar-animated');
+      }
+
       progressBar.style.width = `${percentage}%`;
       progressBar.setAttribute('aria-valuenow', current);
     }
