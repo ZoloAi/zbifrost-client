@@ -254,8 +254,11 @@ export class WizardGateHandler {
     }
 
     // Wire restart handlers for any buttons with data-wizard-action inside the post-gate content
-    const restartBtns = postGateContainer.querySelectorAll('[data-wizard-action]');
+    // (data-wizard-gate path). Mark them wired so the orchestrator's inline-gate
+    // loop-back pass (Pass 0b) skips them — this path owns its own restart.
+    const restartBtns = postGateContainer.querySelectorAll('[data-wizard-action]:not([data-wizard-action-wired])');
     for (const btn of restartBtns) {
+      btn.dataset.wizardActionWired = 'true';
       btn.addEventListener('click', () => {
         this.restartWizardFromGate(btn.dataset.wizardAction);
       });

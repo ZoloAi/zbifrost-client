@@ -922,6 +922,60 @@ export class ZDisplayOrchestrator {
   }
 
   /**
+   * Loop a wizard in the inline-gate path back to an earlier step.
+   *
+   * The inline gate (stamped requestId + render_chunk reveal) has no
+   * data-wizard-gate DOM, so restartWizardFromGate's selectors don't apply.
+   * Instead we operate on the wizard container (nearest ancestor [data-zkey]
+   * holding an input field): drop every appended reveal group, reset the
+   * targeted step's input, and re-arm the gate button. The server re-parks the
+   * gate (same requestId), so re-clicking the gate re-runs the post-gate steps.
+   *
+   * @param {string} actionStep - The step key the loop-back targets (e.g. Ask_Name)
+   * @param {HTMLElement} btn - The clicked loop-back button
+   * @private
+   */
+  _restartInlineWizard(actionStep, btn) {
+    const fieldSel = 'input, textarea, select';
+
+    // Climb to the wizard container: the nearest ancestor [data-zkey] that holds
+    // an input field (mirrors button_renderer._collectInlineContext).
+    let container = null;
+    let node = btn.parentElement;
+    while (node) {
+      if (node.getAttribute && node.getAttribute('data-zkey') && node.querySelector(fieldSel)) {
+        container = node;
+        break;
+      }
+      node = node.parentElement;
+    }
+    if (!container) container = btn.closest('[data-zkey]');
+    if (!container) {
+      this.logger.warn('[WizardLoop] container not found for loop-back:', actionStep);
+      return;
+    }
+
+    // Remove every revealed group (each gate resolve appended one). This also
+    // removes the loop-back button itself — a fresh one renders on the next loop.
+    container.querySelectorAll('.wizard-postgate').forEach((el) => el.remove());
+
+    // Re-arm the gate: re-enable any disabled buttons left in the container
+    // (the gate button keeps its click listener + requestId).
+    container.querySelectorAll('button[disabled]').forEach((b) => { b.disabled = false; });
+
+    // Reset the targeted step's input and focus it (CLI parity: loop to that step).
+    const stepScope = container.querySelector(`[data-zkey="${actionStep}"]`);
+    const stepInput = stepScope ? stepScope.querySelector(fieldSel) : null;
+    if (stepInput) {
+      stepInput.disabled = false;
+      stepInput.value = '';
+      setTimeout(() => stepInput.focus(), 50);
+    }
+
+    this.logger.log('[WizardLoop] Restarted inline wizard from step:', actionStep);
+  }
+
+  /**
    * Wire _zDelegate buttons for all gate wrappers that declare one.
    * Also handles button[data-zdelegate] → input replacement delegation.
    * Safe to call multiple times — skips already-wired gates via dataset.zdelegateWired.
@@ -954,12 +1008,27 @@ export class ZDisplayOrchestrator {
       // Wire target button to trigger wizard restart
       targetBtn.addEventListener('click', () => {
         this.logger.log('[Delegate] Target button clicked, restarting wizard from:', wizardAction);
-        this._restartWizardFromGate(wizardAction);
+        this.wizardGateHandler.restartWizardFromGate(wizardAction);
       });
       hiddenBtn.dataset.zdelegateWired = 'true';
       this.logger.log('[Delegate] Button action → button wired:', wizardAction, '→', targetPath);
     }
-    
+
+    // ── Pass 0b: plain wizard-action button (loop-back, no delegate) ─────────
+    // A post-gate `zBtn` with `action: <stepKey>` and no _zDelegate — the
+    // "Run again?" / "Play again" loop-back. In the inline-gate path there is no
+    // data-wizard-gate wrapper, so wire it to re-enter the wizard in place:
+    // clear this reveal, reset the targeted step's input, re-arm the gate.
+    const actionButtons = document.querySelectorAll(
+      'button[data-wizard-action]:not([data-zdelegate]):not([data-wizard-action-wired])'
+    );
+    for (const btn of actionButtons) {
+      const targetStep = btn.dataset.wizardAction;
+      btn.dataset.wizardActionWired = 'true';
+      btn.addEventListener('click', () => this._restartInlineWizard(targetStep, btn));
+      this.logger.log('[Delegate] Wizard-action (loop-back) button wired:', targetStep);
+    }
+
     // ── Pass 1: button → input (replace value) ──────────────────────────────
     const delegateButtons = document.querySelectorAll('button[data-zdelegate]:not([data-zdelegate-wired])');
     for (const btn of delegateButtons) {
