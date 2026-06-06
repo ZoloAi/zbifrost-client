@@ -460,12 +460,29 @@ export default class TerminalRenderer {
       targetOutput.innerHTML = '';
     }
 
-    // Append the output line with ANSI color rendering
+    // In-place redraw detection: CLI animations (progress bars, spinners) emit
+    // one frame per tick, each prefixed with \r (return to line start) and/or
+    // \x1b[2K (erase line). In a real tty those overwrite the SAME line; here we
+    // mirror that by REUSING the previous animation frame's <div> instead of
+    // stacking a new one per frame. A bare \r not part of a \r\n newline, or any
+    // erase-line code, marks the chunk as a redraw of the current line.
+    const text = String(content);
+    const isRedraw = /\x1b\[2K/.test(text) || /\r(?!\n)/.test(text);
+
     const helper = new TerminalRenderer({ log: () => {}, warn: () => {}, error: () => {}, debug: () => {} });
-    const line = document.createElement('div');
-    line.style.color = '#e0e0e0'; // default terminal fg — overridden by ANSI spans inside
-    line.innerHTML = helper._cleanOutput(String(content));
-    targetOutput.appendChild(line);
+    const html = helper._cleanOutput(text);
+
+    const prev = targetOutput.lastElementChild;
+    let line;
+    if (isRedraw && prev && prev.dataset.zRedraw === 'true') {
+      line = prev;              // overwrite the live animation frame in place
+    } else {
+      line = document.createElement('div');
+      line.style.color = '#e0e0e0'; // default terminal fg — overridden by ANSI spans
+      targetOutput.appendChild(line);
+    }
+    if (isRedraw) line.dataset.zRedraw = 'true';
+    line.innerHTML = html;
     targetOutput.scrollTop = targetOutput.scrollHeight;
   }
 
@@ -527,6 +544,12 @@ export default class TerminalRenderer {
    */
   _ansiToHtml(text) {
     if (!text) return '';
+
+    // Drop terminal control codes we don't emulate as text: carriage return and
+    // non-SGR CSI sequences (erase-line \x1b[2K, cursor moves \x1b[1A, etc.).
+    // Their in-place-redraw INTENT is handled in handleOutput (which line to
+    // overwrite); here we just make sure they never paint as literal "[2K".
+    text = text.replace(/\r/g, '').replace(/\x1b\[[0-9;]*[A-Za-ln-z]/g, '');
 
     const ansiRegex = /\x1b\[([0-9;]+)m/g;
     const segments = [];
