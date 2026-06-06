@@ -1360,3 +1360,55 @@ zNavBar .zNav-link.active {
 
 /* Spinner */
 .zSpinner-border { color: #6366f1; }
+
+/* ============================================================================
+   Tables (zTable) — canonical dark-theme data tables
+   ----------------------------------------------------------------------------
+   Bifrost-owned SSOT for the zTable look (moved here from zCloud so every app
+   inherits the same table styling). The zTable event opts in via _zClass: zTable.
+   ========================================================================== */
+.zTable-container { margin: 1.5rem 0; }
+
+.zTable-container h4 {
+  color: #f9fafb;
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 0.75rem;
+}
+
+.zTable-responsive {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid rgba(79, 70, 229, 0.2);
+}
+
+.zTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: linear-gradient(145deg, rgba(30, 35, 60, 0.5) 0%, rgba(20, 25, 45, 0.6) 100%);
+  font-size: 0.95rem;
+  text-align: left;
+}
+
+.zTable thead th {
+  background: rgba(79, 70, 229, 0.18);
+  color: #c7d2fe;
+  font-weight: 700;
+  text-align: left;
+  padding: 0.85rem 1rem;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(79, 70, 229, 0.3);
+  white-space: nowrap;
+}
+
+.zTable tbody td {
+  padding: 0.8rem 1rem;
+  color: #d1d5db;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  vertical-align: top;
+}
+
+.zTable tbody tr:last-child td { border-bottom: none; }
+.zTable tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
+.zTable tbody tr:hover td { background: rgba(79, 70, 229, 0.08); }
+.zTable td strong { color: #f9fafb; }
