@@ -1440,10 +1440,12 @@ export class ZDisplayOrchestrator {
     wrapper.dataset.zfuncRequestId = requestId;
 
     // zProgress sibling → swap the text spinner for a live, indeterminate bar.
-    // The client can't know the backend's duration, so we draw a full striped+
-    // animated bar that reads as "zOS is working" and tick an elapsed counter
-    // (elapsed, never ETA — we don't fake a percentage). The bar is cleared with
-    // the rest of the wrapper when the response lands and the result is painted.
+    // The client can't know the backend's duration, so the bar FILLS once from
+    // 0→100 (a satisfying "starting" sweep) and then PARKS full, where the
+    // perpetual diagonal stripes carry the "zOS is still working" signal — the
+    // Bifrost analog of the zCLI bar parking on the EXECUTE stage. An elapsed
+    // counter ticks alongside (elapsed, never ETA — we never fake a percentage).
+    // Everything clears with the wrapper when the response lands.
     let progressTicker = null;
     if (progressSpec) {
       const spec = (typeof progressSpec === 'object') ? progressSpec : {};
@@ -1453,7 +1455,7 @@ export class ZDisplayOrchestrator {
           progressId: `zfunc-progress-${requestId}`,
           label: spec.label || 'Working…',
           color: spec.color || 'primary',
-          current: 100,           // full track — stripe motion conveys activity
+          current: 0,             // start empty — fill to full below
           total: 100,
           striped: true,
           animated: true,
@@ -1461,6 +1463,17 @@ export class ZDisplayOrchestrator {
         });
         if (bar) {
           wrapper.appendChild(bar);
+
+          // Fill 0 → 100 once with an eased sweep, then leave it full with the
+          // stripes flowing. Two frames so the browser paints width:0 first.
+          const barFill = bar.querySelector('[data-bar="progress-bar"]');
+          if (barFill) {
+            barFill.style.transition = 'width 1.1s cubic-bezier(0.22, 1, 0.36, 1)';
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+              barFill.style.width = '100%';
+            }));
+          }
+
           const info = bar.querySelector('[data-info="progress-info"]');
           const t0 = Date.now();
           if (info) {
