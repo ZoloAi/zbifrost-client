@@ -531,10 +531,20 @@ export class ZDisplayOrchestrator {
         continue;
       }
 
-      // zFunc: execute a @zfunc plugin call and render result inline
+      // zProgress as a sibling of an action (zFunc) is an action-property — the
+      // bar is owned/drawn by _executeZFunc, never as standalone content. Skip it
+      // here so it doesn't fall through to generic rendering and paint junk.
+      // (Wizard zProgress arrives pre-expanded as {event: progress_bar}, not this key.)
+      if (key === 'zProgress' && (data.zFunc || data.zfunc)) {
+        continue;
+      }
+
+      // zFunc: execute a @zfunc plugin call and render result inline.
+      // A sibling `zProgress` (true | {label,color}) turns the ⏳ spinner into a
+      // live indeterminate bar for the duration of the backend call.
       if (key === 'zFunc' || key === 'zfunc') {
         const funcStr = typeof value === 'string' ? value : String(value);
-        await this._executeZFunc(funcStr, parentElement);
+        await this._executeZFunc(funcStr, parentElement, data.zProgress ?? null);
         continue;
       }
 
@@ -1411,7 +1421,7 @@ export class ZDisplayOrchestrator {
    * @param {string} funcStr  - Plugin invocation string, e.g. "&confirm.ask()"
    * @param {HTMLElement} parentElement - DOM node to append output into
    */
-  async _executeZFunc(funcStr, parentElement) {
+  async _executeZFunc(funcStr, parentElement, progressSpec = null) {
     if (!funcStr.startsWith('&')) {
       this.logger.warn('[ZFunc] Skipping non-plugin zFunc value:', funcStr);
       return;
@@ -1424,10 +1434,48 @@ export class ZDisplayOrchestrator {
     wrapper.className = 'zfunc-wrapper zmy-2';
     wrapper.dataset.zfuncRequestId = requestId;
 
-    const spinner = document.createElement('span');
-    spinner.className = 'zText-muted zSmall';
-    spinner.textContent = '⏳ Running…';
-    wrapper.appendChild(spinner);
+    // zProgress sibling → swap the text spinner for a live, indeterminate bar.
+    // The client can't know the backend's duration, so we draw a full striped+
+    // animated bar that reads as "zOS is working" and tick an elapsed counter
+    // (elapsed, never ETA — we don't fake a percentage). The bar is cleared with
+    // the rest of the wrapper when the response lands and the result is painted.
+    let progressTicker = null;
+    if (progressSpec) {
+      const spec = (typeof progressSpec === 'object') ? progressSpec : {};
+      try {
+        const progressRenderer = await this.client._ensureProgressBarRenderer();
+        const bar = progressRenderer.renderInline({
+          progressId: `zfunc-progress-${requestId}`,
+          label: spec.label || 'Working…',
+          color: spec.color || 'primary',
+          current: 100,           // full track — stripe motion conveys activity
+          total: 100,
+          striped: true,
+          animated: true,
+          showPercentage: false,  // indeterminate: elapsed time, no fake %
+        });
+        if (bar) {
+          wrapper.appendChild(bar);
+          const info = bar.querySelector('[data-info="progress-info"]');
+          const t0 = Date.now();
+          if (info) {
+            info.textContent = '0s';
+            progressTicker = setInterval(() => {
+              info.textContent = `${Math.round((Date.now() - t0) / 1000)}s`;
+            }, 1000);
+          }
+        }
+      } catch (err) {
+        this.logger.warn('[ZFunc] Progress bar unavailable, using spinner:', err);
+      }
+    }
+
+    if (!wrapper.firstChild) {
+      const spinner = document.createElement('span');
+      spinner.className = 'zText-muted zSmall';
+      spinner.textContent = '⏳ Running…';
+      wrapper.appendChild(spinner);
+    }
     parentElement.appendChild(wrapper);
 
     // Register wrapper reference for _handleZFuncInput (direct ref, not DOM query)
@@ -1447,6 +1495,7 @@ export class ZDisplayOrchestrator {
       }));
     } catch (err) {
       this.logger.error('[ZFunc] Failed to send execute_zfunc:', err);
+      if (progressTicker) clearInterval(progressTicker);
       wrapper.innerHTML = `<span class="zText-danger zSmall">⚠ Failed to start: ${err.message}</span>`;
       this._zfuncResolvers.delete(requestId);
       return;
@@ -1458,7 +1507,10 @@ export class ZDisplayOrchestrator {
     // Clean up pending reference
     this._pendingZFuncInputs.delete(requestId);
 
-    // Clear spinner / input widget
+    // Stop the elapsed-time ticker before the bar is removed with the wrapper
+    if (progressTicker) clearInterval(progressTicker);
+
+    // Clear spinner / progress bar / input widget
     wrapper.innerHTML = '';
 
     if (response.success) {
