@@ -1415,3 +1415,69 @@ zNavBar .zNav-link.active {
 .zTable tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
 .zTable tbody tr:hover td { background: rgba(79, 70, 229, 0.08); }
 .zTable td strong { color: #f9fafb; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   Progress bar (zProgress) — canonical animated progress component
+
+   Bifrost-owned SSOT for the progress look (mirrors the zCLI bar). The renderer
+   builds: .zProgress-container > [label row] + .zProgress (track) > .zProgress-bar
+   (the fill). Fill WIDTH is set inline (0–100%); fill COLOR comes from a
+   zBg-{color} class the renderer derives from the event's `color` property.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+.zProgress-container { width: 100%; margin: 0.75rem 0; }
+
+/* Label / percentage row above the track, pushed to the edges (self-contained
+   so it never depends on zTheme flex utilities being present). */
+.zProgress-container > .zD-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.4rem;
+}
+.zProgress-container .zFw-bold     { font-weight: 600; color: var(--zprogress-label, #e5e7eb); }
+.zProgress-container .zText-muted  { color: var(--zprogress-info, rgba(229, 231, 235, 0.6)); }
+
+/* Track — the rail behind the fill. */
+.zProgress {
+  width: 100%;
+  height: 1rem;                 /* default; renderer may override inline via height prop */
+  background: var(--zprogress-track, rgba(255, 255, 255, 0.12));
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+/* Fill — the moving bar. Width animates smoothly to its new value. */
+.zProgress-bar {
+  height: 100%;
+  width: 0;
+  background-color: var(--color-primary, #A2D46E);  /* default; zBg-{color} overrides */
+  border-radius: inherit;
+  transition: width 0.4s ease;
+}
+
+/* `color` property → fill color. Bar-scoped (.zProgress-bar.zBg-*) so it always
+   wins over the generic zTheme utility and pulls from the same --color-* SSOT. */
+.zProgress-bar.zBg-primary   { background-color: var(--color-primary,   #A2D46E); }
+.zProgress-bar.zBg-secondary { background-color: var(--color-secondary, #9370DB); }
+.zProgress-bar.zBg-success   { background-color: var(--color-success,   #52B788); }
+.zProgress-bar.zBg-info      { background-color: var(--color-info,      #5CA9FF); }
+.zProgress-bar.zBg-warning   { background-color: var(--color-warning,   #FFB347); }
+.zProgress-bar.zBg-danger,
+.zProgress-bar.zBg-error     { background-color: var(--color-error,     #E63946); }
+
+/* Striped / animated variants (indeterminate or "working" states). */
+.zProgress-bar-striped {
+  background-image: linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.18) 25%, transparent 25%,
+    transparent 50%, rgba(255, 255, 255, 0.18) 50%,
+    rgba(255, 255, 255, 0.18) 75%, transparent 75%, transparent
+  );
+  background-size: 1rem 1rem;
+}
+.zProgress-bar-animated { animation: zProgress-stripes 1s linear infinite; }
+@keyframes zProgress-stripes {
+  from { background-position: 1rem 0; }
+  to   { background-position: 0 0; }
+}
