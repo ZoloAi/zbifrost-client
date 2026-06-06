@@ -102,6 +102,18 @@ export const RENDERER_REGISTRY = {
     isDefault: true,
     passClient: false
   },
+  video: {
+    path: 'L2_Handling/display/outputs/video_renderer.js',
+    className: 'VideoRenderer',
+    isDefault: true,
+    passClient: false
+  },
+  audio: {
+    path: 'L2_Handling/display/outputs/audio_renderer.js',
+    className: 'AudioRenderer',
+    isDefault: true,
+    passClient: false
+  },
   icon: {
     path: 'L2_Handling/display/outputs/icon_renderer.js',
     className: 'IconRenderer',

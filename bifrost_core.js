@@ -960,6 +960,18 @@ class BifrostCore {
       return this.imageRenderer;
     }
 
+    async _ensureVideoRenderer() {
+      const registry = await this._ensureRendererRegistry();
+      this.videoRenderer = await registry.ensureRenderer('video');
+      return this.videoRenderer;
+    }
+
+    async _ensureAudioRenderer() {
+      const registry = await this._ensureRendererRegistry();
+      this.audioRenderer = await registry.ensureRenderer('audio');
+      return this.audioRenderer;
+    }
+
     async _ensureIconRenderer() {
       const registry = await this._ensureRendererRegistry();
       this.iconRenderer = await registry.ensureRenderer('icon');

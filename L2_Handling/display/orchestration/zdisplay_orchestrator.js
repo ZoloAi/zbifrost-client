@@ -1164,6 +1164,22 @@ export class ZDisplayOrchestrator {
         break;
       }
 
+      case 'video': {
+        // Use modular VideoRenderer for inline <video controls>
+        const videoRenderer = await this.client._ensureVideoRenderer();
+        element = videoRenderer.render(eventData);
+        this.logger.debug(`[renderZDisplayEvent] Rendered video: ${eventData.src}`);
+        break;
+      }
+
+      case 'audio': {
+        // Use modular AudioRenderer for inline <audio controls>
+        const audioRenderer = await this.client._ensureAudioRenderer();
+        element = audioRenderer.render(eventData);
+        this.logger.debug(`[renderZDisplayEvent] Rendered audio: ${eventData.src}`);
+        break;
+      }
+
       case 'icon': {
         // Use modular IconRenderer for Bootstrap Icons
         const iconRenderer = await this.client._ensureIconRenderer();
