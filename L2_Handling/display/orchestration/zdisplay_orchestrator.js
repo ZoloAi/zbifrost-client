@@ -1426,6 +1426,41 @@ export class ZDisplayOrchestrator {
    * @param {string} funcStr  - Plugin invocation string, e.g. "&confirm.ask()"
    * @param {HTMLElement} parentElement - DOM node to append output into
    */
+  /**
+   * Build a live CSS border-spinner row (zProgress type: spinner) with a ticking
+   * elapsed readout. Mirrors SpinnerRenderer's markup (zSpinner-border + label)
+   * so the look matches the streamed-spinner SSOT; color is pinned to the same
+   * --color-* tokens the progress bar uses (so secondary/info/etc. tint reliably).
+   * @returns {{bar: HTMLElement, ticker: number|null}}
+   */
+  _buildSpinnerProgress(label, color) {
+    const COLOR_VARS = {
+      primary: '--color-primary', secondary: '--color-secondary',
+      success: '--color-success', info: '--color-info',
+      warning: '--color-warning', danger: '--color-error', error: '--color-error',
+    };
+    const row = document.createElement('div');
+    row.className = 'zSpinner-container zD-flex zFlex-items-center zGap-2 zMy-2';
+
+    const spin = document.createElement('div');
+    spin.className = `zSpinner-border zText-${color}`;
+    spin.setAttribute('role', 'status');
+    const varName = COLOR_VARS[String(color).toLowerCase()];
+    if (varName) spin.style.color = `var(${varName})`;
+
+    const lbl = document.createElement('span');
+    lbl.className = 'zSpinner-label zText-muted';
+    const t0 = Date.now();
+    lbl.textContent = `${label} · 0s`;
+    const ticker = setInterval(() => {
+      lbl.textContent = `${label} · ${Math.round((Date.now() - t0) / 1000)}s`;
+    }, 1000);
+
+    row.appendChild(spin);
+    row.appendChild(lbl);
+    return { bar: row, ticker };
+  }
+
   async _executeZFunc(funcStr, parentElement, progressSpec = null) {
     if (!funcStr.startsWith('&')) {
       this.logger.warn('[ZFunc] Skipping non-plugin zFunc value:', funcStr);
@@ -1450,36 +1485,44 @@ export class ZDisplayOrchestrator {
     let progressTicker = null;
     if (progressSpec) {
       const spec = (typeof progressSpec === 'object') ? progressSpec : {};
+      const label = spec.label || 'Working…';
+      const color = spec.color || 'primary';
       try {
-        const progressRenderer = await this.client._ensureProgressBarRenderer();
-        const bar = progressRenderer.renderInline({
-          progressId: `zfunc-progress-${requestId}`,
-          label: spec.label || 'Working…',
-          color: spec.color || 'primary',
-          current: 0,
-          total: 100,
-          striped: true,
-          animated: true,
-          showPercentage: false,  // indeterminate: elapsed time, no fake %
-        });
-        if (bar) {
+        if (String(spec.type || 'bar').toLowerCase() === 'spinner') {
+          // type: spinner — the zCLI glyph cascades to the canonical CSS border
+          // spinner (zTheme). Honest indeterminate motion + elapsed, no fake %.
+          const { bar, ticker } = this._buildSpinnerProgress(label, color);
           wrapper.appendChild(bar);
+          progressTicker = ticker;
+        } else {
+          // type: bar (default) — indeterminate marching marquee.
+          const progressRenderer = await this.client._ensureProgressBarRenderer();
+          const bar = progressRenderer.renderInline({
+            progressId: `zfunc-progress-${requestId}`,
+            label, color,
+            current: 0,
+            total: 100,
+            striped: true,
+            animated: true,
+            showPercentage: false,  // indeterminate: elapsed time, no fake %
+          });
+          if (bar) {
+            wrapper.appendChild(bar);
+            const track = bar.querySelector('.zProgress');
+            if (track) track.classList.add('zProgress--indeterminate');
 
-          // Switch the track to the marching-marquee indeterminate animation.
-          const track = bar.querySelector('.zProgress');
-          if (track) track.classList.add('zProgress--indeterminate');
-
-          const info = bar.querySelector('[data-info="progress-info"]');
-          const t0 = Date.now();
-          if (info) {
-            info.textContent = '0s';
-            progressTicker = setInterval(() => {
-              info.textContent = `${Math.round((Date.now() - t0) / 1000)}s`;
-            }, 1000);
+            const info = bar.querySelector('[data-info="progress-info"]');
+            const t0 = Date.now();
+            if (info) {
+              info.textContent = '0s';
+              progressTicker = setInterval(() => {
+                info.textContent = `${Math.round((Date.now() - t0) / 1000)}s`;
+              }, 1000);
+            }
           }
         }
       } catch (err) {
-        this.logger.warn('[ZFunc] Progress bar unavailable, using spinner:', err);
+        this.logger.warn('[ZFunc] Progress indicator unavailable, using spinner:', err);
       }
     }
 
