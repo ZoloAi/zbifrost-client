@@ -827,6 +827,35 @@ export class ZDisplayOrchestrator {
         // Guard: prevent re-entry while a zfunc is already in-flight for this option
         if (btn.dataset.zfuncInFlight === '1') return;
 
+        // ── Server-driven menu (SSOT) ─────────────────────────────────────
+        // The menu carries a _menuId: its option content was deliberately NOT
+        // shipped (server owns the flow). Send the pick back; the server resumes
+        // the executor at the chosen key and falls through the siblings, streaming
+        // the result into this option's placeholder. The JS never decides flow.
+        if (menuValue._menuId) {
+          resetMenu();
+          btn.classList.add('active');
+          const ph = placeholders[optKey];
+          if (!ph) return;
+          ph.style.display = 'block';
+          ph.innerHTML = '';
+          ph.dataset.rendered = '1';
+          // Pin the resumed chunk(s) into this placeholder (replace, single-shot).
+          this.client._renderTarget = { el: ph, mode: 'replace', once: true };
+          const payload = {
+            event: 'menu_selection',
+            menu_id: menuValue._menuId,
+            menu_key: menuKey,
+            selected: optKey,
+          };
+          if (typeof this.client._sendWalker === 'function') {
+            this.client._sendWalker(payload);
+          } else {
+            this.client.connection.send(JSON.stringify(payload));
+          }
+          return;
+        }
+
         // No inline sibling content → the option is a $-reference to a SEPARATE
         // block (e.g. ~Profile_Actions* → ^Edit_Profile). Mirror CLI menu→block
         // selection: navigate in place via zDelta (same route, content swap). The
