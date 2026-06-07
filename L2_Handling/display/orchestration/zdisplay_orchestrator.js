@@ -922,6 +922,39 @@ export class ZDisplayOrchestrator {
       ul.appendChild(li);
     });
 
+    // Auto Back item for non-anchor (~ absent) menus — server signals via
+    // _allowBack, mirroring the zCLI allow_back rule. Clicking it collapses the
+    // drill-in this menu lives in, re-showing the parent menu (CLI: zBack from a
+    // sub-menu returns to the parent menu).
+    if (menuValue._allowBack) {
+      const backLi = document.createElement('li');
+      backLi.className = 'zNav-item';
+      const backNav = document.createElement('button');
+      backNav.className = 'zNav-link zBtn w-100 text-start zp-2';
+      backNav.setAttribute('role', 'menuitem');
+      backNav.dataset.key = 'zBack';
+      backNav.innerHTML = `<span class="zBadge zBadge-secondary me-2">${options.length + 1}</span>Back`;
+      backNav.addEventListener('click', () => {
+        const parentPh = containerDiv.closest('.zMenu-option-content');
+        if (parentPh) {
+          const ownerKey = parentPh.dataset.menuContent;
+          const ownerContainer = parentPh.parentElement;
+          parentPh.style.display = 'none';
+          parentPh.innerHTML = '';
+          delete parentPh.dataset.rendered;
+          if (ownerContainer && ownerKey) {
+            const ownerBtn = ownerContainer.querySelector(`button[data-key="${ownerKey}"]`);
+            if (ownerBtn) ownerBtn.classList.remove('active');
+          }
+        } else {
+          // Top-level non-anchor menu — nothing to collapse into; reset self.
+          resetMenu();
+        }
+      });
+      backLi.appendChild(backNav);
+      ul.appendChild(backLi);
+    }
+
     parentElement.appendChild(containerDiv);
   }
 
