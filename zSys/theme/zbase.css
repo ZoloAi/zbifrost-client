@@ -1525,3 +1525,123 @@ zNavBar .zNav-link.active {
     animation: none; transform: none; width: 60% !important;
   }
 }
+
+/* ─── zMenu — interactive menu events ──────────────────────────────────────────
+   Canonical Bifrost render of a zMenu: a vertical list of full-width selectable
+   rows, each with a numbered chip (keyboard shortcut) + label. Overrides the
+   generic zBtn-pill fallback so menus read as navigation, not loose buttons.
+
+   Markup (menu_renderer.js):
+     .zMenu-container > h2.zCard-title
+                      > .zMenu-options > .zMenu-option[data-key]
+                          > button > span.zBadge + label
+
+   Dark-theme friendly: surfaces use translucent overlays; accents pull from the
+   zCLI SSOT palette (--color-primary lime, --color-secondary purple). */
+.zMenu-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.25rem;
+  margin: 1.5rem 0;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1rem;
+}
+
+/* Title — quiet uppercase eyebrow above the options */
+.zMenu-container > h2,
+.zMenu-container .zCard-title,
+.zMenu-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Options list — kill inherited bullets / list padding */
+.zMenu-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.zMenu-option {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.zMenu-option::marker { content: none; }
+
+/* Row — overrides the fallback zBtn pill into a full-width nav row */
+.zMenu-container .zMenu-option button,
+.zMenu-container .zMenu-option .zBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.85rem;
+  font-size: 1rem;
+  font-weight: 500;
+  font-family: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.625rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.zMenu-container .zMenu-option button:hover,
+.zMenu-container .zMenu-option button:focus-visible {
+  background: rgba(162, 212, 110, 0.12);
+  border-color: var(--color-primary, #A2D46E);
+  transform: translateX(2px);
+  outline: none;
+}
+
+.zMenu-container .zMenu-option button:active,
+.zMenu-container .zMenu-option button.active {
+  background: var(--color-primary, #A2D46E);
+  border-color: var(--color-primary, #A2D46E);
+  color: #1a1a1a;
+}
+
+.zMenu-container .zMenu-option button:disabled {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+
+/* Leading chip — the keyboard index (overrides the faded zBadge) */
+.zMenu-container .zMenu-option .zBadge,
+.zMenu-container .zMenu-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-secondary, #9370DB);
+  background: rgba(147, 112, 219, 0.16);
+  border-radius: 50%;
+}
+
+.zMenu-container .zMenu-option button:hover .zBadge,
+.zMenu-container .zMenu-option button:focus-visible .zBadge {
+  color: #fff;
+  background: var(--color-secondary, #9370DB);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zMenu-container .zMenu-option button { transition: none; }
+  .zMenu-container .zMenu-option button:hover { transform: none; }
+}
