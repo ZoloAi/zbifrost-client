@@ -70,7 +70,7 @@ export class NavigationManager {
    * @param {Object} options - Navigation options
    */
   async navigateToRoute(routePath, options = {}) {
-    const { skipHistory = false } = options;
+    const { skipHistory = false, navbar = false } = options;
 
     this.client._isClientSideNav = true;
 
@@ -107,8 +107,11 @@ export class NavigationManager {
         this.client._zVaFElement.innerHTML = '<div class="zText-center zp-4">Loading...</div>';
       }
 
-      // Send walker execution request via WebSocket
+      // Send walker execution request via WebSocket.
+      // navbar:true signals navbar-origin so the server RESETs the crumb trail
+      // (SSOT mirror of zCLI navbar navigation — the pick becomes the new root).
       const walkerRequest = { event: 'execute_walker', zBlock, zVaFile, zVaFolder };
+      if (navbar) walkerRequest.navbar = true;
       this.logger.debug('[ClientNav] Sending walker request', walkerRequest);
       this.client.connection.send(JSON.stringify(walkerRequest));
 

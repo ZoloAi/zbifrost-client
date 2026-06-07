@@ -62,7 +62,10 @@ export class NavBarBuilder {
             menu.classList.remove('zShow');
             toggle.setAttribute('aria-expanded', 'false');
             if (client?.navigationManager) {
-              client.navigationManager.navigateToRoute(href);
+              // navbar:true → server RESETs the crumb trail (SSOT with zCLI:
+              // a navbar pick becomes the new root). Browser Back/popstate does
+              // NOT pass this, so it still pops the stack normally.
+              client.navigationManager.navigateToRoute(href, { navbar: true });
             } else {
               window.location.href = href;
             }
@@ -94,7 +97,8 @@ export class NavBarBuilder {
           menu.previousElementSibling?.setAttribute('aria-expanded', 'false');
         }
         if (client?.navigationManager) {
-          client.navigationManager.navigateToRoute(href);
+          // navbar:true → server RESETs the crumb trail (SSOT with zCLI navbar).
+          client.navigationManager.navigateToRoute(href, { navbar: true });
         } else {
           window.location.href = href;
         }
