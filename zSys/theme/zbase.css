@@ -1531,37 +1531,18 @@ zNavBar .zNav-link.active {
    rows, each with a numbered chip (keyboard shortcut) + label. Overrides the
    generic zBtn-pill fallback so menus read as navigation, not loose buttons.
 
-   Markup (menu_renderer.js):
-     .zMenu-container > h2.zCard-title
-                      > .zMenu-options > .zMenu-option[data-key]
-                          > button > span.zBadge + label
+   Live markup (zdisplay_orchestrator.js _renderZMenuBlock):
+     nav.zMenu-nav > ul.zNavbar-nav > li.zNav-item
+        > button.zNav-link.zBtn[data-key] > span.zBadge + label
+   Legacy markup (menu_renderer.js): .zMenu-container > .zMenu-option > button.
+   Both paths are styled below.
 
-   Dark-theme friendly: surfaces use translucent overlays; accents pull from the
-   zCLI SSOT palette (--color-primary lime, --color-secondary purple). */
-.zMenu-container {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 1.25rem;
-  margin: 1.5rem 0;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 1rem;
-}
-
-/* Title — quiet uppercase eyebrow above the options */
-.zMenu-container > h2,
-.zMenu-container .zCard-title,
-.zMenu-title {
-  margin: 0 0 0.5rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
-}
+   The block wrapper (.zCallout) supplies the card surface; this only owns the
+   list, rows, and number chip. Accents pull from the zCLI SSOT palette
+   (--color-primary lime, --color-secondary purple); dark-theme friendly. */
 
 /* Options list — kill inherited bullets / list padding */
+.zMenu-nav .zNavbar-nav,
 .zMenu-options {
   display: flex;
   flex-direction: column;
@@ -1570,14 +1551,17 @@ zNavBar .zNav-link.active {
   padding: 0;
   list-style: none;
 }
+.zMenu-nav .zNav-item,
 .zMenu-option {
   margin: 0;
   padding: 0;
   list-style: none;
 }
+.zMenu-nav .zNav-item::marker,
 .zMenu-option::marker { content: none; }
 
 /* Row — overrides the fallback zBtn pill into a full-width nav row */
+.zMenu-nav .zNav-link,
 .zMenu-container .zMenu-option button,
 .zMenu-container .zMenu-option .zBtn {
   display: flex;
@@ -1597,6 +1581,8 @@ zNavBar .zNav-link.active {
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
+.zMenu-nav .zNav-link:hover,
+.zMenu-nav .zNav-link:focus-visible,
 .zMenu-container .zMenu-option button:hover,
 .zMenu-container .zMenu-option button:focus-visible {
   background: rgba(162, 212, 110, 0.12);
@@ -1605,6 +1591,8 @@ zNavBar .zNav-link.active {
   outline: none;
 }
 
+.zMenu-nav .zNav-link:active,
+.zMenu-nav .zNav-link.active,
 .zMenu-container .zMenu-option button:active,
 .zMenu-container .zMenu-option button.active {
   background: var(--color-primary, #A2D46E);
@@ -1612,13 +1600,20 @@ zNavBar .zNav-link.active {
   color: #1a1a1a;
 }
 
+.zMenu-nav .zNav-link.active .zBadge {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.zMenu-nav .zNav-link:disabled,
 .zMenu-container .zMenu-option button:disabled {
   opacity: 0.55;
   cursor: default;
   transform: none;
 }
 
-/* Leading chip — the keyboard index (overrides the faded zBadge) */
+/* Leading chip — the keyboard index (overrides the faded zBadge-secondary) */
+.zMenu-nav .zNav-link .zBadge,
 .zMenu-container .zMenu-option .zBadge,
 .zMenu-container .zMenu-index {
   display: inline-flex;
@@ -1627,6 +1622,7 @@ zNavBar .zNav-link.active {
   flex: 0 0 auto;
   width: 1.5rem;
   height: 1.5rem;
+  padding: 0;
   font-size: 0.8125rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
@@ -1635,6 +1631,8 @@ zNavBar .zNav-link.active {
   border-radius: 50%;
 }
 
+.zMenu-nav .zNav-link:hover .zBadge,
+.zMenu-nav .zNav-link:focus-visible .zBadge,
 .zMenu-container .zMenu-option button:hover .zBadge,
 .zMenu-container .zMenu-option button:focus-visible .zBadge {
   color: #fff;
@@ -1642,6 +1640,8 @@ zNavBar .zNav-link.active {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .zMenu-nav .zNav-link,
   .zMenu-container .zMenu-option button { transition: none; }
+  .zMenu-nav .zNav-link:hover,
   .zMenu-container .zMenu-option button:hover { transform: none; }
 }
