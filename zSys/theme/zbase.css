@@ -644,7 +644,10 @@ zNavBar .zNav-link.active {
   list-style: none;
 }
 
-.zNavbar-inblock .zNav-item { position: relative; }
+/* Immune to host prose list styling: an inblock bar can be embedded inside
+   arbitrary content (e.g. a .zCallout whose `li { margin: 0 0 .5rem }` +
+   `li:last-child { margin-bottom: 0 }` would drop the last item off-baseline). */
+.zNavbar-inblock .zNav-item { position: relative; margin: 0; line-height: 1; }
 
 .zNavbar-inblock .zNav-link {
   display: block;
