@@ -637,9 +637,7 @@ zNavBar .zNav-link.active {
 
 .zNavbar-inblock .zNavbar-nav {
   display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
+  align-items: center;       /* one row, baseline-aligned — mirror global bar */
   gap: 0.25rem;
   margin: 0;
   padding: 0;
