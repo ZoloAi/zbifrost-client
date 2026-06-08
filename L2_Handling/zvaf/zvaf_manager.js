@@ -22,7 +22,13 @@ export class ZVaFManager {
   }
 
   /**
-   * Initialize zVaF elements (v1.6.0: Simplified - elements exist in HTML, just populate)
+   * Initialize zVaF elements.
+   *
+   * SSOT (hard cut): chrome hosts <zNavBar> and <zBifrostBadge> are RUNTIME-owned,
+   * not template-owned. An app template needs only the <zVaF> content mount; the
+   * runtime creates the chrome hosts on demand and positions/styles them purely
+   * via built-in zClass in zbase.css (navbar = sticky top, badge = fixed). This
+   * removes per-app template boilerplate and the SSOT drift it caused.
    */
   initZVaFElements() {
     this.logger.debug('[ZVaFManager] Starting initialization');
@@ -32,30 +38,8 @@ export class ZVaFManager {
       return;
     }
 
-    // Step 1: Find badge element (created by template)
-    const badgeElement = document.querySelector('zBifrostBadge');
-    if (badgeElement) {
-      this.client._zConnectionBadge = badgeElement;
-      this.populateConnectionBadge();
-      this.logger.debug('[ZVaFManager] Badge element found and populated');
-    } else {
-      this.logger.error('[ZVaFManager] [ERROR] <zBifrostBadge> not found in DOM');
-    }
-
-    // Step 2: Find navbar element (created by template)
-    const navElement = document.querySelector('zNavBar');
-    if (navElement) {
-      this.client._zNavBarElement = navElement;
-      // Fetch and populate navbar asynchronously (don't block initialization)
-      this.populateNavBar().catch(err => {
-        this.logger.error('[ZVaFManager] Failed to populate navbar:', err);
-      });
-      this.logger.debug('[ZVaFManager] NavBar element found, populating');
-    } else {
-      this.logger.error('[ZVaFManager] [ERROR] <zNavBar> not found in DOM');
-    }
-
-    // Step 3: Find zVaF element (content renders directly into it)
+    // The zVaF content element is the ONE required mount point (template owns it).
+    // Resolve it first so the navbar host can be placed relative to it.
     const zVaFElement = document.querySelector(this.options.targetElement) ||
                         document.getElementById(this.options.targetElement);
     if (zVaFElement) {
@@ -65,7 +49,56 @@ export class ZVaFManager {
       this.logger.error(`[ZVaFManager] [ERROR] <${this.options.targetElement}> not found in DOM`);
     }
 
+    // Badge: position:fixed → parent-agnostic, append to <body>.
+    const badgeElement = this._ensureChromeHost('zBifrostBadge', (el) => {
+      document.body.appendChild(el);
+    });
+    if (badgeElement) {
+      this.client._zConnectionBadge = badgeElement;
+      this.populateConnectionBadge();
+      this.logger.debug('[ZVaFManager] Badge host ready');
+    }
+
+    // NavBar: page-frame chrome (sticky top) → insert BEFORE <zVaF> so it sits
+    // above the scrolling content, never inside it.
+    const navElement = this._ensureChromeHost('zNavBar', (el) => {
+      if (zVaFElement && zVaFElement.parentNode) {
+        zVaFElement.parentNode.insertBefore(el, zVaFElement);
+      } else {
+        document.body.insertBefore(el, document.body.firstChild);
+      }
+    });
+    if (navElement) {
+      this.client._zNavBarElement = navElement;
+      // Populate asynchronously (don't block initialization).
+      this.populateNavBar().catch(err => {
+        this.logger.error('[ZVaFManager] Failed to populate navbar:', err);
+      });
+      this.logger.debug('[ZVaFManager] NavBar host ready, populating');
+    }
+
     this.logger.log('[ZVaFManager] All elements initialized');
+  }
+
+  /**
+   * Ensure a runtime-owned chrome host element exists, returning it.
+   *
+   * If the element is already in the DOM (e.g. a legacy template still declares
+   * it) it is reused; otherwise it is created and placed via `place(el)`. This is
+   * the hard-cut SSOT path — <zNavBar>/<zBifrostBadge> are no longer required in
+   * app templates.
+   *
+   * @param {string} tagName - Custom element tag (zNavBar | zBifrostBadge)
+   * @param {(el: HTMLElement) => void} place - Inserts the freshly created element
+   * @returns {HTMLElement}
+   */
+  _ensureChromeHost(tagName, place) {
+    let el = document.querySelector(tagName);
+    if (el) return el;
+    el = document.createElement(tagName);
+    place(el);
+    this.logger.debug(`[ZVaFManager] Created runtime chrome host <${tagName}>`);
+    return el;
   }
 
   /**
