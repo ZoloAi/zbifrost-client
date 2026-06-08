@@ -47,7 +47,7 @@ Prism.languages.insertBefore('zui', 'property', {
             alias: 'keyword',
         },
         'zui-element': {
-            pattern: /\b(?:zFunc|zTerminal|zInfo|zInput|zSuccess|zDL|zRange|zCrumbs|zH3|zNavBar|zH2|zUL|zURL|zH0|zCode|zText|zBtn|zH6|zCheckbox|zError|zH5|zTable|zH1|zLink|zWizard|zMD|zImage|zSelect|zSignal|zWarning|zOL|zH4)(?=\s*(?:\([^)]+\))?[*!]?:)/,
+            pattern: /\b(?:zError|zWizard|zImage|zWarning|zSuccess|zH3|zDL|zTable|zSignal|zH0|zRange|zCheckbox|zInput|zH4|zBtn|zNavBar|zMD|zOL|zH6|zH1|zCode|zLink|zFunc|zCrumbs|zUL|zInfo|zH5|zH2|zURL|zText|zTerminal|zSelect)(?=\s*(?:\([^)]+\))?[*!]?:)/,
             alias: 'function',
         },
         'metadata': {
@@ -55,11 +55,11 @@ Prism.languages.insertBefore('zui', 'property', {
             alias: 'keyword',
         },
         'zui-element-property': {
-            pattern: /\b(?:action|alt_text|autocomplete|break_message|caption|checked|color|columns|content|disabled|format|href|id|indent|interactive|items|label|limit|max|maxlength|min|minlength|multi|multiple|name|offset|open_prompt|options|parent|pattern|pause|placeholder|prefix|prompt|readonly|rel|required|rows|semantic|show|show_header|size|src|step|style|suffix|target|title|type|value|window|zAnchor)(?=\s*(?:\([^)]+\))?:)/,
+            pattern: /\b(?:action|alt_text|autocomplete|break_message|burst|caption|checked|color|columns|content|count|delay|disabled|every|format|full_page|href|id|indent|interactive|items|label|limit|max|maxlength|min|minlength|multi|multiple|name|offset|open_prompt|options|overwrite|parent|pattern|pause|placeholder|prefix|prompt|quality|readonly|rel|required|resolution|rows|selector|semantic|show|show_header|size|src|step|style|suffix|target|title|type|value|window|zAnchor)(?=\s*(?:\([^)]+\))?:)/,
             alias: 'variable',
         },
         'zdispatch-event': {
-            pattern: /\b(?:zCRUD|zData|zDialog|zDispatch|zLogin|zMenu)(?=\s*(?:\([^)]+\))?[*!]?:)/,
+            pattern: /\b(?:zCRUD|zData|zDialog|zDispatch|zExport|zImport|zLogin|zMenu)(?=\s*(?:\([^)]+\))?[*!]?:)/,
             alias: 'dispatch-event',
         }
 });
