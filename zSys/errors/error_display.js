@@ -35,25 +35,18 @@ export class ErrorDisplay {
     if (!this.container) {
       this.container = document.createElement('div');
       this.container.id = this.containerId;
-      this.container.className = 'bifrost-error-container';
 
-      // Position styles
-      const positions = {
-        'top-right': 'top: 1rem; right: 1rem;',
-        'top-left': 'top: 1rem; left: 1rem;',
-        'bottom-right': 'bottom: 1rem; right: 1rem;',
-        'bottom-left': 'bottom: 1rem; left: 1rem;'
-      };
+      // Canonical, class-based styling (SSOT in zbase.css) — no inline styles.
+      // A corner modifier selects the fixed position.
+      const corner = ['top-right', 'top-left', 'bottom-right', 'bottom-left']
+        .includes(this.position) ? this.position : 'top-right';
+      this.container.className =
+        `bifrost-error-container bifrost-error-container--${corner}`;
 
-      this.container.style.cssText = `
-        position: fixed;
-        ${positions[this.position] || positions['top-right']}
-        z-index: 10000; /* Z_INDEX.ERROR_CONTAINER (UMD limitation, can't import) */
-        max-width: 400px;
-        pointer-events: none;
-      `;
-
-      document.body.appendChild(this.container);
+      // Centralize under the <zVaF> root (SSOT — all bifrost chrome lives there);
+      // fall back to <body> if the root isn't present yet.
+      const root = document.querySelector('zVaF') || document.body;
+      root.appendChild(this.container);
     }
   }
 

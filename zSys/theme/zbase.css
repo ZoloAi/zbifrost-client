@@ -483,6 +483,23 @@ zBifrostBadge {
 .zBadge-dot     { border-radius: 50%; background: currentColor; }
 .zIcon          { display: inline-block; width: 0.75em; height: 0.75em; fill: currentColor; }
 
+/* ─── zVaF content host ─────────────────────────────────────────────────────── */
+/* The re-rendered subtree under the <zVaF> root. Chrome (navbar/badge/errors) are
+ * its siblings inside the root, so clearing this node never destroys them. */
+.zVaF-content { display: block; }
+
+/* ─── Error toasts — bifrost-owned fixed-corner container (was inline styles) ── */
+.bifrost-error-container {
+  position: fixed;
+  z-index: 10000;
+  max-width: 400px;
+  pointer-events: none;
+}
+.bifrost-error-container--top-right    { top: 1rem; right: 1rem; }
+.bifrost-error-container--top-left     { top: 1rem; left: 1rem; }
+.bifrost-error-container--bottom-right { bottom: 1rem; right: 1rem; }
+.bifrost-error-container--bottom-left  { bottom: 1rem; left: 1rem; }
+
 /* ─── zNavBar — Bifrost-owned default chrome (token-driven) ─────────────────── */
 /* Structure + a sensible dark visual default. Apps re-skin via --znav-* vars or
  * a higher-specificity rule — no need to re-declare the whole navbar per app. */

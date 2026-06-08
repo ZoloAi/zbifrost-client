@@ -24,11 +24,19 @@ export class ZVaFManager {
   /**
    * Initialize zVaF elements.
    *
-   * SSOT (hard cut): chrome hosts <zNavBar> and <zBifrostBadge> are RUNTIME-owned,
-   * not template-owned. An app template needs only the <zVaF> content mount; the
-   * runtime creates the chrome hosts on demand and positions/styles them purely
-   * via built-in zClass in zbase.css (navbar = sticky top, badge = fixed). This
-   * removes per-app template boilerplate and the SSOT drift it caused.
+   * SSOT (hard cut): <zVaF> is the bifrost ROOT — the single mount an app template
+   * provides. EVERYTHING bifrost-generated lives under it, never as stray <body>
+   * children:
+   *
+   *   <zVaF>                          ← root (template owns this tag only)
+   *     <zNavBar>…</zNavBar>          ← chrome (runtime-created), sticky top
+   *     <div id="zVaF-content">…</div>← the render/clear target (page content)
+   *     <zBifrostBadge>…</zBifrostBadge> ← chrome (runtime-created), fixed
+   *     <div class="bifrost-error-container">…</div> ← error toasts (lazy)
+   *
+   * Chrome are SIBLINGS of the content host, so re-renders (which wipe the content
+   * host) never destroy them. Position/look come purely from built-in zClass in
+   * zbase.css (navbar sticky, badge/errors fixed).
    */
   initZVaFElements() {
     this.logger.debug('[ZVaFManager] Starting initialization');
@@ -38,35 +46,31 @@ export class ZVaFManager {
       return;
     }
 
-    // The zVaF content element is the ONE required mount point (template owns it).
-    // Resolve it first so the navbar host can be placed relative to it.
-    const zVaFElement = document.querySelector(this.options.targetElement) ||
-                        document.getElementById(this.options.targetElement);
-    if (zVaFElement) {
-      this.client._zVaFElement = zVaFElement;
-      this.logger.debug('[ZVaFManager] zVaF element found');
-    } else {
-      this.logger.error(`[ZVaFManager] [ERROR] <${this.options.targetElement}> not found in DOM`);
+    // The <zVaF> ROOT is the only required mount (template owns the bare tag).
+    const zVaFRoot = document.querySelector(this.options.targetElement) ||
+                     document.getElementById(this.options.targetElement);
+    if (!zVaFRoot) {
+      this.logger.error(`[ZVaFManager] [ERROR] <${this.options.targetElement}> root not found in DOM`);
+      return;
     }
+    this.client._zVaFRoot = zVaFRoot;
+    this.logger.debug('[ZVaFManager] zVaF root found');
 
-    // Badge: position:fixed → parent-agnostic, append to <body>.
-    const badgeElement = this._ensureChromeHost('zBifrostBadge', (el) => {
-      document.body.appendChild(el);
-    });
-    if (badgeElement) {
-      this.client._zConnectionBadge = badgeElement;
-      this.populateConnectionBadge();
-      this.logger.debug('[ZVaFManager] Badge host ready');
+    // Inner content host (#zVaF-content) — THE render/clear target. Created inside
+    // the root so chrome siblings survive content re-renders.
+    let contentHost = zVaFRoot.querySelector('#zVaF-content');
+    if (!contentHost) {
+      contentHost = document.createElement('div');
+      contentHost.id = 'zVaF-content';
+      contentHost.className = 'zVaF-content';
+      zVaFRoot.appendChild(contentHost);
+      this.logger.debug('[ZVaFManager] Created content host #zVaF-content');
     }
+    this.client._zVaFElement = contentHost;
 
-    // NavBar: page-frame chrome (sticky top) → insert BEFORE <zVaF> so it sits
-    // above the scrolling content, never inside it.
+    // NavBar: sticky-top chrome → FIRST child of the root (above content).
     const navElement = this._ensureChromeHost('zNavBar', (el) => {
-      if (zVaFElement && zVaFElement.parentNode) {
-        zVaFElement.parentNode.insertBefore(el, zVaFElement);
-      } else {
-        document.body.insertBefore(el, document.body.firstChild);
-      }
+      zVaFRoot.insertBefore(el, zVaFRoot.firstChild);
     });
     if (navElement) {
       this.client._zNavBarElement = navElement;
@@ -77,16 +81,26 @@ export class ZVaFManager {
       this.logger.debug('[ZVaFManager] NavBar host ready, populating');
     }
 
-    this.logger.log('[ZVaFManager] All elements initialized');
+    // Badge: fixed chrome → appended to the root (DOM position is cosmetic; it's
+    // viewport-fixed via zbase.css).
+    const badgeElement = this._ensureChromeHost('zBifrostBadge', (el) => {
+      zVaFRoot.appendChild(el);
+    });
+    if (badgeElement) {
+      this.client._zConnectionBadge = badgeElement;
+      this.populateConnectionBadge();
+      this.logger.debug('[ZVaFManager] Badge host ready');
+    }
+
+    this.logger.log('[ZVaFManager] All elements initialized under <zVaF> root');
   }
 
   /**
    * Ensure a runtime-owned chrome host element exists, returning it.
    *
-   * If the element is already in the DOM (e.g. a legacy template still declares
-   * it) it is reused; otherwise it is created and placed via `place(el)`. This is
-   * the hard-cut SSOT path — <zNavBar>/<zBifrostBadge> are no longer required in
-   * app templates.
+   * Reuses an existing element if present (legacy templates); otherwise creates it
+   * and places it via `place(el)`. Hard-cut SSOT — <zNavBar>/<zBifrostBadge> are no
+   * longer required in app templates; the runtime creates them inside <zVaF>.
    *
    * @param {string} tagName - Custom element tag (zNavBar | zBifrostBadge)
    * @param {(el: HTMLElement) => void} place - Inserts the freshly created element
