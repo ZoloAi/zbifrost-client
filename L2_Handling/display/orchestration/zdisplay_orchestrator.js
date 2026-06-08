@@ -1293,6 +1293,30 @@ export class ZDisplayOrchestrator {
         break;
       }
 
+      case 'navbar_inline': {
+        // Block-level (in-page) navbar rendered inline. The server (message_walker
+        // ._inline_block_navbars) builds the bar HTML via build_nav_html — the SAME
+        // SSOT as the chrome navbar — and ships it as `html`. We inject it and wire
+        // the generic data-nav-action delegation (hamburger/dropdown/navigate).
+        // zPsi items are emitted as native `#anchor` links (no data-nav-action), so
+        // the browser scrolls to the matching section _zId for free.
+        const wrapper = document.createElement('div');
+        wrapper.className = eventData._zClass || 'zNavbar-inline-wrap';
+        wrapper.innerHTML = eventData.html || '';
+        const navEl = wrapper.querySelector('nav');
+        if (navEl) {
+          try {
+            const { NavBarBuilder } = await import('../../../L3_Abstraction/orchestrator/navbar_builder.js');
+            NavBarBuilder.wireNavBarEvents(navEl, this.client, this.logger);
+          } catch (err) {
+            this.logger.warn('[renderZDisplayEvent] navbar_inline wiring skipped:', err);
+          }
+        }
+        element = wrapper;
+        this.logger.debug('[renderZDisplayEvent] Rendered navbar_inline');
+        break;
+      }
+
       case 'zTable': {
         // Use modular TableRenderer for tables
         const tableRenderer = await this.client._ensureTableRenderer();
