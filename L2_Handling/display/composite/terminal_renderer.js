@@ -86,13 +86,18 @@ export default class TerminalRenderer {
     // Extract language and code from code fences (```language ... ```)
     const { language, code } = this._parseCodeFences(rawContent);
 
+    // Effective zTerminal mode for THIS instance, stamped server-side from zEnv
+    // (readonly | sandbox | trust). Missing → assume sandbox for continuity.
+    const mode = (data.mode || 'sandbox').toString().toLowerCase();
+
     // Create main container
     const container = document.createElement('div');
     container.className = `zTerminal-container zCard zMb-3 ${customClass}`.trim();
     container.id = terminalId;
 
-    // Create header with title, Copy button, and (when runnable) a Run button
-    const header = this._createHeader(title, language, terminalId, code);
+    // Header: title + language, a constant mode badge, Copy, and Run (only when
+    // execution is actually possible for this mode + language).
+    const header = this._createHeader(title, language, terminalId, code, mode);
     container.appendChild(header);
 
     // Create code block with syntax highlighting (display extracted code)
@@ -151,7 +156,7 @@ export default class TerminalRenderer {
    * Run button when the snippet is runnable (python / zui).
    * @private
    */
-  _createHeader(title, language, terminalId, code = '') {
+  _createHeader(title, language, terminalId, code = '', mode = 'sandbox') {
     const header = document.createElement('div');
     header.style.cssText = `
       display: flex;
@@ -190,14 +195,22 @@ export default class TerminalRenderer {
     leftContainer.appendChild(titleEl);
     leftContainer.appendChild(langBadge);
 
-    // Right side: Copy button (always) + Run button (when runnable)
+    // Right side: constant mode badge (the instance's trust dial) + Copy +
+    // a Run button ONLY when execution is actually possible here.
     const buttonContainer = document.createElement('div');
     buttonContainer.style.cssText = 'display: flex; align-items: center; gap: 8px; margin: 0;';
+
+    // The mode badge is a per-instance fact (from zEnv), shown on every block so
+    // the trust context is unambiguous — never a per-language guess.
+    buttonContainer.appendChild(this._createModeBadge(mode));
 
     // Copy is present on every zTerminal — runnable or display-only.
     buttonContainer.appendChild(this._createCopyButton(code));
 
-    if (language === 'python' || language === 'zui') {
+    // Run appears only when the mode permits it AND the language can run. Over
+    // Bifrost that means sandbox + python/zui; readonly never runs, and bash is
+    // never executable on the web surface. No run → no button (and no fake pill).
+    if (this._isRunnable(mode, language)) {
       const runButton = createButton('button', {});
       runButton.innerHTML = '<i class="bi bi-play-fill"></i> Run';
       runButton.style.cssText = `
@@ -219,25 +232,53 @@ export default class TerminalRenderer {
       });
       runButton.addEventListener('click', () => this._executeCode(terminalId));
       buttonContainer.appendChild(runButton);
-    } else if (language === 'bash') {
-      const blockedBadge = document.createElement('span');
-      blockedBadge.style.cssText = `
-        background: rgba(234, 179, 8, 0.2);
-        color: #fbbf24;
-        border: 1px solid rgba(234, 179, 8, 0.3);
-        padding: 4px 10px;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-weight: ${TYPOGRAPHY.FONT_WEIGHTS.MEDIUM};
-      `;
-      blockedBadge.innerHTML = '<i class="bi bi-shield-lock"></i> Sandbox';
-      buttonContainer.appendChild(blockedBadge);
     }
 
     header.appendChild(leftContainer);
     header.appendChild(buttonContainer);
 
     return header;
+  }
+
+  /**
+   * Whether a Run button should appear at all. Execution over Bifrost is only
+   * possible in `sandbox` for runnable languages (python / zui). `readonly`
+   * never runs; bash is never executable on the web surface. trust is clamped to
+   * sandbox server-side, so it never reaches the client.
+   * @private
+   */
+  _isRunnable(mode, language) {
+    return mode === 'sandbox' && (language === 'python' || language === 'zui');
+  }
+
+  /**
+   * Create the constant mode badge — the instance's trust dial (from zEnv),
+   * shown on every zTerminal so the execution context is never ambiguous.
+   * @private
+   */
+  _createModeBadge(mode) {
+    const META = {
+      readonly: { icon: 'bi-eye',               label: 'read-only', fg: '#9aa4b2', bg: 'rgba(154,164,178,0.15)', bd: 'rgba(154,164,178,0.30)' },
+      sandbox:  { icon: 'bi-shield-check',       label: 'sandbox',   fg: '#fbbf24', bg: 'rgba(234,179,8,0.18)',   bd: 'rgba(234,179,8,0.35)'   },
+      trust:    { icon: 'bi-shield-exclamation', label: 'trust',     fg: '#f87171', bg: 'rgba(248,113,113,0.18)', bd: 'rgba(248,113,113,0.35)' },
+    };
+    const meta = META[mode] || META.sandbox;
+    const badge = document.createElement('span');
+    badge.title = `zTerminal mode: ${meta.label}`;
+    badge.style.cssText = `
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: ${meta.bg};
+      color: ${meta.fg};
+      border: 1px solid ${meta.bd};
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: ${TYPOGRAPHY.FONT_WEIGHTS.MEDIUM};
+    `;
+    badge.innerHTML = `<i class="bi ${meta.icon}"></i> ${meta.label}`;
+    return badge;
   }
 
   /**
