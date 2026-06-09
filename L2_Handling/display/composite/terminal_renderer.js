@@ -247,7 +247,7 @@ export default class TerminalRenderer {
    */
   _createCopyButton(code) {
     const copyButton = createButton('button', {});
-    copyButton.innerHTML = '<i class="bi bi-clipboard"></i> Copy';
+    copyButton.innerHTML = '<i class="bi bi-clipboard"></i>';
     copyButton.title = 'Copy code';
     copyButton.style.cssText = `
       background: rgba(255, 255, 255, 0.06);
@@ -255,7 +255,7 @@ export default class TerminalRenderer {
       color: #c8c8d4;
       font-weight: ${TYPOGRAPHY.FONT_WEIGHTS.MEDIUM};
       font-size: 0.8rem;
-      padding: 5px 12px;
+      padding: 5px 9px;
       border-radius: 4px;
       cursor: pointer;
       transition: background 0.2s, color 0.2s;
@@ -288,7 +288,7 @@ export default class TerminalRenderer {
         document.execCommand('copy');
         document.body.removeChild(textarea);
       }
-      button.innerHTML = '<i class="bi bi-check2"></i> Copied';
+      button.innerHTML = '<i class="bi bi-check2"></i> Copied!';
       button.style.color = '#22c55e';
     } catch (e) {
       this.logger.warn('[TerminalRenderer] Copy failed:', e.message);
@@ -296,7 +296,7 @@ export default class TerminalRenderer {
       button.style.color = '#ff6b6b';
     }
     setTimeout(() => {
-      button.innerHTML = '<i class="bi bi-clipboard"></i> Copy';
+      button.innerHTML = '<i class="bi bi-clipboard"></i>';
       button.style.color = '#c8c8d4';
     }, 1500);
   }
