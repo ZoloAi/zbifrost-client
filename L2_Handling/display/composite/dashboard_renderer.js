@@ -202,6 +202,14 @@ export default class DashboardRenderer {
         zBlock:        panelName,
         zVaFile:       `zUI.${panelName}`,
         zVaFolder:     folder,
+        // Server contract: presence of _renderTarget marks this as a dashboard
+        // PANEL load (not a full-page nav). The server uses it to stamp
+        // session['_panel_zVaFile'] so a later in-panel $delta/zDelegate (e.g.
+        // $Edit_Profile, a ^bounce living in the panel's own file) resolves
+        // against that file instead of the dashboard host (zUI.zAccountHome).
+        // NOT dead — render-targeting moved to client._renderTarget, but this
+        // flag is the server's only signal that the load is panel-scoped.
+        _renderTarget: 'dashboard-panel-content',
       }));
       setTimeout(() => { pane.dataset.loaded = 'done'; }, 2000);
     } catch (err) {
