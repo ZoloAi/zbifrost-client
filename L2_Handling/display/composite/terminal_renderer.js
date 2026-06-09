@@ -90,14 +90,18 @@ export default class TerminalRenderer {
     // (readonly | sandbox | trust). Missing → assume sandbox for continuity.
     const mode = (data.mode || 'sandbox').toString().toLowerCase();
 
+    // Per-block opt-out: zRun:false hides the Run button even when the mode and
+    // language would allow it — for "copy this snippet" blocks. Default true.
+    const runEnabled = !(data.zRun === false || data.zRun === 'false' || data.zRun === 'False');
+
     // Create main container
     const container = document.createElement('div');
     container.className = `zTerminal-container zCard zMb-3 ${customClass}`.trim();
     container.id = terminalId;
 
     // Header: title + language, a constant mode badge, Copy, and Run (only when
-    // execution is actually possible for this mode + language).
-    const header = this._createHeader(title, language, terminalId, code, mode);
+    // execution is possible for this mode + language AND not opted out via zRun).
+    const header = this._createHeader(title, language, terminalId, code, mode, runEnabled);
     container.appendChild(header);
 
     // Create code block with syntax highlighting (display extracted code)
@@ -156,7 +160,7 @@ export default class TerminalRenderer {
    * Run button when the snippet is runnable (python / zui).
    * @private
    */
-  _createHeader(title, language, terminalId, code = '', mode = 'sandbox') {
+  _createHeader(title, language, terminalId, code = '', mode = 'sandbox', runEnabled = true) {
     const header = document.createElement('div');
     header.style.cssText = `
       display: flex;
@@ -207,10 +211,11 @@ export default class TerminalRenderer {
     // Copy is present on every zTerminal — runnable or display-only.
     buttonContainer.appendChild(this._createCopyButton(code));
 
-    // Run appears only when the mode permits it AND the language can run. Over
-    // Bifrost that means sandbox + python/zui; readonly never runs, and bash is
-    // never executable on the web surface. No run → no button (and no fake pill).
-    if (this._isRunnable(mode, language)) {
+    // Run appears only when the mode permits it AND the language can run AND the
+    // block didn't opt out (zRun:false). Over Bifrost runnable means sandbox +
+    // python/zui; readonly never runs, bash is never executable on the web.
+    // No run → no button (and no fake pill).
+    if (runEnabled && this._isRunnable(mode, language)) {
       const runButton = createButton('button', {});
       runButton.innerHTML = '<i class="bi bi-play-fill"></i> Run';
       runButton.style.cssText = `
