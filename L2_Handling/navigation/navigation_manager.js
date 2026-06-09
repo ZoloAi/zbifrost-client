@@ -65,6 +65,51 @@ export class NavigationManager {
   }
 
   /**
+   * Apply a destination route's navbar on SPA navigation (SSOT: server-resolved).
+   *
+   * The navbar is persistent chrome populated once on full-page load. On a
+   * client-side jump (zLink / link click / popstate) the server returns the
+   * destination's resolved navbar in route-config: `nav_html` (prebuilt,
+   * RBAC-filtered) and `navbar` (resolved items, or null). We MUST re-apply it
+   * here — otherwise the previous page's navbar lingers when you land on a
+   * `zNavBar: false` page (and a page with a different navbar shows the wrong one).
+   *
+   * @param {Object} routeConfig - Parsed /api/route-config payload
+   * @private
+   */
+  _applyRouteNavBar(routeConfig) {
+    const el = this.client._zNavBarElement;
+    if (!el) return;
+
+    const navHtml = routeConfig && routeConfig.nav_html;
+    const navItems = routeConfig && routeConfig.navbar;
+    const wantsNavbar = !!(navHtml || (Array.isArray(navItems) && navItems.length));
+
+    if (!wantsNavbar) {
+      // Destination opted out (zNavBar: false / no navbar) — hide the chrome.
+      el.style.display = 'none';
+      el.innerHTML = '';
+      this.logger.debug('[ClientNav] Destination has no navbar — hiding chrome');
+      return;
+    }
+
+    // Destination wants a navbar — make sure the chrome is visible and refreshed
+    // from the server's prebuilt HTML (reuse the SSOT populate path so events
+    // are wired and client-side nav re-enabled). Keep zuiConfig in sync so later
+    // bounce-back refreshes reuse THIS page's navbar, not the entry page's.
+    el.style.display = '';
+    if (this.client.zuiConfig) {
+      this.client.zuiConfig.nav_html = navHtml || this.client.zuiConfig.nav_html;
+      this.client.zuiConfig.zNavBar = navItems || this.client.zuiConfig.zNavBar;
+    }
+    if (navHtml && typeof this.client._fetchAndPopulateNavBar === 'function') {
+      this.client._fetchAndPopulateNavBar(navHtml).catch((err) =>
+        this.logger.error('[ClientNav] navbar populate failed:', err)
+      );
+    }
+  }
+
+  /**
    * Navigate to a route via WebSocket (client-side navigation)
    * @param {string} routePath - Path to navigate to (e.g., '/zAbout', '/zAccount')
    * @param {Object} options - Navigation options
@@ -86,6 +131,13 @@ export class NavigationManager {
       const { zBlock, zVaFile, zVaFolder, zMeta } = routeConfig;
 
       this.logger.debug('[ClientNav] Route config', { zVaFile, zVaFolder, zBlock });
+
+      // Per-page navbar (SSOT: server-resolved via route-config). A full-page
+      // load honors each page's zNavBar; SPA arrivals must too, or the entry
+      // page's navbar chrome lingers on a zNavBar:false landing. The server is
+      // the single authority — it returns resolved `navbar` items + prebuilt
+      // `nav_html`; the client just shows/hides + injects.
+      this._applyRouteNavBar(routeConfig);
 
       // Inject page-specific zBrush CSS (not loaded by full-page <head> on SPA nav)
       const brushes = zMeta?.zBrush
