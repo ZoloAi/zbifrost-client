@@ -91,8 +91,8 @@ export default class TerminalRenderer {
     container.className = `zTerminal-container zCard zMb-3 ${customClass}`.trim();
     container.id = terminalId;
 
-    // Create header with title and Run button
-    const header = this._createHeader(title, language, terminalId);
+    // Create header with title, Copy button, and (when runnable) a Run button
+    const header = this._createHeader(title, language, terminalId, code);
     container.appendChild(header);
 
     // Create code block with syntax highlighting (display extracted code)
@@ -147,10 +147,11 @@ export default class TerminalRenderer {
   }
 
   /**
-   * Create terminal header with title and Run button
+   * Create terminal header with title, an always-present Copy button, and a
+   * Run button when the snippet is runnable (python / zui).
    * @private
    */
-  _createHeader(title, language, terminalId) {
+  _createHeader(title, language, terminalId, code = '') {
     const header = document.createElement('div');
     header.style.cssText = `
       display: flex;
@@ -189,10 +190,13 @@ export default class TerminalRenderer {
     leftContainer.appendChild(titleEl);
     leftContainer.appendChild(langBadge);
 
-    // Right side: Run button
+    // Right side: Copy button (always) + Run button (when runnable)
     const buttonContainer = document.createElement('div');
-    buttonContainer.style.cssText = 'margin: 0;';
-    
+    buttonContainer.style.cssText = 'display: flex; align-items: center; gap: 8px; margin: 0;';
+
+    // Copy is present on every zTerminal — runnable or display-only.
+    buttonContainer.appendChild(this._createCopyButton(code));
+
     if (language === 'python' || language === 'zui') {
       const runButton = createButton('button', {});
       runButton.innerHTML = '<i class="bi bi-play-fill"></i> Run';
@@ -234,6 +238,67 @@ export default class TerminalRenderer {
     header.appendChild(buttonContainer);
 
     return header;
+  }
+
+  /**
+   * Create the always-present "Copy code" button. Copies the displayed snippet
+   * (fences stripped) to the clipboard, with brief inline confirmation.
+   * @private
+   */
+  _createCopyButton(code) {
+    const copyButton = createButton('button', {});
+    copyButton.innerHTML = '<i class="bi bi-clipboard"></i> Copy';
+    copyButton.title = 'Copy code';
+    copyButton.style.cssText = `
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid #3a3a4a;
+      color: #c8c8d4;
+      font-weight: ${TYPOGRAPHY.FONT_WEIGHTS.MEDIUM};
+      font-size: 0.8rem;
+      padding: 5px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    `;
+    copyButton.addEventListener('mouseenter', () => {
+      copyButton.style.background = 'rgba(255, 255, 255, 0.12)';
+    });
+    copyButton.addEventListener('mouseleave', () => {
+      copyButton.style.background = 'rgba(255, 255, 255, 0.06)';
+    });
+    copyButton.addEventListener('click', () => this._copyCode(copyButton, code));
+    return copyButton;
+  }
+
+  /**
+   * Copy the snippet to the clipboard and flash a short confirmation on the
+   * button. Falls back to a hidden textarea + execCommand on older browsers.
+   * @private
+   */
+  async _copyCode(button, code) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = code;
+        textarea.style.cssText = 'position: fixed; top: -9999px; opacity: 0;';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      button.innerHTML = '<i class="bi bi-check2"></i> Copied';
+      button.style.color = '#22c55e';
+    } catch (e) {
+      this.logger.warn('[TerminalRenderer] Copy failed:', e.message);
+      button.innerHTML = '<i class="bi bi-x-lg"></i> Failed';
+      button.style.color = '#ff6b6b';
+    }
+    setTimeout(() => {
+      button.innerHTML = '<i class="bi bi-clipboard"></i> Copy';
+      button.style.color = '#c8c8d4';
+    }, 1500);
   }
 
   /**
