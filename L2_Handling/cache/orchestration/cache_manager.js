@@ -170,10 +170,26 @@ export class CacheManager {
         const isNowAuthenticated = this.client.session.isAuthenticated();
         const newSessionHash = this.client.session.getHash();
 
-        // 3A: If server sent nav_html in connection_info, always refresh the navbar
-        // This keeps the nav correct after reconnect even without an auth change.
+        // Per-page opt-out wins (SSOT): connection_info.nav_html is the
+        // CONNECTION-level (global, page-agnostic) navbar. The rendered page's
+        // own zui-config is the authority for THIS page — if it explicitly set
+        // zNavBar:false, the connection default must NOT override it. Without
+        // this guard, a refresh on a zNavBar:false landing re-injects the global
+        // navbar on (re)connect (SPA nav never reconnects, so it only showed on
+        // refresh). Mirrors the SPA-nav + server-side explicit-false opt-out.
+        const pageZNavBar = this.client.zuiConfig?.zMeta?.zNavBar;
+        const pageOptedOut = pageZNavBar === false || pageZNavBar === 'false';
+
+        // 3A: If server sent nav_html in connection_info, refresh the navbar —
+        // unless this page opted out (then hide the chrome and skip).
         const navHtml = data.nav_html || null;
-        if (navHtml) {
+        if (pageOptedOut) {
+          if (this.client._zNavBarElement) {
+            this.client._zNavBarElement.style.display = 'none';
+            this.client._zNavBarElement.innerHTML = '';
+          }
+          this.logger.log('[NavBar] Page set zNavBar:false — skipping connection_info navbar');
+        } else if (navHtml) {
           await this.client._fetchAndPopulateNavBar(navHtml);
           this.logger.log('[NavBar] Navbar refreshed from connection_info nav_html (3A)');
         } else if (wasAuthenticated !== isNowAuthenticated || oldSessionHash !== newSessionHash) {

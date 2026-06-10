@@ -85,6 +85,14 @@ export class NavigationManager {
     const navItems = routeConfig && routeConfig.navbar;
     const wantsNavbar = !!(navHtml || (Array.isArray(navItems) && navItems.length));
 
+    // Keep zuiConfig.zMeta in sync with the destination so a later reconnect's
+    // per-page opt-out guard (cache_manager) reads THIS page's zNavBar, not the
+    // entry page's — otherwise an SPA hop to a zNavBar:false page would re-show
+    // the global navbar if the socket reconnects.
+    if (this.client.zuiConfig && routeConfig && routeConfig.zMeta) {
+      this.client.zuiConfig.zMeta = routeConfig.zMeta;
+    }
+
     if (!wantsNavbar) {
       // Destination opted out (zNavBar: false / no navbar) — hide the chrome.
       el.style.display = 'none';

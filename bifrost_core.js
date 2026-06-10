@@ -6,7 +6,7 @@
  * A production-ready WebSocket client for zCLI's zBifrost bridge.
  * Modular architecture with lazy loading and automatic zTheme integration.
  *
- * @version 1.6.1
+ * @version 1.6.2
  * @author Gal Nachshon
  * @license MIT
  *
