@@ -437,6 +437,31 @@ export class MessageHandler {
         return;
       }
 
+      // Walker finished a fire-and-forget render (navigation). When the server
+      // attaches a zPsi anchor — a crumb-driven zBack that should land on the
+      // section the user navigated FROM — scroll that section into view once the
+      // streamed chunks have painted. SSOT: the section comes from zCrumbs on the
+      // server; the client only honours the anchor it is handed.
+      if (message.event === 'walker_complete') {
+        if (message.zPsi) {
+          const anchor = String(message.zPsi);
+          const root = (this.client && this.client._zVaFElement) || document;
+          const scrollToSection = () => {
+            const target = root.querySelector(`[data-zkey="${anchor}"]`)
+              || document.getElementById(anchor);
+            if (target) {
+              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              this.logger.log('[MessageHandler] zBack zPsi → scrolled to section:', anchor);
+            } else {
+              this.logger.warn('[MessageHandler] zBack zPsi → section not found:', anchor);
+            }
+          };
+          // Chunks paint before this event; defer one frame so layout has settled.
+          requestAnimationFrame(() => setTimeout(scrollToSection, 0));
+        }
+        return;
+      }
+
       // Handle real-time output lines from execute_code execution (e.g. zText / Show_Result steps)
       if (message.event === PROTOCOL_EVENTS.OUTPUT) {
         const TerminalRenderer = window._TerminalRenderer;

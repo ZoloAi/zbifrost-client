@@ -6,7 +6,7 @@
  * A production-ready WebSocket client for zCLI's zBifrost bridge.
  * Modular architecture with lazy loading and automatic zTheme integration.
  *
- * @version 1.6.4
+ * @version 1.6.5
  * @author Gal Nachshon
  * @license MIT
  *
@@ -1499,7 +1499,11 @@ class BifrostCore {
       this._currentBlock = prevBlock;
       this._prevBlock = null;
       // Fire-and-forget (chunks stream back); see zDelta note on the _requestId guard.
-      this._sendWalker({ event: 'execute_walker', zBlock: prevBlock, zVaFile, zVaFolder });
+      // zBack:true flags back-intent so the server can read the crumb's origin
+      // section off the (now-active) parent scope and return it as a zPsi anchor on
+      // walker_complete — letting us land on the section the user came FROM, not the
+      // page top. SSOT: the section lives in zCrumbs, the client never derives it.
+      this._sendWalker({ event: 'execute_walker', zBlock: prevBlock, zVaFile, zVaFolder, zBack: true });
     }
 
     /**
