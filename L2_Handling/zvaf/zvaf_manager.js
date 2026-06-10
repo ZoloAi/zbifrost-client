@@ -169,7 +169,10 @@ export class ZVaFManager {
    */
   updateBadgeState(state) {
     if (!this.client._zConnectionBadge) {
-      this.logger.warn('[ConnectionBadge] Cannot update - badge element not found');
+      // Badge is opt-in (zHooks.badge). When disabled the element is never
+      // created — that's expected, not an error. Stay quiet (matches
+      // updateRenderState's silent no-op) so it doesn't spam the console.
+      this.logger.debug('[ConnectionBadge] No badge element (badge disabled) — skipping update');
       return;
     }
 
