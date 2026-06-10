@@ -23,6 +23,7 @@
 // SSOT for the set of module zHooks (opt-in, dynamically imported features).
 const ZHOOK_REGISTRY = {
   crumbs_live: 'L2_Handling/zhooks/features/crumbs_live.js',
+  cache_live: 'L2_Handling/zhooks/features/cache_live.js',
 };
 
 // Core zHooks are gated where they live in the client (not imported as modules)

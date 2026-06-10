@@ -158,21 +158,25 @@ export function activate(client) {
   function installWrap() {
     if (!client || !client.hooks || !client.hooks.hooks) return false;
     const orig = client.hooks.hooks.onZFuncResponse;
-    if (orig && orig._zdebugWrapped) return true;
+    if (orig && orig._zCrumbsWrapped) return true;
+    // Claim ONLY our own requestId prefixes and pass everything else to `orig`.
+    // This makes the wrap composable: other zHooks (e.g. cache_live) chain their
+    // own wrap and each claims its own replies — no single feature swallows
+    // another's. Distinct flag (_zCrumbsWrapped) so chained wraps don't mistake
+    // each other for "already installed".
     const wrapped = function (msg) {
-      if (msg && typeof msg.requestId === 'string' &&
-          msg.requestId.indexOf('zdebug-') === 0) {
-        // crumbs replies repaint the overlay; nav() replies are fire-and-forget
-        // — both swallowed so the orchestrator never warns about "no resolver".
-        if (msg.requestId.indexOf('zdebug-crumbs') === 0) {
-          if (msg.success) { render(msg.result); }
-          else { log('poll error →', msg.error); }
-        }
-        return;
+      const rid = (msg && typeof msg.requestId === 'string') ? msg.requestId : '';
+      if (rid.indexOf('zdebug-crumbs') === 0) {
+        if (msg.success) { render(msg.result); }
+        else { log('poll error →', msg.error); }
+        return; // claimed: crumbs poll reply repaints the overlay
+      }
+      if (rid.indexOf('zdebug-nav') === 0) {
+        return; // claimed: nav() is fire-and-forget — swallow our own reply
       }
       if (typeof orig === 'function') return orig(msg);
     };
-    wrapped._zdebugWrapped = true;
+    wrapped._zCrumbsWrapped = true;
     client.hooks.hooks.onZFuncResponse = wrapped;
     return true;
   }
