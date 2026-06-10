@@ -92,6 +92,17 @@ export class ZVaFManager {
       this.logger.debug('[ZVaFManager] Badge host ready');
     }
 
+    // Client-side navigation (SPA link interception + popstate handler) is
+    // PAGE-LEVEL infrastructure — independent of whether this page renders a
+    // navbar. Enable it unconditionally here. Previously it was only wired from
+    // populateNavBar()'s navbar branches, so a zNavBar:false page loaded directly
+    // (hard reload) never registered the popstate listener → server-driven
+    // history.back() rewrote the URL without re-rendering. (populateNavBar still
+    // calls it too; enablement is idempotent.)
+    this.client._enableClientSideNavigation().catch(err => {
+      this.logger.error('[ZVaFManager] Failed to enable client-side navigation:', err);
+    });
+
     this.logger.log('[ZVaFManager] All elements initialized under <zVaF> root');
   }
 
