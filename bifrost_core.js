@@ -6,7 +6,7 @@
  * A production-ready WebSocket client for zCLI's zBifrost bridge.
  * Modular architecture with lazy loading and automatic zTheme integration.
  *
- * @version 1.6.3
+ * @version 1.6.4
  * @author Gal Nachshon
  * @license MIT
  *
@@ -1351,16 +1351,41 @@ class BifrostCore {
     }
 
     /**
+     * SSOT: resolve the top-level section key a click originated FROM.
+     * Walks up the DOM from the clicked element collecting [data-zkey] ancestors
+     * and returns the OUTERMOST one within the zVaF root — i.e. the departing
+     * block's top-level key (e.g. "ZDelta_Section"). Every nav verb (zLink,
+     * zDelta, …) feeds this single origin into its walker request so the server
+     * records the click-crumb verb-agnostically (mirrors zCLI on_continue, timed
+     * to the click). Returns null when there is no section ancestor (navbar/root).
+     * @param {HTMLElement} el - the clicked element
+     * @returns {string|null}
+     */
+    navOriginKey(el) {
+      const root = this._zVaFElement || null;
+      let top = null;
+      let node = el;
+      while (node && node !== root) {
+        if (node.getAttribute && typeof node.hasAttribute === 'function' && node.hasAttribute('data-zkey')) {
+          top = node.getAttribute('data-zkey');
+        }
+        node = node.parentElement;
+      }
+      return top;
+    }
+
+    /**
      * Navigate to a zLink path.
      * Resolves @.UI.* paths to Bifrost routes client-side (no backend walker needed).
      * @param {string} path - zLink navigation path (@.UI.Folder.zUI.File.Block or raw URL)
+     * @param {string|null} originKey - SSOT click-origin section key (from navOriginKey)
      * @returns {Promise<any>}
      */
-    async zLink(path) {
+    async zLink(path, originKey = null) {
       const url = this._zLinkPathToUrl(path);
       if (url) {
         this.logger.log(`[zLink] Navigating to: ${url} (from: ${path})`);
-        return this._navigateToRoute(url);
+        return this._navigateToRoute(url, { zOrigin: originKey });
       }
       // Fallback: unknown path format — pass to backend
       return this.send({
@@ -1375,8 +1400,9 @@ class BifrostCore {
      * Same route, same zVaFile/zVaFolder, different zBlock streamed into the container.
      * Mirrors CLI zDelta semantics client-side.
      * @param {string} blockName - target block name ($ prefix already stripped)
+     * @param {string|null} originKey - SSOT click-origin section key (from navOriginKey)
      */
-    async zDelta(blockName) {
+    async zDelta(blockName, originKey = null) {
       const zVaFile = this.zuiConfig?.zVaFile;
       const zVaFolder = this.zuiConfig?.zVaFolder;
       if (!zVaFile || !zVaFolder) {
@@ -1386,12 +1412,16 @@ class BifrostCore {
       // Track current block for zBack before hopping
       this._prevBlock = this._currentBlock || this.options.zBlock || null;
       this._currentBlock = blockName;
-      this.logger.log(`[zDelta] Block hop: ${zVaFile} → ${blockName} (prev: ${this._prevBlock})`);
+      this.logger.log(`[zDelta] Block hop: ${zVaFile} → ${blockName} (prev: ${this._prevBlock}, origin: ${originKey})`);
       // execute_walker is fire-and-forget: the server streams chunks, it never
       // sends a single _requestId-correlated response. Using send() here would
       // leak a never-resolving callback into messageHandler.callbacks, which then
       // trips the "response without _requestId" guard on the next real response.
-      this._sendWalker({ event: 'execute_walker', zBlock: blockName, zVaFile, zVaFolder });
+      // zOrigin carries the SSOT click-crumb so the server records where the hop
+      // launched from (verb-agnostic — same field zLink uses).
+      const payload = { event: 'execute_walker', zBlock: blockName, zVaFile, zVaFolder };
+      if (originKey) payload.zOrigin = originKey;
+      this._sendWalker(payload);
     }
 
     /**

@@ -324,7 +324,8 @@ export default class ButtonRenderer {
         this.logger.log(`[ButtonRenderer] zLink action — navigating to: ${path}`);
         const client = this.client || window.bifrostClient;
         if (client?.zLink) {
-          client.zLink(path);
+          const originKey = client.navOriginKey ? client.navOriginKey(button) : null;
+          client.zLink(path, originKey);
         }
         return;
       }
@@ -347,7 +348,8 @@ export default class ButtonRenderer {
         this.logger.log(`[ButtonRenderer] zDelta action — block hop to: ${blockName}`);
         const client = this.client || window.bifrostClient;
         if (client?.zDelta) {
-          client.zDelta(blockName);
+          const originKey = client.navOriginKey ? client.navOriginKey(button) : null;
+          client.zDelta(blockName, originKey);
         }
         return;
       }

@@ -123,7 +123,7 @@ export class NavigationManager {
    * @param {Object} options - Navigation options
    */
   async navigateToRoute(routePath, options = {}) {
-    const { skipHistory = false, navbar = false } = options;
+    const { skipHistory = false, navbar = false, zOrigin = null } = options;
 
     this.client._isClientSideNav = true;
 
@@ -172,6 +172,9 @@ export class NavigationManager {
       // (SSOT mirror of zCLI navbar navigation — the pick becomes the new root).
       const walkerRequest = { event: 'execute_walker', zBlock, zVaFile, zVaFolder };
       if (navbar) walkerRequest.navbar = true;
+      // SSOT click-crumb: carry the section the zLink launched FROM so the server
+      // records it on the departing scope (same field zDelta uses — verb-agnostic).
+      if (zOrigin) walkerRequest.zOrigin = zOrigin;
       this.logger.debug('[ClientNav] Sending walker request', walkerRequest);
       this.client.connection.send(JSON.stringify(walkerRequest));
 
