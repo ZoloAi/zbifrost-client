@@ -109,15 +109,10 @@ export class WidgetHookManager {
           
           if (this.client.cache && typeof document !== 'undefined') {
             try {
-              const currentPage = window.location.pathname;
-              const contentArea = this.client._zVaFElement;
-              if (contentArea) {
-                this.logger.debug('[Cache] DOM flushed, caching content now');
-                await this.client.cache.set(currentPage, contentArea.outerHTML, 'rendered');
-                this.logger.log(`[Cache] Cached content: ${currentPage}`);
-              }
+              this.logger.debug('[Cache] DOM flushed, snapshotting page into trail');
+              await this.client._snapshotCurrentPage();
             } catch (error) {
-              this.logger.error('[Cache] Error caching content:', error);
+              this.logger.error('[Cache] Error snapshotting page:', error);
             }
           }
         }, 1000); // TIMEOUTS.DEBOUNCE_WIDGET (increased from 500ms for safer debouncing)

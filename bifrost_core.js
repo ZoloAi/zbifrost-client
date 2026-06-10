@@ -804,6 +804,11 @@ class BifrostCore {
       return this.initializer.navigateToRoute(routePath, options);
     }
 
+    async _snapshotCurrentPage() {
+      await this._ensureInitializer();
+      return this.initializer.snapshotCurrentPage();
+    }
+
 
     /**
      * Lazy load a module

@@ -1,8 +1,12 @@
 /**
  * Caching Module - Barrel Export
- * 
- * Unified entry point for all caching functionality
- * 
+ *
+ * Client caching surface after the SSOT collapse: the server (zLoader) is the
+ * single cache of record. The client keeps only IDENTITY (SessionManager) and
+ * the visited-page TRAIL (TrailStore / CacheOrchestrator alias), backed by
+ * StorageManager (IndexedDB). The old per-tier "mirror of zLoader" and the HTTP
+ * conditional-request manager are gone.
+ *
  * @module caching
  */
 
@@ -16,12 +20,3 @@ export { SessionManager } from './storage/session_manager.js';
 // Orchestration Layer
 export { CacheOrchestrator } from './orchestration/cache_orchestrator.js';
 export { CacheManager } from './orchestration/cache_manager.js';
-export { HTTPCacheManager } from './orchestration/http_cache_manager.js';
-
-// Tier Layer
-export { BaseCache } from './tiers/base_cache.js';
-export { SystemCache } from './tiers/system_cache.js';
-export { PinnedCache } from './tiers/pinned_cache.js';
-export { PluginCache } from './tiers/plugin_cache.js';
-export { SessionCache } from './tiers/session_cache.js';
-export { RenderedCache } from './tiers/rendered_cache.js';

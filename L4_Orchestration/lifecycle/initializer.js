@@ -124,4 +124,12 @@ export class Initializer {
     await this.client._ensureNavigationManager();
     return this.client.navigationManager.navigateToRoute(routePath, options);
   }
+
+  /**
+   * Freeze the page currently on screen into the trail (offline-browse).
+   */
+  async snapshotCurrentPage() {
+    await this.client._ensureNavigationManager();
+    return this.client.navigationManager.snapshotCurrentPage();
+  }
 }

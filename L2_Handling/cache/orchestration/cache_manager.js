@@ -2,8 +2,7 @@
  * CacheManager - Manages offline-first caching, storage, and session
  *
  * Responsibilities:
- * - Initialize StorageManager, SessionManager, CacheOrchestrator
- * - Initialize HTTPCacheManager for conditional requests
+ * - Initialize StorageManager, SessionManager, TrailStore (CacheOrchestrator)
  * - Register cache-related hooks (onConnectionInfo, onDisconnected, onConnected)
  * - Handle offline/online transitions
  * - Disable/enable forms during offline mode
@@ -11,13 +10,6 @@
  *
  * Extracted from bifrost_client.js (Phase 3.1)
  */
-
-// ─────────────────────────────────────────────────────────────────
-// Imports
-// ─────────────────────────────────────────────────────────────────
-
-// Layer 3: Managers
-import { HTTPCacheManager } from './http_cache_manager.js';
 
 export class CacheManager {
   constructor(client) {
@@ -66,10 +58,12 @@ export class CacheManager {
       await this.client.session.init();
       this.logger.debug('[Cache] Session initialized');
 
-      // Initialize cache orchestrator
+      // Initialize the visited-page trail store (TrailStore, exposed as
+      // window.CacheOrchestrator for back-compat). This is the offline-browse
+      // engine — the only client cache now that the server is the cache of record.
       this.client.cache = new window.CacheOrchestrator(this.client.storage, this.client.session, this.logger);
       await this.client.cache.init();
-      this.logger.debug('[Cache] Cache orchestrator initialized');
+      this.logger.debug('[Cache] Trail store initialized');
 
       // Clear rendered-HTML cache on every cold page load.
       // The rendered cache stores panel HTML for SPA tab-switching within one
@@ -83,11 +77,8 @@ export class CacheManager {
         this.logger.debug('[Cache] Could not clear rendered cache:', e?.message);
       }
 
-      // Initialize HTTP cache manager for conditional requests
-      this.client.httpCache = new HTTPCacheManager(this.client);
-      
       // Single summary log
-      this.logger.debug('[Cache] Cache system ready (storage, session, orchestrator, HTTP cache)');
+      this.logger.debug('[Cache] Cache system ready (storage, session, trail store)');
 
     } catch (error) {
       this.logger.error('[Cache] Initialization error:', error);
@@ -211,14 +202,10 @@ export class CacheManager {
         // Update badge (v1.6.0: Combined with cache hook to avoid conflicts)
         await this.client._updateBadgeState('disconnected');
 
-        // Cache zVaF content for offline access (badge/navbar are dynamic, re-populated on page load)
+        // Freeze the current page into the trail so Back/forward keep working
+        // while the socket is down (offline-browse).
         if (this.client.cache && typeof document !== 'undefined') {
-          const currentPage = window.location.pathname;
-          const contentArea = this.client._zVaFElement;
-          if (contentArea) {
-            await this.client.cache.set(currentPage, contentArea.outerHTML, 'rendered');
-            this.logger.log(`[Cache] Cached content for offline: ${currentPage}`);
-          }
+          await this.client._snapshotCurrentPage();
         }
 
         // Disable forms (prevent data loss)
@@ -239,6 +226,21 @@ export class CacheManager {
 
         // Re-enable forms
         this.enableForms();
+
+        // Offline-browse: if the user requested a never-seen page while down and
+        // is sitting on the "you're offline" notice, fulfill it now that the line
+        // is back — they never have to retry by hand.
+        const pending = this.client._pendingOfflineNav;
+        if (pending) {
+          this.client._pendingOfflineNav = null;
+          this.logger.log(`[Cache] Reconnected — fulfilling pending nav: ${pending}`);
+          try {
+            // URL was never pushed for the offline notice, so let this nav push it.
+            await this.client._navigateToRoute(pending);
+          } catch (navErr) {
+            this.logger.error('[Cache] Pending nav retry failed:', navErr);
+          }
+        }
 
       } catch (error) {
         this.logger.error('[Cache] Error handling reconnect:', error);

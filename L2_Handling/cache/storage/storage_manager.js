@@ -44,8 +44,9 @@
   // SSOT is in ../cache_constants.js
   //
 
-  const DB_VERSION = 1;  // SSOT: cache_constants.DB_VERSION
-  const STORE_NAMES = ['system', 'pinned', 'plugin', 'rendered']; // SSOT: cache_constants.STORE_NAMES
+  const DB_VERSION = 2;  // SSOT: cache_constants.DB_VERSION (v2 drops legacy tiers)
+  const STORE_NAMES = ['rendered']; // SSOT: cache_constants.STORE_NAMES (trail only)
+  const LEGACY_STORE_NAMES = ['system', 'pinned', 'plugin']; // dropped in v2
 
   // 
   // StorageManager Class
@@ -142,12 +143,21 @@
         request.onupgradeneeded = (event) => {
           const db = event.target.result;
 
-          // Create object stores for each cache tier
+          // Create the trail store (rendered pages)
           STORE_NAMES.forEach(storeName => {
             if (!db.objectStoreNames.contains(storeName)) {
               const store = db.createObjectStore(storeName, { keyPath: 'key' });
               store.createIndex('timestamp', 'timestamp', { unique: false });
               this.logger.info(`[StorageManager] Created object store: ${storeName}`);
+            }
+          });
+
+          // v2: drop the legacy mirror-of-zLoader stores — the client no longer
+          // caches UI files / configs / plugins (the server is the cache of record).
+          LEGACY_STORE_NAMES.forEach(storeName => {
+            if (db.objectStoreNames.contains(storeName)) {
+              db.deleteObjectStore(storeName);
+              this.logger.info(`[StorageManager] Dropped legacy object store: ${storeName}`);
             }
           });
         };
@@ -289,7 +299,7 @@
         return false;
       }
 
-      const tiersToClean = tier === 'all' ? ['system', 'pinned', 'plugin', 'session', 'rendered'] : [tier];
+      const tiersToClean = tier === 'all' ? ['session', 'rendered'] : [tier];
 
       for (const t of tiersToClean) {
         if (t === 'session') {
@@ -324,6 +334,33 @@
         return await this._getIndexedDBKeys(tier);
       } else if (this.useLocalStorage) {
         return this._getLocalStorageKeys(tier);
+      }
+
+      return [];
+    }
+
+    /**
+         * Get all entries in a tier as [{ key, value, timestamp }]. Used for
+         * LRU eviction and trail diagnostics.
+         *
+         * @param {string} tier - Cache tier
+         * @returns {Promise<Array<{key:string, value:any, timestamp:number}>>}
+         */
+    async getAll(tier = 'rendered') {
+      if (!this.initialized) {
+        return [];
+      }
+
+      if (tier === 'session') {
+        return Array.from(this.sessionCache.entries()).map(([key, value]) => ({
+          key, value, timestamp: 0
+        }));
+      }
+
+      if (this.useIndexedDB) {
+        return await this._getAllFromIndexedDB(tier);
+      } else if (this.useLocalStorage) {
+        return this._getAllFromLocalStorage(tier);
       }
 
       return [];
@@ -420,6 +457,21 @@
       });
     }
 
+    _getAllFromIndexedDB(tier) {
+      return new Promise((resolve) => {
+        try {
+          const transaction = this.db.transaction([tier], 'readonly');
+          const store = transaction.objectStore(tier);
+          const request = store.getAll();
+
+          request.onsuccess = () => resolve(request.result || []);
+          request.onerror = () => resolve([]);
+        } catch (error) {
+          resolve([]);
+        }
+      });
+    }
+
     // 
     // localStorage Private Methods
     // 
@@ -498,6 +550,31 @@
         }
 
         return keys;
+      } catch (error) {
+        return [];
+      }
+    }
+
+    _getAllFromLocalStorage(tier) {
+      try {
+        const prefix = `${this.namespace}_${tier}_`;
+        const out = [];
+
+        for (let i = 0; i < localStorage.length; i++) {
+          const storageKey = localStorage.key(i);
+          if (storageKey && storageKey.startsWith(prefix)) {
+            try {
+              const entry = JSON.parse(localStorage.getItem(storageKey));
+              out.push({
+                key: storageKey.substring(prefix.length),
+                value: entry.value,
+                timestamp: entry.timestamp || 0
+              });
+            } catch (_e) { /* skip malformed entry */ }
+          }
+        }
+
+        return out;
       } catch (error) {
         return [];
       }

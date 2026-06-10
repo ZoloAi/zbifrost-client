@@ -1,40 +1,29 @@
 /**
- * 
- * zCLI - CacheOrchestrator (Tier 3 - Mirrors zLoader Backend)
- * 
  *
- * Coordinates 5 cache tiers for progressive enhancement and offline-first UX.
- * Mirrors zLoader's backend cache architecture for consistency and predictability.
+ * TrailStore — the client's visited-trail of rendered pages (offline-browse engine)
  *
- * 5-Tier Cache System:
- *   1. System Cache   - UI files, configs, YAML (LRU: 100 items)
- *   2. Pinned Cache   - User bookmarks (no eviction)
- *   3. Plugin Cache   - JS modules (LRU: 50 items)
- *   4. Session Cache  - In-memory user state (no persistence)
- *   5. Rendered Cache - DOM for offline mode (TTL: 30 min, LRU: 20 items)
  *
- * Usage:
- *   const cache = new CacheOrchestrator(storage, session);
- *   await cache.init();
+ * SSOT: the server (zLoader) is the single cache of record. The browser is a
+ * renderer, not a second zLoader. This store holds ONE thing: the rendered
+ * output of pages the user has actually visited, keyed by route path, persisted
+ * in IndexedDB (via StorageManager). It is the replacement for the bfcache the
+ * browser gives a normal MPA for free but cannot give a WebSocket-driven SPA:
+ * it lets Back/forward — and navigation while the socket is down — replay a
+ * page the user already saw, with no server round-trip.
  *
- *   // Store UI file
- *   await cache.set('zUI.zLogin.yaml', yamlData, 'system');
+ * A replayed page is STALE RENDER OUTPUT, never authority:
+ *   - every entry is stamped with the session_hash and dropped when it changes
+ *   - a TTL caps how stale a replay can be
+ *   - the trail is LRU-capped so it can't grow unbounded
  *
- *   // Get with cache validation
- *   const data = await cache.get('zUI.zLogin.yaml', 'system');
+ * Static assets (CSS/JS/images/fonts) are NOT stored here — the browser's
+ * native HTTP cache (SHA-pinned, immutable) already owns those.
  *
- *   // Clear stale caches on session change
- *   cache.clearOnSessionChange();
+ * Back-compat: exported as both `TrailStore` and `CacheOrchestrator` (the
+ * loader and `client.cache` still reference the latter name).
  *
- * Architecture:
- *   - Delegates to individual cache modules (separation of concerns)
- *   - Validates session_hash for stale cache detection
- *   - TTL enforcement for time-sensitive data
- *   - LRU eviction for memory management
+ * @version 2.0.0
  *
- * @version 1.6.0
- * @since 2025-12-16
- * 
  */
 
 (function(root, factory) {
@@ -43,603 +32,229 @@
   } else if (typeof module === 'object' && module.exports) {
     module.exports = factory();
   } else {
-    root.CacheOrchestrator = factory();
+    const TrailStore = factory();
+    root.TrailStore = TrailStore;
+    root.CacheOrchestrator = TrailStore; // back-compat alias
   }
 }(typeof self !== 'undefined' ? self : this, () => {
   'use strict';
 
-  // 
-  // Constants
-  // 
+  // SSOT lives in ../cache_constants.js; duplicated here for UMD compatibility.
+  const TIER = 'rendered';
+  const TRAIL_TTL = 86400000; // 24h
+  const TRAIL_LIMIT = 50;
 
-  const TIER_SYSTEM = 'system';
-  const TIER_PINNED = 'pinned';
-  const TIER_PLUGIN = 'plugin';
-  const TIER_SESSION = 'session';
-  const TIER_RENDERED = 'rendered';
-
-  const VALID_TIERS = [TIER_SYSTEM, TIER_PINNED, TIER_PLUGIN, TIER_SESSION, TIER_RENDERED];
-
-  // TTL (Time-To-Live) in milliseconds
-  const TTL = {
-    system: 3600000,    // 1 hour
-    pinned: Infinity,   // Never expires (user-controlled)
-    plugin: 3600000,    // 1 hour
-    session: 0,         // In-memory only (no persistence)
-    rendered: 1800000   // 30 minutes
-  };
-
-  // LRU Limits
-  const LRU_LIMITS = {
-    system: 100,   // Match zLoader backend
-    pinned: null,  // No limit (user-controlled)
-    plugin: 50,    // Smaller (JS modules are large)
-    session: null, // No limit (in-memory only)
-    rendered: 20   // Smallest (HTML is very large)
-  };
-
-  // 
-  // CacheOrchestrator Class
-  // 
-
-  class CacheOrchestrator {
+  class TrailStore {
     /**
-         * Create cache orchestrator instance
-         *
-         * @param {StorageManager} storage - StorageManager instance
-         * @param {SessionManager} session - SessionManager instance
-         * @param {Object} logger - Optional logger instance
-         */
+     * @param {StorageManager} storage - persistent backing store (IndexedDB)
+     * @param {SessionManager} session - identity (for session_hash gating)
+     * @param {Object} logger - optional logger
+     */
     constructor(storage, session, logger = null) {
       if (!storage) {
-        throw new Error('[CacheOrchestrator] StorageManager required');
+        throw new Error('[TrailStore] StorageManager required');
       }
       if (!session) {
-        throw new Error('[CacheOrchestrator] SessionManager required');
+        throw new Error('[TrailStore] SessionManager required');
       }
-
       this.storage = storage;
       this.session = session;
-      this.caches = {};
-      this.initialized = false;
       this.logger = logger || console;
-
-      this.logger.debug('[CacheOrchestrator] Created');
+      this.initialized = false;
+      this.logger.debug('[TrailStore] Created');
     }
 
-    /**
-         * Initialize cache orchestrator
-         *
-         * Loads cache modules and sets up session change listeners.
-         *
-         * @returns {Promise<boolean>} Success status
-         */
     async init() {
       if (this.initialized) {
-        this.logger.debug('[CacheOrchestrator] Already initialized');
         return true;
       }
-
+      // StorageManager owns IndexedDB init; it may already be initialized by the
+      // CacheManager. Calling init() again is a no-op there.
       try {
-        // Load cache modules (will be created in next steps)
-        // For now, we'll use placeholder implementations
-        this.caches = {
-          system: await this._createSystemCache(),
-          pinned: await this._createPinnedCache(),
-          plugin: await this._createPluginCache(),
-          session: await this._createSessionCache(),
-          rendered: await this._createRenderedCache()
-        };
-
-        // Listen for session changes to invalidate caches
-        this.session.addListener((event, _data) => {
-          if (event === 'session_changed') {
-            this.logger.debug('[CacheOrchestrator] Session changed, invalidating caches');
-            this.clearOnSessionChange();
-          } else if (event === 'session_cleared') {
-            this.logger.debug('[CacheOrchestrator] Session cleared, clearing all caches');
-            this.clearAll();
-          }
-        });
-
+        if (typeof this.storage.init === 'function') {
+          await this.storage.init();
+        }
+        // Drop trail on identity change (pages are session-scoped).
+        if (this.session && typeof this.session.addListener === 'function') {
+          this.session.addListener((event) => {
+            if (event === 'session_changed' || event === 'session_cleared') {
+              this.logger.debug(`[TrailStore] ${event} → clearing trail`);
+              this.clear();
+            }
+          });
+        }
         this.initialized = true;
-        this.logger.debug('[CacheOrchestrator] Initialized (5 tiers: system, pinned, plugin, session, rendered)');
+        this.logger.debug('[TrailStore] Initialized (rendered trail only)');
         return true;
       } catch (error) {
-        this.logger.debug('[CacheOrchestrator] Initialization failed:', error);
+        this.logger.debug('[TrailStore] Init failed:', error);
         this.initialized = false;
         return false;
       }
     }
 
     /**
-         * Get value from cache with validation
-         *
-         * @param {string} key - Cache key
-         * @param {string} tier - Cache tier
-         * @returns {Promise<any|null>} Cached value or null
-         */
-    async get(key, tier = TIER_SYSTEM) {
+     * Read a trail entry. Returns the stored value, or null if missing / expired
+     * / from a different session.
+     * @param {string} key - route path
+     */
+    async get(key) {
       if (!this.initialized) {
-        this.logger.debug('[CacheOrchestrator] Not initialized');
         return null;
       }
-
-      if (!VALID_TIERS.includes(tier)) {
-        this.logger.info(`[CacheOrchestrator] Invalid tier: ${tier}`);
-        return null;
-      }
-
-      const cache = this.caches[tier];
-      if (!cache) {
-        this.logger.info(`[CacheOrchestrator] Cache not found for tier: ${tier}`);
-        return null;
-      }
-
-      // Get entry from cache
-      const entry = await cache.get(key);
+      const entry = await this.storage.get(key, TIER);
       if (!entry) {
         return null;
       }
-
-      // Validate TTL
-      if (this._isExpired(entry, tier)) {
-        this.logger.info(`[CacheOrchestrator] Cache expired for ${tier}/${key}`);
-        await cache.remove(key);
+      if (this._isExpired(entry)) {
+        await this.storage.remove(key, TIER);
+        this.logger.debug(`[TrailStore] Expired: ${key}`);
         return null;
       }
-
-      // Validate session_hash (for all tiers except session)
-      if (tier !== TIER_SESSION && !this._isValidSession(entry)) {
-        this.logger.info(`[CacheOrchestrator] Session hash mismatch for ${tier}/${key}`);
-        await cache.remove(key);
+      if (!this._isValidSession(entry)) {
+        await this.storage.remove(key, TIER);
+        this.logger.debug(`[TrailStore] Session mismatch: ${key}`);
         return null;
       }
-
-      this.logger.info(`[CacheOrchestrator] Cache hit: ${tier}/${key}`);
       return entry.value;
     }
 
     /**
-         * Set value in cache
-         *
-         * @param {string} key - Cache key
-         * @param {any} value - Value to cache
-         * @param {string} tier - Cache tier
-         * @returns {Promise<boolean>} Success status
-         */
-    async set(key, value, tier = TIER_SYSTEM) {
+     * Write a rendered page into the trail (LRU-capped, session-stamped).
+     * @param {string} key - route path
+     * @param {any} value - rendered payload (HTML string / structured snapshot)
+     */
+    async set(key, value) {
       if (!this.initialized) {
-        this.logger.debug('[CacheOrchestrator] Not initialized');
         return false;
       }
-
-      if (!VALID_TIERS.includes(tier)) {
-        this.logger.info(`[CacheOrchestrator] Invalid tier: ${tier}`);
-        return false;
-      }
-
-      const cache = this.caches[tier];
-      if (!cache) {
-        this.logger.info(`[CacheOrchestrator] Cache not found for tier: ${tier}`);
-        return false;
-      }
-
-      // Create cache entry with metadata
       const entry = {
-        key: key,
         value: value,
         timestamp: Date.now(),
-        ttl: TTL[tier],
-        session_hash: tier !== TIER_SESSION ? this.session.getHash() : null
+        session_hash: this.session && typeof this.session.getHash === 'function'
+          ? this.session.getHash()
+          : null
       };
-
-      // Store in cache
-      const success = await cache.set(key, entry);
-      if (success) {
-        this.logger.info(`[CacheOrchestrator] Cached: ${tier}/${key}`);
+      const ok = await this.storage.set(key, entry, TIER);
+      if (ok) {
+        await this._enforceLimit();
+        this.logger.debug(`[TrailStore] Stored: ${key}`);
       }
+      return ok;
+    }
 
-      return success;
+    /** @param {string} key - route path */
+    async has(key) {
+      return (await this.get(key)) !== null;
+    }
+
+    /** @param {string} key - route path */
+    async remove(key) {
+      if (!this.initialized) {
+        return false;
+      }
+      return await this.storage.remove(key, TIER);
     }
 
     /**
-         * Remove value from cache
-         *
-         * @param {string} key - Cache key
-         * @param {string} tier - Cache tier
-         * @returns {Promise<boolean>} Success status
-         */
-    async remove(key, tier = TIER_SYSTEM) {
+     * Clear the trail. Accepts an optional tier arg for back-compat with callers
+     * that pass 'rendered'; there is only one tier now, so it always clears it.
+     */
+    async clear() {
       if (!this.initialized) {
-        this.logger.debug('[CacheOrchestrator] Not initialized');
         return false;
       }
-
-      const cache = this.caches[tier];
-      if (!cache) {
-        this.logger.info(`[CacheOrchestrator] Cache not found for tier: ${tier}`);
-        return false;
-      }
-
-      return await cache.remove(key);
-    }
-
-    /**
-         * Clear entire tier
-         *
-         * @param {string} tier - Cache tier to clear
-         * @returns {Promise<boolean>} Success status
-         */
-    async clear(tier) {
-      if (!this.initialized) {
-        this.logger.debug('[CacheOrchestrator] Not initialized');
-        return false;
-      }
-
-      const cache = this.caches[tier];
-      if (!cache) {
-        this.logger.info(`[CacheOrchestrator] Cache not found for tier: ${tier}`);
-        return false;
-      }
-
-      await cache.clear();
-      this.logger.info(`[CacheOrchestrator] Cleared tier: ${tier}`);
+      await this.storage.clear(TIER);
+      this.logger.debug('[TrailStore] Cleared trail');
       return true;
     }
 
-    /**
-         * Clear all caches
-         *
-         * @returns {Promise<void>}
-         */
+    /** Back-compat alias — only one tier exists. */
     async clearAll() {
-      if (!this.initialized) {
-        this.logger.debug('[CacheOrchestrator] Not initialized');
-        return;
-      }
-
-      for (const tier of VALID_TIERS) {
-        await this.clear(tier);
-      }
-
-      this.logger.debug('[CacheOrchestrator] Cleared all caches');
+      return this.clear();
     }
 
-    /**
-         * Get cache tier instance
-         *
-         * @param {string} tier - Cache tier name
-         * @returns {Object|null} Cache instance or null
-         */
-    getTier(tier) {
-      if (!this.initialized) {
-        this.logger.debug('[CacheOrchestrator] Not initialized');
-        return null;
-      }
-
-      if (!VALID_TIERS.includes(tier)) {
-        this.logger.info(`[CacheOrchestrator] Invalid tier: ${tier}`);
-        return null;
-      }
-
-      return this.caches[tier] || null;
-    }
-
-    /**
-         * Clear caches on session change (except pinned)
-         *
-         * Called automatically when session_hash changes.
-         * Preserves pinned cache (user bookmarks).
-         */
+    /** Back-compat alias — trail is already session-scoped. */
     async clearOnSessionChange() {
-      if (!this.initialized) {
-        return;
-      }
-
-      // Clear all except pinned
-      const tiersToClean = [TIER_SYSTEM, TIER_PLUGIN, TIER_SESSION, TIER_RENDERED];
-
-      for (const tier of tiersToClean) {
-        await this.clear(tier);
-      }
-
-      this.logger.debug('[CacheOrchestrator] Cleared caches on session change (preserved pinned)');
+      return this.clear();
     }
 
     /**
-         * Get cache statistics
-         *
-         * @returns {Object} Stats for all tiers
-         */
+     * List trail keys (route paths currently cached). Useful for diagnostics and
+     * for the navigator deciding whether a Back target can be replayed offline.
+     */
+    async keys() {
+      if (!this.initialized) {
+        return [];
+      }
+      return await this.storage.keys(TIER);
+    }
+
     async getStats() {
       if (!this.initialized) {
         return {};
       }
-
-      const stats = {};
-
-      for (const tier of VALID_TIERS) {
-        const cache = this.caches[tier];
-        if (cache && cache.getStats) {
-          stats[tier] = await cache.getStats();
-        }
-      }
-
-      return stats;
-    }
-
-    // 
-    // Private Methods
-    // 
-
-    /**
-         * Check if cache entry is expired
-         *
-         * @private
-         * @param {Object} entry - Cache entry
-         * @param {string} tier - Cache tier
-         * @returns {boolean} True if expired
-         */
-    _isExpired(entry, tier) {
-      const ttl = TTL[tier];
-
-      // Pinned cache never expires
-      if (ttl === Infinity) {
-        return false;
-      }
-
-      // Session cache has no TTL (in-memory only)
-      if (ttl === 0) {
-        return false;
-      }
-
-      // Check age
-      const age = Date.now() - entry.timestamp;
-      return age > ttl;
+      const keys = await this.keys();
+      return { rendered: { size: keys.length, limit: TRAIL_LIMIT } };
     }
 
     /**
-         * Validate session hash
-         *
-         * @private
-         * @param {Object} entry - Cache entry
-         * @returns {boolean} True if valid
-         */
-    _isValidSession(entry) {
-      const currentHash = this.session.getHash();
+     * Back-compat shim. The old multi-tier API exposed getTier(); the trail is
+     * the only tier now, so callers get this store back.
+     */
+    getTier() {
+      return this.initialized ? this : null;
+    }
 
-      // If no current hash, session not initialized yet
-      if (!currentHash) {
+    // ── private ──────────────────────────────────────────────────────────────
+
+    _isExpired(entry) {
+      if (!entry || typeof entry.timestamp !== 'number') {
         return true;
       }
+      return (Date.now() - entry.timestamp) > TRAIL_TTL;
+    }
 
-      // If entry has no hash, it's from before session system
+    _isValidSession(entry) {
+      const current = this.session && typeof this.session.getHash === 'function'
+        ? this.session.getHash()
+        : null;
+      // No current session yet → accept (anonymous browsing).
+      if (!current) {
+        return true;
+      }
+      // Entry predates the session system → reject.
       if (!entry.session_hash) {
         return false;
       }
-
-      // Compare hashes
-      return entry.session_hash === currentHash;
+      return entry.session_hash === current;
     }
 
     /**
-         * Create system cache
-         * @private
-         */
-    async _createSystemCache() {
-      // In production, this would be: const SystemCache = await import('./caches/system_cache.js');
-      // For now, return placeholder until modules are loaded via script tags
-      // System cache ready (silent - logged in summary)
-      return {
-        data: new Map(),
-        metadata: new Map(),
-        async get(key) {
-          return this.data.get(key);
-        },
-        async set(key, value) {
-          this.data.set(key, value); return true;
-        },
-        async remove(key) {
-          this.data.delete(key);
-          this.metadata.delete(key);
-          return true;
-        },
-        async clear() {
-          this.data.clear();
-          this.metadata.clear();
-        },
-        async getStats() {
-          return { size: this.data.size, limit: LRU_LIMITS.system };
-        },
-        async getMetadata(key) {
-          return this.metadata.get(key);
-        },
-        async setMetadata(key, etag, lastModified, cacheControl) {
-          this.metadata.set(key, {
-            etag: etag,
-            last_modified: lastModified,
-            cache_control: cacheControl,
-            timestamp: Date.now()
-          });
-          return true;
+     * Enforce the LRU cap: if the trail exceeds TRAIL_LIMIT, evict the oldest
+     * entries by write timestamp. Relies on StorageManager.getAll() exposing the
+     * per-entry timestamp.
+     */
+    async _enforceLimit() {
+      try {
+        if (typeof this.storage.getAll !== 'function') {
+          return;
         }
-      };
-    }
-
-    /**
-         * Create pinned cache
-         * @private
-         */
-    async _createPinnedCache() {
-      // Pinned cache ready (silent - logged in summary)
-      return {
-        data: new Map(),
-        metadata: new Map(),
-        async get(key) {
-          return this.data.get(key);
-        },
-        async set(key, value) {
-          this.data.set(key, value); return true;
-        },
-        async remove(key) {
-          this.data.delete(key);
-          this.metadata.delete(key);
-          return true;
-        },
-        async clear() {
-          this.data.clear();
-          this.metadata.clear();
-        },
-        async getStats() {
-          return { size: this.data.size, limit: null };
-        },
-        async getMetadata(key) {
-          return this.metadata.get(key);
-        },
-        async setMetadata(key, etag, lastModified, cacheControl) {
-          this.metadata.set(key, {
-            etag: etag,
-            last_modified: lastModified,
-            cache_control: cacheControl,
-            timestamp: Date.now()
-          });
-          return true;
+        const all = await this.storage.getAll(TIER);
+        if (!Array.isArray(all) || all.length <= TRAIL_LIMIT) {
+          return;
         }
-      };
-    }
-
-    /**
-         * Create plugin cache
-         * @private
-         */
-    async _createPluginCache() {
-      // Plugin cache ready (silent - logged in summary)
-      return {
-        data: new Map(),
-        metadata: new Map(),
-        async get(key) {
-          return this.data.get(key);
-        },
-        async set(key, value) {
-          this.data.set(key, value); return true;
-        },
-        async remove(key) {
-          this.data.delete(key);
-          this.metadata.delete(key);
-          return true;
-        },
-        async clear() {
-          this.data.clear();
-          this.metadata.clear();
-        },
-        async getStats() {
-          return { size: this.data.size, limit: LRU_LIMITS.plugin };
-        },
-        async getMetadata(key) {
-          return this.metadata.get(key);
-        },
-        async setMetadata(key, etag, lastModified, cacheControl) {
-          this.metadata.set(key, {
-            etag: etag,
-            last_modified: lastModified,
-            cache_control: cacheControl,
-            timestamp: Date.now()
-          });
-          return true;
+        all.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+        const evictCount = all.length - TRAIL_LIMIT;
+        for (let i = 0; i < evictCount; i++) {
+          await this.storage.remove(all[i].key, TIER);
         }
-      };
-    }
-
-    /**
-         * Create session cache (in-memory only)
-         * @private
-         */
-    async _createSessionCache() {
-      // Session cache ready (silent - logged in summary)
-      return {
-        data: new Map(),
-        metadata: new Map(),
-        async get(key) {
-          return this.data.get(key);
-        },
-        async set(key, value) {
-          this.data.set(key, value); return true;
-        },
-        async remove(key) {
-          this.data.delete(key);
-          this.metadata.delete(key);
-          return true;
-        },
-        async clear() {
-          this.data.clear();
-          this.metadata.clear();
-        },
-        async getStats() {
-          return { size: this.data.size, limit: null };
-        },
-        async getMetadata(key) {
-          return this.metadata.get(key);
-        },
-        async setMetadata(key, etag, lastModified, cacheControl) {
-          this.metadata.set(key, {
-            etag: etag,
-            last_modified: lastModified,
-            cache_control: cacheControl,
-            timestamp: Date.now()
-          });
-          return true;
-        }
-      };
-    }
-
-    /**
-         * Create rendered cache
-         * @private
-         */
-    async _createRenderedCache() {
-      // Rendered cache ready (silent - logged in summary)
-      return {
-        data: new Map(),
-        metadata: new Map(),
-        async get(key) {
-          return this.data.get(key);
-        },
-        async set(key, value) {
-          this.data.set(key, value); return true;
-        },
-        async remove(key) {
-          this.data.delete(key);
-          this.metadata.delete(key);
-          return true;
-        },
-        async clear() {
-          this.data.clear();
-          this.metadata.clear();
-        },
-        async getStats() {
-          return { size: this.data.size, limit: LRU_LIMITS.rendered };
-        },
-        async getMetadata(key) {
-          return this.metadata.get(key);
-        },
-        async setMetadata(key, etag, lastModified, cacheControl) {
-          this.metadata.set(key, {
-            etag: etag,
-            last_modified: lastModified,
-            cache_control: cacheControl,
-            timestamp: Date.now()
-          });
-          return true;
-        }
-      };
+        this.logger.debug(`[TrailStore] LRU evicted ${evictCount} entr${evictCount === 1 ? 'y' : 'ies'}`);
+      } catch (err) {
+        this.logger.debug('[TrailStore] LRU enforce skipped:', err && err.message);
+      }
     }
   }
 
-  // 
-  // Export
-  // 
-
-  return CacheOrchestrator;
+  return TrailStore;
 }));
-

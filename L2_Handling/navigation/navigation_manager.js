@@ -2,14 +2,21 @@
  * NavigationManager - Handles client-side navigation (SPA-style routing)
  *
  * Responsibilities:
- * - Enable client-side navigation (intercept clicks on navbar links)
+ * - Enable client-side navigation (intercept clicks on navbar + body links)
  * - Handle browser back/forward buttons (popstate)
  * - Navigate to routes via WebSocket (no page reload)
+ * - Snapshot each visited page into the TrailStore (offline-browse engine)
+ * - Replay a cached page on Back/forward and when the socket is down, so zOS
+ *   feels like a regular HTML site even with a flaky/absent connection
  * - Fetch route configuration from backend
- * - Send walker execution requests
  * - Update browser URL without reload
  *
- * Extracted from bifrost_client.js (Phase 3.3)
+ * Offline-browse model (mirrors what a normal MPA gets free from bfcache):
+ * - Forward to a NEW page → server round-trip (route-config + execute_walker)
+ * - Back/forward to a SEEN page → replay the frozen paint from the trail
+ * - Socket down + SEEN target → replay from trail; NEW target → graceful notice
+ * A replayed page is stale render output, never authority (the server revalidates
+ * on the next forward navigation).
  */
 
 export class NavigationManager {
@@ -21,14 +28,11 @@ export class NavigationManager {
   /**
    * Enable client-side navigation (SPA-style routing)
    *
-   *  REFACTORED: Global click handler removed in favor of individual link handlers
-   *
-   * Previously, this method attached a global click handler to intercept ALL navbar links.
-   * Now, individual links (rendered via link_primitives.js) have their own handlers.
-   * This is cleaner, more maintainable, and aligns with primitive-driven architecture.
-   *
-   * The global handler was causing conflicts (stopPropagation prevented individual handlers).
-   * Individual handlers are the single source of truth for link behavior.
+   * Individual links (rendered via link_primitives.js) wire their own click
+   * handlers and stopPropagation. For pages REPLAYED from the trail (raw HTML,
+   * no live handlers) we add ONE delegated click handler on the zVaF container:
+   * fresh links never reach it (they stopPropagation), restored links bubble up
+   * and get routed through the SPA. This is what keeps a replayed page browsable.
    */
   enableClientSideNavigation() {
     if (typeof document === 'undefined') {
@@ -42,9 +46,7 @@ export class NavigationManager {
       this.logger.debug('[ClientNav] Removed legacy global click handler');
     }
 
-    // Individual links now handle their own clicks via link_primitives.js
-    // No global handler needed - each link has its own addEventListener('click', ...)
-    // This is the primitive-driven way: each component manages its own behavior
+    this._wireRestoredLinkDelegation();
 
     this.logger.info('[ClientNav] Client-side navigation enabled');
 
@@ -57,10 +59,17 @@ export class NavigationManager {
         // An in-page zBack button routes a cross-file step-out through
         // history.back() and flags intent — carry it so the server consumes the
         // crumb's origin section (zPsi), mirroring zCLI's start_key resume. A
-        // plain browser Back/Fwd leaves the flag unset and renders from the top
-        // (browser-history-vs-crumbs reconciliation is deferred).
+        // plain browser Back/Fwd leaves the flag unset and renders from the top.
         const zBack = !!this.client._pendingZBack;
         this.client._pendingZBack = false;
+
+        // Freeze the page we're leaving, then try to replay the target's frozen
+        // paint (bfcache parity — Back is instant and works offline). Only fall
+        // through to a server nav if we never cached this page.
+        await this.snapshotCurrentPage();
+        if (await this._replayFromTrail(path, { zBack })) {
+          return;
+        }
         await this.navigateToRoute(path, { skipHistory: true, zBack });
       };
 
@@ -71,14 +80,42 @@ export class NavigationManager {
   }
 
   /**
+   * Attach the single delegated click handler that routes links on replayed
+   * (handler-less) pages. Idempotent — wired once per zVaF element.
+   * @private
+   */
+  _wireRestoredLinkDelegation() {
+    const el = this.client._zVaFElement;
+    if (!el || this.client._zVaFLinkDelegationWired) {
+      return;
+    }
+    el.addEventListener('click', (e) => {
+      // A live link handler (fresh render) already handled + stopped this.
+      if (e.defaultPrevented) {
+        return;
+      }
+      const a = e.target && e.target.closest ? e.target.closest('a') : null;
+      if (!a || !el.contains(a)) {
+        return;
+      }
+      if (a.target === '_blank') {
+        return; // let new-tab links behave natively
+      }
+      const href = a.getAttribute('href');
+      // Internal, same-origin path only (e.g. /zProducts/zOS/...).
+      if (!href || !href.startsWith('/') || href.startsWith('//')) {
+        return;
+      }
+      e.preventDefault();
+      this.logger.debug('[ClientNav] Restored-link click → SPA nav:', href);
+      this.navigateToRoute(href);
+    }, false);
+    this.client._zVaFLinkDelegationWired = true;
+    this.logger.debug('[ClientNav] Restored-link delegation wired');
+  }
+
+  /**
    * Apply a destination route's navbar on SPA navigation (SSOT: server-resolved).
-   *
-   * The navbar is persistent chrome populated once on full-page load. On a
-   * client-side jump (zLink / link click / popstate) the server returns the
-   * destination's resolved navbar in route-config: `nav_html` (prebuilt,
-   * RBAC-filtered) and `navbar` (resolved items, or null). We MUST re-apply it
-   * here — otherwise the previous page's navbar lingers when you land on a
-   * `zNavBar: false` page (and a page with a different navbar shows the wrong one).
    *
    * @param {Object} routeConfig - Parsed /api/route-config payload
    * @private
@@ -92,25 +129,18 @@ export class NavigationManager {
     const wantsNavbar = !!(navHtml || (Array.isArray(navItems) && navItems.length));
 
     // Keep zuiConfig.zMeta in sync with the destination so a later reconnect's
-    // per-page opt-out guard (cache_manager) reads THIS page's zNavBar, not the
-    // entry page's — otherwise an SPA hop to a zNavBar:false page would re-show
-    // the global navbar if the socket reconnects.
+    // per-page opt-out guard reads THIS page's zNavBar.
     if (this.client.zuiConfig && routeConfig && routeConfig.zMeta) {
       this.client.zuiConfig.zMeta = routeConfig.zMeta;
     }
 
     if (!wantsNavbar) {
-      // Destination opted out (zNavBar: false / no navbar) — hide the chrome.
       el.style.display = 'none';
       el.innerHTML = '';
       this.logger.debug('[ClientNav] Destination has no navbar — hiding chrome');
       return;
     }
 
-    // Destination wants a navbar — make sure the chrome is visible and refreshed
-    // from the server's prebuilt HTML (reuse the SSOT populate path so events
-    // are wired and client-side nav re-enabled). Keep zuiConfig in sync so later
-    // bounce-back refreshes reuse THIS page's navbar, not the entry page's.
     el.style.display = '';
     if (this.client.zuiConfig) {
       this.client.zuiConfig.nav_html = navHtml || this.client.zuiConfig.nav_html;
@@ -121,6 +151,128 @@ export class NavigationManager {
         this.logger.error('[ClientNav] navbar populate failed:', err)
       );
     }
+  }
+
+  /**
+   * Snapshot the page currently on screen into the trail (bfcache-style freeze).
+   * Stores the rendered HTML + the route's resolved config so a later replay can
+   * restore both the content and its navbar without the server.
+   * @returns {Promise<boolean>} true if a snapshot was written
+   */
+  async snapshotCurrentPage() {
+    const client = this.client;
+    if (!client.cache || typeof document === 'undefined') {
+      return false;
+    }
+    const el = client._zVaFElement;
+    if (!el) {
+      return false;
+    }
+    const html = el.innerHTML;
+    // Never freeze a transient loading/placeholder state.
+    if (!html || html.indexOf('Loading...') !== -1) {
+      return false;
+    }
+    const path = client._currentPath || window.location.pathname;
+    const routeConfig = client._currentRouteConfig || null;
+    try {
+      await client.cache.set(path, {
+        html,
+        routeConfig,
+        title: document.title,
+        ts: Date.now()
+      });
+      this.logger.debug('[ClientNav] Snapshotted page into trail: %s', path);
+      return true;
+    } catch (err) {
+      this.logger.debug('[ClientNav] Snapshot skipped:', err && err.message);
+      return false;
+    }
+  }
+
+  /**
+   * Replay a page from the trail (no server round-trip).
+   * @param {string} routePath - target path
+   * @param {Object} opts - { zBack }
+   * @returns {Promise<boolean>} true if the page was replayed
+   * @private
+   */
+  async _replayFromTrail(routePath, { zBack = false } = {}) {
+    const client = this.client;
+    if (!client.cache) {
+      return false;
+    }
+    let entry;
+    try {
+      entry = await client.cache.get(routePath);
+    } catch (err) {
+      return false;
+    }
+    if (!entry || !entry.html) {
+      return false;
+    }
+    const el = client._zVaFElement;
+    if (!el) {
+      return false;
+    }
+
+    el.innerHTML = entry.html;
+    if (entry.title) {
+      document.title = entry.title;
+    }
+    if (entry.routeConfig) {
+      this._applyRouteNavBar(entry.routeConfig);
+    }
+    client._currentPath = routePath;
+    client._currentRouteConfig = entry.routeConfig || null;
+    // We served a page — cancel any pending offline retry.
+    client._pendingOfflineNav = null;
+
+    // Re-enable nav so the delegated handler + popstate stay live.
+    if (typeof client._enableClientSideNavigation === 'function') {
+      await client._enableClientSideNavigation();
+    }
+
+    // A page replayed while the socket is down is stale render output — lock its
+    // forms (the disconnect handler ran before this content existed).
+    if (!this._isSocketConnected() && client.cacheManager && typeof client.cacheManager.disableForms === 'function') {
+      client.cacheManager.disableForms();
+    }
+
+    // Don't yank to the top on a crumb-driven back.
+    if (!zBack) {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+
+    this.logger.info('[ClientNav] Replayed from trail: %s', routePath);
+    return true;
+  }
+
+  /**
+   * Render a graceful offline notice when a NEVER-seen page is requested while
+   * the connection is down (a normal site shows the browser dino here).
+   * @private
+   */
+  _showOfflineNotice(routePath) {
+    if (this.client._zVaFElement) {
+      this.client._zVaFElement.innerHTML = `<div class="zAlert zAlert-warning zmt-4">
+        <strong>You're offline</strong><br>
+        <small>"${routePath}" hasn't been opened yet, so it isn't available offline. Reconnecting…</small>
+      </div>`;
+    }
+    // Remember the intent so the reconnect handler can fulfill it automatically.
+    this.client._pendingOfflineNav = routePath;
+    this.logger.warn('[ClientNav] Offline + uncached target: %s', routePath);
+  }
+
+  /** @private */
+  _isSocketConnected() {
+    const conn = this.client.connection;
+    if (conn && typeof conn.isConnected === 'function') {
+      return conn.isConnected();
+    }
+    // Unknown → assume connected (preserve legacy behavior).
+    return true;
   }
 
   /**
@@ -136,22 +288,43 @@ export class NavigationManager {
     try {
       this.logger.info('[ClientNav] Navigating to: %s', routePath);
 
-      // 2B: Python owns route resolution — ask the server for walker params
-      const res = await fetch(`/api/route-config?path=${encodeURIComponent(routePath)}`);
-      if (!res.ok) {
-        throw new Error(`Route not found: ${routePath} (${res.status})`);
-      }
-      const routeConfig = await res.json();
-      const { zBlock, zVaFile, zVaFolder, zMeta } = routeConfig;
+      // Freeze the page we're leaving before we touch the DOM (bfcache-style).
+      await this.snapshotCurrentPage();
 
+      // 2B: Python owns route resolution — ask the server for walker params.
+      // If the server is unreachable, fall back to the trail (offline-browse).
+      let routeConfig;
+      try {
+        const res = await fetch(`/api/route-config?path=${encodeURIComponent(routePath)}`);
+        if (!res.ok) {
+          throw new Error(`Route not found: ${routePath} (${res.status})`);
+        }
+        routeConfig = await res.json();
+      } catch (netErr) {
+        this.logger.warn('[ClientNav] route-config unreachable (%s) — trying trail', netErr && netErr.message);
+        if (await this._replayFromTrail(routePath, { zBack })) {
+          return;
+        }
+        this._showOfflineNotice(routePath);
+        return;
+      }
+
+      const { zBlock, zVaFile, zVaFolder, zMeta } = routeConfig;
       this.logger.debug('[ClientNav] Route config', { zVaFile, zVaFolder, zBlock });
 
-      // Per-page navbar (SSOT: server-resolved via route-config). A full-page
-      // load honors each page's zNavBar; SPA arrivals must too, or the entry
-      // page's navbar chrome lingers on a zNavBar:false landing. The server is
-      // the single authority — it returns resolved `navbar` items + prebuilt
-      // `nav_html`; the client just shows/hides + injects.
+      // Per-page navbar (SSOT: server-resolved via route-config).
       this._applyRouteNavBar(routeConfig);
+
+      // If the socket is down, the walker request can't be served — replay the
+      // frozen paint instead of stalling on the timeout.
+      if (!this._isSocketConnected()) {
+        this.logger.warn('[ClientNav] Socket down — trying trail for %s', routePath);
+        if (await this._replayFromTrail(routePath, { zBack })) {
+          return;
+        }
+        this._showOfflineNotice(routePath);
+        return;
+      }
 
       // Inject page-specific zBrush CSS (not loaded by full-page <head> on SPA nav)
       const brushes = zMeta?.zBrush
@@ -168,21 +341,21 @@ export class NavigationManager {
         }
       });
 
+      // Track the destination so the NEXT snapshot (on leave) is stamped right.
+      this.client._currentPath = routePath;
+      this.client._currentRouteConfig = routeConfig;
+      // A live server nav supersedes any pending offline retry.
+      this.client._pendingOfflineNav = null;
+
       // Clear current content and show loading state
       if (this.client._zVaFElement) {
         this.client._zVaFElement.innerHTML = '<div class="zText-center zp-4">Loading...</div>';
       }
 
       // Send walker execution request via WebSocket.
-      // navbar:true signals navbar-origin so the server RESETs the crumb trail
-      // (SSOT mirror of zCLI navbar navigation — the pick becomes the new root).
       const walkerRequest = { event: 'execute_walker', zBlock, zVaFile, zVaFolder };
       if (navbar) walkerRequest.navbar = true;
-      // SSOT click-crumb: carry the section the zLink launched FROM so the server
-      // records it on the departing scope (same field zDelta uses — verb-agnostic).
       if (zOrigin) walkerRequest.zOrigin = zOrigin;
-      // Crumb-driven back: tell the server to consume the parent scope's origin
-      // section and return it as a zPsi scroll target (Step 2).
       if (zBack) walkerRequest.zBack = true;
       this.logger.debug('[ClientNav] Sending walker request', walkerRequest);
       this.client.connection.send(JSON.stringify(walkerRequest));
@@ -197,8 +370,7 @@ export class NavigationManager {
         }
       }, 10000);
 
-      // Don't yank to the top on a crumb-driven back — the zPsi handler will land
-      // on the origin section once the chunks paint. Forward navs still reset.
+      // Don't yank to the top on a crumb-driven back.
       if (!zBack) window.scrollTo({ top: 0, behavior: 'smooth' });
 
       // Update browser URL (skip for popstate — URL already correct)
@@ -211,10 +383,8 @@ export class NavigationManager {
     } catch (error) {
       this.logger.error('[ClientNav] [ERROR] Navigation failed:', error);
 
-      // Reset flag on error
       this.client._isClientSideNav = false;
 
-      // Show error in content area
       if (this.client._zVaFElement) {
         this.client._zVaFElement.innerHTML = `
           <div class="zAlert zAlert-danger zmt-4">
@@ -223,7 +393,6 @@ export class NavigationManager {
         `;
       }
     } finally {
-      // Reset flag after navigation attempt (success or fail)
       setTimeout(() => {
         this.client._isClientSideNav = false;
       }, 100);
@@ -232,4 +401,3 @@ export class NavigationManager {
 }
 
 export default NavigationManager;
-

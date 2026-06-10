@@ -301,11 +301,12 @@ export class ZVaFManager {
         return;
       }
 
-      // 3A reuse: client-side bounce-back / refresh has no new server round-trip,
-      // so reuse the RBAC-filtered nav_html the server embedded in the page head
-      // (zui-config). The legacy /api/zui/config endpoint was removed (smart
-      // routing + connection_info supersede it) — hitting it 404s and spams the
-      // console. Only fall through to the fetch if no embedded nav_html exists.
+      // Client-side bounce-back / refresh has no new server round-trip, so reuse
+      // the RBAC-filtered nav_html the server embedded in the page head
+      // (zui-config). This is the SSOT: the server resolves the navbar and ships
+      // it inline (and via connection_info / route-config). The legacy
+      // /api/zui/config endpoint was removed — the client no longer re-fetches a
+      // parallel copy of server-owned config.
       const embeddedNav = this.zuiConfig?.nav_html || this.client?.zuiConfig?.nav_html;
       if (embeddedNav) {
         this.client._zNavBarElement.innerHTML = embeddedNav;
@@ -314,50 +315,14 @@ export class ZVaFManager {
           this.client,
           this.logger
         );
-        this.logger.log('[NavBar] NavBar refreshed from embedded zui-config nav_html (3A)');
+        this.logger.log('[NavBar] NavBar refreshed from embedded zui-config nav_html');
         await this.client._enableClientSideNavigation();
         return;
       }
 
-      // Legacy path: fetch from /api/zui/config
-      let freshConfig;
-      if (this.client.httpCache) {
-        const { data, fromCache } = await this.client.httpCache.fetchWithCache(
-          '/api/zui/config', {}, 'zui_config', 'system'
-        );
-        freshConfig = data;
-        this.logger.log(`[NavBar] Fetched config from API (${fromCache ? '304 cached' : '200 fresh'})`);
-      } else {
-        const response = await fetch('/api/zui/config');
-        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        freshConfig = await response.json();
-      }
-
-      if (freshConfig.nav_html) {
-        this.client._zNavBarElement.innerHTML = freshConfig.nav_html;
-        NavBarBuilder.wireNavBarEvents(
-          this.client._zNavBarElement.firstElementChild,
-          this.client,
-          this.logger
-        );
-        this.logger.log('[NavBar] NavBar updated from API nav_html (3A)');
-      } else if (freshConfig.zNavBar) {
-        this.zuiConfig.zNavBar = freshConfig.zNavBar;
-        this.client.zuiConfig.zNavBar = freshConfig.zNavBar;
-        const navElement = await this.client._renderMetaNavBarHTML(freshConfig.zNavBar);
-        this.client._zNavBarElement.innerHTML = '';
-        if (navElement) {
-          this.client._zNavBarElement.appendChild(navElement);
-          this.logger.log('[NavBar] NavBar updated from API zNavBar array (legacy)');
-        }
-      } else {
-        this.logger.warn('[NavBar] No nav_html or zNavBar in API response, skipping');
-        return;
-      }
-
-      await this.client._enableClientSideNavigation();
+      this.logger.warn('[NavBar] No embedded nav_html — nothing to refresh');
     } catch (error) {
-      this.logger.error('[NavBar] Failed to fetch/populate:', error);
+      this.logger.error('[NavBar] Failed to populate:', error);
     }
   }
 }
