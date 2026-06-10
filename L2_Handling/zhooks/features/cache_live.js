@@ -29,12 +29,12 @@ const EL_TAG = 'zCache_Debugging';
 // Amber / warning dev palette — deliberately loud so it reads as "not product".
 const CSS = `
 ${EL_TAG} {
-  position: fixed; top: 0; left: 0; right: 0; z-index: 99998;
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 99998;
   box-sizing: border-box; max-height: 42vh; overflow: auto;
   font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
   background: repeating-linear-gradient(45deg, rgba(60,42,0,.96), rgba(60,42,0,.96) 14px, rgba(72,50,0,.96) 14px, rgba(72,50,0,.96) 28px);
-  color: #ffe08a; border-bottom: 2px solid #ffb300;
-  padding: 6px 12px; box-shadow: 0 4px 18px rgba(0,0,0,.4);
+  color: #ffe08a; border-top: 2px solid #ffb300;
+  padding: 6px 12px 8px; box-shadow: 0 -4px 18px rgba(0,0,0,.4);
 }
 ${EL_TAG} .zcl-title {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
