@@ -20,10 +20,15 @@
  */
 
 // name → module path (resolved against the client BASE_URL at load time).
-// SSOT for the set of shippable zHooks.
+// SSOT for the set of module zHooks (opt-in, dynamically imported features).
 const ZHOOK_REGISTRY = {
   crumbs_live: 'L2_Handling/zhooks/features/crumbs_live.js',
 };
+
+// Core zHooks are gated where they live in the client (not imported as modules)
+// — typically default-ON chrome with opt-out, e.g. the connection badge handled
+// in zvaf_manager. Listed here only so explicit toggles aren't flagged unknown.
+const CORE_ZHOOKS = new Set(['badge']);
 
 /**
  * Activate every enabled zHook declared in the config.
@@ -37,9 +42,11 @@ export async function activateZHooks(client, config, baseUrl) {
 
   for (const [name, enabled] of Object.entries(config)) {
     if (!enabled) continue;
+    // Core zHooks are gated in-core (e.g. badge in zvaf_manager) — not imported.
+    if (CORE_ZHOOKS.has(name)) continue;
     const path = ZHOOK_REGISTRY[name];
     if (!path) {
-      logger.warn(`[zHooks] Unknown zHook "${name}" — ignored. Known: ${Object.keys(ZHOOK_REGISTRY).join(', ')}`);
+      logger.warn(`[zHooks] Unknown zHook "${name}" — ignored. Known: ${[...Object.keys(ZHOOK_REGISTRY), ...CORE_ZHOOKS].join(', ')}`);
       continue;
     }
     try {

@@ -82,14 +82,21 @@ export class ZVaFManager {
     }
 
     // Badge: fixed chrome → appended to the root (DOM position is cosmetic; it's
-    // viewport-fixed via zbase.css).
-    const badgeElement = this._ensureChromeHost('zBifrostBadge', (el) => {
-      zVaFRoot.appendChild(el);
-    });
-    if (badgeElement) {
-      this.client._zConnectionBadge = badgeElement;
-      this.populateConnectionBadge();
-      this.logger.debug('[ZVaFManager] Badge host ready');
+    // viewport-fixed via zbase.css). The badge is a core zHook — ON by default,
+    // opt out with zHooks: { badge: false }. When off, the element is never
+    // created and every updateBadgeState/updateRenderState call no-ops via its
+    // own _zConnectionBadge null-guard.
+    if (this._badgeEnabled()) {
+      const badgeElement = this._ensureChromeHost('zBifrostBadge', (el) => {
+        zVaFRoot.appendChild(el);
+      });
+      if (badgeElement) {
+        this.client._zConnectionBadge = badgeElement;
+        this.populateConnectionBadge();
+        this.logger.debug('[ZVaFManager] Badge host ready');
+      }
+    } else {
+      this.logger.debug('[ZVaFManager] Badge zHook disabled (zHooks.badge:false)');
     }
 
     // Client-side navigation (SPA link interception + popstate handler) is
@@ -104,6 +111,16 @@ export class ZVaFManager {
     });
 
     this.logger.log('[ZVaFManager] All elements initialized under <zVaF> root');
+  }
+
+  /**
+   * Is the connection-badge zHook enabled? Default-on; opt out via
+   * zHooks: { badge: false }. (Core zHook — gated here, not loaded as a module.)
+   * @returns {boolean}
+   */
+  _badgeEnabled() {
+    const zHooks = this.options.zHooks || {};
+    return zHooks.badge !== false;
   }
 
   /**
