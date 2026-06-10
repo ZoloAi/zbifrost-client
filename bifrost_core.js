@@ -6,7 +6,7 @@
  * A production-ready WebSocket client for zCLI's zBifrost bridge.
  * Modular architecture with lazy loading and automatic zTheme integration.
  *
- * @version 1.6.5
+ * @version 1.6.6
  * @author Gal Nachshon
  * @license MIT
  *
@@ -1484,7 +1484,14 @@ class BifrostCore {
     async zBack() {
       const prevBlock = this._prevBlock;
       if (!prevBlock) {
-        this.logger.log('[zBack] No previous block tracked — falling back to browser history');
+        // Cross-file back (e.g. arrived via zLink): there is no same-file sibling
+        // to hop to, so step out through the browser. Flag back-intent so the
+        // popstate handler re-navigates with zBack:true — the server then consumes
+        // the origin section recorded on the parent scope (Step 1) and returns it
+        // as a zPsi anchor, mirroring zCLI's start_key resume. SSOT: the section
+        // lives in zCrumbs; the browser only supplies the destination URL.
+        this.logger.log('[zBack] No same-file prev block — crumb-driven step-out via history');
+        this._pendingZBack = true;
         window.history.back();
         return;
       }

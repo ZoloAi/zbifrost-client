@@ -446,18 +446,27 @@ export class MessageHandler {
         if (message.zPsi) {
           const anchor = String(message.zPsi);
           const root = (this.client && this.client._zVaFElement) || document;
-          const scrollToSection = () => {
+          // Chunks render asynchronously (awaited renderItems, emoji/icon loads),
+          // so the target section may not exist the instant walker_complete lands.
+          // Poll briefly until it paints, then scroll. data-zkey is stamped on
+          // every top-level section; _zId is the fallback for anchored blocks.
+          let tries = 0;
+          const maxTries = 30; // ~2.4s at 80ms
+          const tryScroll = () => {
             const target = root.querySelector(`[data-zkey="${anchor}"]`)
               || document.getElementById(anchor);
             if (target) {
               target.scrollIntoView({ behavior: 'smooth', block: 'start' });
               this.logger.log('[MessageHandler] zBack zPsi → scrolled to section:', anchor);
+              return;
+            }
+            if (++tries < maxTries) {
+              setTimeout(tryScroll, 80);
             } else {
-              this.logger.warn('[MessageHandler] zBack zPsi → section not found:', anchor);
+              this.logger.warn('[MessageHandler] zBack zPsi → section not found after retries:', anchor);
             }
           };
-          // Chunks paint before this event; defer one frame so layout has settled.
-          requestAnimationFrame(() => setTimeout(scrollToSection, 0));
+          requestAnimationFrame(tryScroll);
         }
         return;
       }

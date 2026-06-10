@@ -54,8 +54,14 @@ export class NavigationManager {
         this.logger.debug('[ClientNav] Browser back/forward detected');
         const path = window.location.pathname;
 
-        // Navigate to the new path via WebSocket
-        await this.navigateToRoute(path, { skipHistory: true });
+        // An in-page zBack button routes a cross-file step-out through
+        // history.back() and flags intent — carry it so the server consumes the
+        // crumb's origin section (zPsi), mirroring zCLI's start_key resume. A
+        // plain browser Back/Fwd leaves the flag unset and renders from the top
+        // (browser-history-vs-crumbs reconciliation is deferred).
+        const zBack = !!this.client._pendingZBack;
+        this.client._pendingZBack = false;
+        await this.navigateToRoute(path, { skipHistory: true, zBack });
       };
 
       window.addEventListener('popstate', this.client._popstateHandler);
@@ -123,7 +129,7 @@ export class NavigationManager {
    * @param {Object} options - Navigation options
    */
   async navigateToRoute(routePath, options = {}) {
-    const { skipHistory = false, navbar = false, zOrigin = null } = options;
+    const { skipHistory = false, navbar = false, zOrigin = null, zBack = false } = options;
 
     this.client._isClientSideNav = true;
 
@@ -175,6 +181,9 @@ export class NavigationManager {
       // SSOT click-crumb: carry the section the zLink launched FROM so the server
       // records it on the departing scope (same field zDelta uses — verb-agnostic).
       if (zOrigin) walkerRequest.zOrigin = zOrigin;
+      // Crumb-driven back: tell the server to consume the parent scope's origin
+      // section and return it as a zPsi scroll target (Step 2).
+      if (zBack) walkerRequest.zBack = true;
       this.logger.debug('[ClientNav] Sending walker request', walkerRequest);
       this.client.connection.send(JSON.stringify(walkerRequest));
 
@@ -188,7 +197,9 @@ export class NavigationManager {
         }
       }, 10000);
 
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Don't yank to the top on a crumb-driven back — the zPsi handler will land
+      // on the origin section once the chunks paint. Forward navs still reset.
+      if (!zBack) window.scrollTo({ top: 0, behavior: 'smooth' });
 
       // Update browser URL (skip for popstate — URL already correct)
       if (!skipHistory) {
