@@ -108,6 +108,7 @@ export function activate(client) {
   let collapsed = localStorage.getItem('zclCollapsed') === '1';
   let feStats = null;
   let beStats = null;
+  let lastSentFe = null; // dedupe: only echo to the server when FE stats change
   function log(...args) { console.log('%c' + TAG, STY, ...args); }
 
   function render() {
@@ -172,10 +173,18 @@ export function activate(client) {
     return true;
   }
 
-  async function tick() {
+  // The real BE cache events stream straight to zCache.log via the server-side
+  // logging tap, so the panel no longer needs to poll on a blind timer. We only
+  // echo to the server when the FE stats actually change — that kills the 2s
+  // identical-payload spam while still refreshing BE counts on real activity.
+  async function tick(force) {
     await pollFrontend();
     render();
-    sendBackend('report');
+    const sig = JSON.stringify(feStats || {});
+    if (force || sig !== lastSentFe) {
+      lastSentFe = sig;
+      sendBackend('report');
+    }
   }
 
   // Delegated controls — survive innerHTML rebuilds.
@@ -189,7 +198,7 @@ export function activate(client) {
       render();
       return;
     }
-    if (act === 'refresh') { tick(); return; }
+    if (act === 'refresh') { tick(true); return; }
     if (act === 'clear-blocks') {
       try { await client.cache.clear('rendered'); log('cleared FE rendered (blocks)'); } catch (err) { log('clear blocks error →', err); }
       tick();
@@ -210,8 +219,8 @@ export function activate(client) {
   const setup = setInterval(function () {
     if (installWrap()) {
       clearInterval(setup);
-      tick();
-      setInterval(tick, 2000);
+      tick(true);                  // first paint always echoes once
+      setInterval(tick, 2000);     // subsequent ticks only echo on FE change
     }
   }, 300);
 
