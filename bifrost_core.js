@@ -208,7 +208,10 @@ class BifrostCore {
         zVaFolder: zVaFolder,
         zBlock: zBlock,
         title: options.title || zuiConfig.title || null,
-        brand: options.brand || zuiConfig.brand || null
+        brand: options.brand || zuiConfig.brand || null,
+        // zHooks: declarative, data-only feature toggles (see L2_Handling/zhooks).
+        // Opt-in capabilities the client ships — never code. Merge config over zui-config.
+        zHooks: { ...(zuiConfig.zHooks || {}), ...(options.zHooks || {}) }
       };
 
       return { zuiConfig, options: parsedOptions };
@@ -323,6 +326,10 @@ class BifrostCore {
       // Just populate content, don't create structure
       this._initZVaFElements();
 
+      // zHooks: activate declared opt-in features (data flags, never code).
+      // Non-blocking; each feature is responsible for waiting on the connection.
+      this._initZHooks();
+
       // Walker mode: all pages use execute_walker (server-side rendering via WebSocket)
       if (this.options.autoRequest && this.options.autoRequest.event === 'execute_walker') {
         this.logger.debug('Walker mode detected');
@@ -370,6 +377,21 @@ class BifrostCore {
           }
         }
       });
+    }
+
+    /**
+     * Activate declared zHooks — opt-in, data-only client features.
+     *
+     * zHooks are feature toggles (booleans), not callbacks. The manager imports
+     * each enabled feature module and calls its activate(client). Failures are
+     * isolated per-feature and never block boot.
+     */
+    _initZHooks() {
+      const config = this.options.zHooks;
+      if (!config || !Object.keys(config).length) return;
+      import(`${BASE_URL}L2_Handling/zhooks/zhooks_manager.js`)
+        .then(({ activateZHooks }) => activateZHooks(this, config, BASE_URL))
+        .catch(err => this.logger.error('[zHooks] Manager load failed:', err));
     }
 
     /**

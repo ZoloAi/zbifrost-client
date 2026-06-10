@@ -10,7 +10,8 @@
  *   5. Forward registerHook() calls queued before core is ready
  *
  * Intelligence lives in bifrost_core.js (server-controlled URL = Phase 3B).
- * zVaF.html still does: new BifrostClient(null, { autoConnect: true }) — unchanged.
+ * zVaF.html does: new BifrostClient() — autoConnect defaults on; pass
+ * { autoConnect: false } to opt out (the exception, not the rule).
  */
 
 (function (root) {
@@ -48,6 +49,10 @@
 
   class BifrostClient {
     constructor(url, options = {}) {
+      // Ergonomic single-object form: new BifrostClient({ zHooks: {...} }).
+      // A non-string first arg is treated as the options bag.
+      if (url && typeof url === 'object') { options = url; url = null; }
+
       this._cfg   = readZuiConfig();
       this._opts  = options;
       this._url   = url || buildWsUrl(this._cfg.websocket);
@@ -56,6 +61,7 @@
       this._pendingHooks = [];   // hooks registered before core is ready
       this.logger = makeLogger(this._cfg);
 
+      // Default-on: connect unless the caller explicitly opts out.
       if (options.autoConnect !== false) {
         this._bootstrap();
       }
