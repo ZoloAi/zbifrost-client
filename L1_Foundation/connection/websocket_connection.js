@@ -33,12 +33,31 @@ export class WebSocketConnection {
   }
 
   /**
+   * Effective connect URL — appends the blue-green resume id (prior server
+   * full_session_id) when one is remembered, so a reconnect that lands on a
+   * swapped-in instance resumes the same session. No id (first connect / cleared
+   * storage) → the base URL, i.e. today's fresh-mint behavior.
+   * @returns {string}
+   */
+  _effectiveUrl() {
+    let url = this.url;
+    try {
+      const resumeId = (typeof sessionStorage !== 'undefined')
+        ? sessionStorage.getItem('zOS_resume_id') : null;
+      if (resumeId) {
+        url += (url.includes('?') ? '&' : '?') + 'zresume=' + encodeURIComponent(resumeId);
+      }
+    } catch (_) { /* storage unavailable — connect without resume */ }
+    return url;
+  }
+
+  /**
    * Connect to WebSocket server
    * @returns {Promise<void>}
    */
   async connect() {
     return new Promise((resolve, reject) => {
-      this.ws = new WebSocket(this.url);
+      this.ws = new WebSocket(this._effectiveUrl());
       
       this.ws.onopen = () => {
         this.logger.info('Connected to server');

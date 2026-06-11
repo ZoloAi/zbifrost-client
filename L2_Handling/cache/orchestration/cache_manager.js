@@ -114,6 +114,16 @@ export class CacheManager {
     // v1.6.0: Register hook to populate session from connection_info
     this.hooks.register('onConnectionInfo', async (data) => {
       try {
+        // Blue-green / scale-to-zero resume: remember our server session id so a
+        // reconnect (auto-reconnect lands on a swapped-in instance) can present it
+        // and resume the same session instead of re-authenticating from scratch.
+        // Per-tab (sessionStorage) — cleared on tab close, survives WS reconnects.
+        try {
+          const resumeId = data && data.auth && data.auth.bifrost_session
+            && data.auth.bifrost_session.full_id;
+          if (resumeId) sessionStorage.setItem('zOS_resume_id', resumeId);
+        } catch (_) { /* sessionStorage unavailable — resume simply won't engage */ }
+
         // 2A: Server-version-gated cache bust
         // server_version is sent on every connect — if it changed since last load,
         // the browser may be serving stale JS modules (304 cache). Reload to flush.
