@@ -34,12 +34,13 @@ export default class IconRenderer {
    * @param {string} [data.color] - SSOT semantic color value (e.g., "primary", "warning")
    * @param {string} [data._zClass] - Additional CSS classes (also sizing)
    * @param {string|Object} [data._zStyle] - SSOT inline-style escape hatch
-   * @param {HTMLElement} targetElement - Target element to render into
+   * @param {HTMLElement} [targetElement] - Optional parent to append into
+   * @returns {HTMLElement} The rendered node (bare <i>, or a styled <span> wrapper)
    */
   render(data, targetElement) {
     if (!data || !data.name) {
       this.logger.warn('[IconRenderer] Missing icon name');
-      return;
+      return null;
     }
 
     // Strip 'bi-' prefix if present
@@ -49,10 +50,13 @@ export default class IconRenderer {
     const icon = document.createElement('i');
     icon.className = `bi bi-${cleanName}`;
 
-    // Wrap in span if color / classes / inline-style provided (sizing comes via _zClass)
+    // Only wrap when the icon carries its OWN styling (colour / classes / inline
+    // style). A bare icon returns the raw <i> so the container-unwrapper can
+    // collapse any redundant parent frame instead of nesting a second box.
+    let node = icon;
     if (data.color || data._zClass || data._zStyle) {
       const wrapper = document.createElement('span');
-      
+
       // Build class list. color is an SSOT semantic value (primary, warning, …) —
       // resolved through the same mapping zText/zH use, never a raw class.
       const classes = [];
@@ -65,7 +69,7 @@ export default class IconRenderer {
           classes.push(...data._zClass.split(' ').filter(c => c));
         }
       }
-      
+
       if (classes.length > 0) {
         wrapper.className = classes.join(' ');
       }
@@ -77,14 +81,14 @@ export default class IconRenderer {
           wrapper.setAttribute('style', cssString);
         }
       }
-      
+
       wrapper.appendChild(icon);
-      targetElement.appendChild(wrapper);
-    } else {
-      // No wrapper needed - append icon directly
-      targetElement.appendChild(icon);
+      node = wrapper;
     }
 
+    if (targetElement) targetElement.appendChild(node);
+
     this.logger.debug(`[IconRenderer] Rendered icon: %s`, `bi-${cleanName}`);
+    return node;
   }
 }

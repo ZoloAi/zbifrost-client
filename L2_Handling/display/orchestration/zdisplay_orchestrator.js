@@ -670,7 +670,18 @@ export class ZDisplayOrchestrator {
           this.logger.log(`[renderItems] zData:read resolved inline → zTable (${value.rows?.length ?? 0} rows)`);
         }
         this.logger.debug(`[renderItems] Direct event: %s for %s`, value.event, key);
-        const element = await this.renderZDisplayEvent(value, containerDiv);
+        // Collapsed single-child container: the backend merges a styled wrapper
+        // (e.g. Demo {_zClass: zc-render, zIcon}) into one flat event, so _zClass
+        // lands on BOTH the container div (itemMetadata) and the event. For an
+        // inline icon that double-boxes the glyph — the container already owns the
+        // frame, so render the icon bare inside it.
+        let evtData = value;
+        if (value.event === 'icon' && (itemMetadata._zClass || itemMetadata._zStyle)) {
+          evtData = { ...value };
+          delete evtData._zClass;
+          delete evtData._zStyle;
+        }
+        const element = await this.renderZDisplayEvent(evtData, containerDiv);
         if (element) {
           // Handle unwrapping - delegated to ContainerUnwrapper (Phase 4.4c)
           if (element.nodeType === Node.COMMENT_NODE) {
@@ -1396,9 +1407,10 @@ export class ZDisplayOrchestrator {
       case 'icon': {
         // Use modular IconRenderer for Bootstrap Icons
         const iconRenderer = await this.client._ensureIconRenderer();
-        const iconContainer = document.createElement('span');
-        iconRenderer.render(eventData, iconContainer);
-        element = iconContainer;
+        // Return the renderer's own node (bare <i>, or a styled <span>) directly —
+        // no extra empty wrapper. This lets the container-unwrapper collapse a
+        // redundant parent frame (e.g. a single-child zc-render Demo) by class match.
+        element = iconRenderer.render(eventData);
         this.logger.debug(`[renderZDisplayEvent] Rendered icon: ${eventData.name}`);
         break;
       }
