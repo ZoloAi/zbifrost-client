@@ -52,8 +52,10 @@ export class CodeRenderer {
     if (eventData.zId || eventData._zId || eventData._id) {
       attrs.id = eventData.zId || eventData._zId || eventData._id;
     }
-    if (eventData._zClass || eventData.class) {
-      attrs.class = eventData._zClass || eventData.class;
+    // _zClass is applied centrally by the orchestrator (SSOT); only legacy `class`
+    // is honoured here as a creation-time attribute.
+    if (eventData.class) {
+      attrs.class = eventData.class;
     }
 
     const element = createLanguagePre(language || 'text', content, attrs);

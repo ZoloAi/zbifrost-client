@@ -188,6 +188,9 @@ export class TableRenderer {
 
     // Create outer container for title + table + footer
     const wrapper = createElement('div', ['zTable-container']);
+    // _zClass/_zStyle are applied to the inner <table> below (zTable + modifiers),
+    // so the orchestrator's central metadata pass must skip this wrapper frame.
+    wrapper.__zMetaScoped = true;
 
     // Mark interactive tables with a unique instance ID so navigation re-renders replace in-place.
     // _tableInstanceId is preferred (survives navigation round-trips); generate one on first render.

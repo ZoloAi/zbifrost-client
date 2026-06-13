@@ -11,7 +11,6 @@
 // Layer 0: Primitives
 import { createHeading, createParagraph } from '../primitives/typography_primitives.js';
 import { createSemanticElement, createLanguagePre } from '../primitives/semantic_element_primitive.js';
-import { convertStyleToString } from '../../../zSys/dom/style_utils.js';
 import { escapeHtml } from '../../../zSys/dom/encoding_utils.js';
 
 export class TypographyRenderer {
@@ -107,14 +106,9 @@ export class TypographyRenderer {
       element.style.marginLeft = `${eventData.indent}rem`;
     }
 
-    // Apply inline styles if provided (_zStyle metadata)
-    if (eventData._zStyle) {
-      const cssString = convertStyleToString(eventData._zStyle, this.logger);
-      if (cssString) {
-        element.setAttribute('style', cssString);
-      }
-    }
-    
+    // _zClass / _zStyle are applied centrally by the orchestrator (SSOT) — see
+    // renderZDisplayEvent's append-mode applyMetadata pass. Nothing to do here.
+
     // Handle _zDelegate: update target input with this text's content
     if (eventData._zDelegate) {
       this._handleDelegation(eventData._zDelegate, content);
@@ -144,15 +138,9 @@ export class TypographyRenderer {
       attrs.id = eventData.zId || eventData._zId || eventData._id;
     }
     const h = createHeading(level, attrs);
-    
-    // Apply inline styles if provided (_zStyle metadata)
-    if (eventData._zStyle) {
-      const cssString = convertStyleToString(eventData._zStyle, this.logger);
-      if (cssString) {
-        h.setAttribute('style', cssString);
-      }
-    }
-    
+
+    // _zStyle applied centrally by the orchestrator (SSOT) — nothing to do here.
+
     // Decode Unicode escapes and convert newlines to <br> for Bifrost
     const content = eventData.label || eventData.content || '';
     const decoded = this._decodeUnicodeEscapes(content);
@@ -200,10 +188,8 @@ export class TypographyRenderer {
       classes.push(`zText-${color}`);
     }
 
-    // Custom classes from YAML (_zClass parameter - ignored by terminal)
-    if (eventData._zClass) {
-      classes.push(eventData._zClass);
-    }
+    // NOTE: _zClass is applied centrally by the orchestrator (SSOT, append mode),
+    // not here — this builder only owns the contextual color class.
 
     return classes.length > 0 ? classes.join(' ') : '';
   }

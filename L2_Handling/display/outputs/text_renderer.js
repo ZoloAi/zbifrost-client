@@ -399,7 +399,7 @@ export class TextRenderer {
    * renderer.renderRichText({ content: 'Use `code` for commands', color: 'info' });
    */
   renderRichText(data) {
-    const { content, color, indent = 0, _zClass, _id } = data;
+    const { content, color, indent = 0, _id } = data;
 
     // Validate required parameters
     if (!content) {
@@ -407,15 +407,10 @@ export class TextRenderer {
       return null;
     }
 
-    // Build CSS classes array
+    // Build CSS classes array.
+    // NOTE: _zClass is applied centrally by the orchestrator (SSOT, append mode)
+    // on the returned element — this renderer only owns the contextual color class.
     const classes = [];
-
-    // Add custom class if provided (from YAML)
-    if (_zClass) {
-      // Split space-separated classes (e.g., "zText-center zmt-3 zmb-4")
-      const customClasses = _zClass.split(/\s+/).filter(c => c);
-      classes.push(...customClasses);
-    }
 
     // Add color class if provided (uses Layer 2 utility)
     if (color) {

@@ -95,6 +95,8 @@ export class VideoRenderer {
       figcaption.textContent = caption;
       figcaption.className = 'zText-muted zText-center zmt-2';
       figure.appendChild(figcaption);
+      // _zClass/_zStyle live on the inner <video>; skip the central pass on the wrapper.
+      figure.__zMetaScoped = true;
       this.logger.debug('[VideoRenderer] Video with caption rendered');
       return figure;
     }

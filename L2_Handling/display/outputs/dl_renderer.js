@@ -25,10 +25,7 @@ export class DLRenderer {
   render(event) {
     const dl = document.createElement('dl');
 
-    // Apply custom _zClass if provided
-    if (event._zClass) {
-      dl.className = event._zClass;
-    }
+    // _zClass / _zStyle applied centrally by the orchestrator (SSOT) on this <dl>.
 
     // Apply indent as left margin
     if (event.indent && event.indent > 0) {

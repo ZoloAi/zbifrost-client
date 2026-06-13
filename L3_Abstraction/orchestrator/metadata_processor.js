@@ -148,11 +148,20 @@ export class MetadataProcessor {
       element.className = '';
     }
 
-    // Apply inline styles if provided (supports string or nested object)
+    // Apply inline styles if provided (supports string or nested object).
+    // MERGE onto any existing inline style (e.g. a renderer's indent margin or a
+    // media element's max-width) instead of clobbering it — _zStyle is an additive
+    // escape hatch, not a replacement for intrinsic layout styles.
     if (metadata._zStyle !== undefined && metadata._zStyle !== '' && metadata._zStyle !== null) {
       const cssString = convertStyleToString(metadata._zStyle, logger);
       if (cssString) {
-        element.setAttribute('style', cssString);
+        const existing = (element.getAttribute('style') || '').trim();
+        if (existing) {
+          const sep = existing.endsWith(';') ? ' ' : '; ';
+          element.setAttribute('style', existing + sep + cssString);
+        } else {
+          element.setAttribute('style', cssString);
+        }
       }
     }
 

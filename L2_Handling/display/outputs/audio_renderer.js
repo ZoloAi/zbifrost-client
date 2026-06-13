@@ -73,6 +73,8 @@ export class AudioRenderer {
       figcaption.textContent = caption;
       figcaption.className = 'zText-muted zText-center zmt-2';
       figure.appendChild(figcaption);
+      // _zClass/_zStyle live on the inner <audio>; skip the central pass on the wrapper.
+      figure.__zMetaScoped = true;
       this.logger.debug('[AudioRenderer] Audio with caption rendered');
       return figure;
     }

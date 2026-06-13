@@ -80,7 +80,6 @@ export default class TerminalRenderer {
   render(data) {
     const title = data.title || 'Terminal';
     const rawContent = data.content || '';
-    const customClass = data._zClass || '';
     const terminalId = data._id || `terminal_${Math.random().toString(36).substr(2, 9)}`;
 
     // Extract language and code from code fences (```language ... ```)
@@ -94,9 +93,9 @@ export default class TerminalRenderer {
     // language would allow it — for "copy this snippet" blocks. Default true.
     const runEnabled = !(data.zRun === false || data.zRun === 'false' || data.zRun === 'False');
 
-    // Create main container
+    // Create main container (_zClass is appended centrally by the orchestrator SSOT)
     const container = document.createElement('div');
-    container.className = `zTerminal-container zCard zMb-3 ${customClass}`.trim();
+    container.className = 'zTerminal-container zCard zMb-3';
     container.id = terminalId;
 
     // Header: title + language, a constant mode badge, Copy, and Run (only when

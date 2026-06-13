@@ -79,11 +79,8 @@ export class ListRenderer {
       listElement.style.listStyleType = listStyleType;
     }
 
-    // Apply custom classes if provided (from YAML `_zClass` parameter - ignored by terminal)
-    // Only apply custom classes at top level (level 0)
-    if (level === 0 && eventData._zClass) {
-      listElement.className += ` ${eventData._zClass}`;
-    }
+    // _zClass is applied centrally by the orchestrator (SSOT, append mode) on the
+    // returned listElement — we only read it below to detect inline layout.
 
     // TODO: DEPRECATE - Remove `indent` property from list events
     // Rationale: Conflicts with native HTML nesting, redundant with _zClass/_zStyle,

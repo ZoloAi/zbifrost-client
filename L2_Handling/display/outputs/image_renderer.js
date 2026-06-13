@@ -115,6 +115,10 @@ export class ImageRenderer {
       figcaption.className = 'zText-muted zText-center zmt-2';
       figure.appendChild(figcaption);
 
+      // _zClass/_zStyle already live on the inner <img> — tell the orchestrator's
+      // central metadata pass not to also stamp them onto this <figure> wrapper.
+      figure.__zMetaScoped = true;
+
       this.logger.log('[ImageRenderer] Image with caption rendered');
       return figure;
     }
