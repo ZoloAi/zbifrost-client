@@ -24,7 +24,6 @@ import { GroupRenderer } from '../../../L3_Abstraction/orchestrator/group_render
 import { ContainerUnwrapper } from '../../../L3_Abstraction/orchestrator/container_unwrapper.js';
 import { InputEventHandler } from '../../../L3_Abstraction/orchestrator/input_event_handler.js';
 import { createSemanticElement } from '../primitives/semantic_element_primitive.js';
-import { convertStyleToString } from '../../../zSys/dom/style_utils.js';
 import { getAlertColorClass } from '../../../zSys/theme/ztheme_utils.js';
 
 export class ZDisplayOrchestrator {
@@ -67,19 +66,15 @@ export class ZDisplayOrchestrator {
     // Clear existing content
     contentElement.innerHTML = '';
 
-    // Check if blockData has block-level metadata (_zClass) for cascading
+    // Block-level metadata wrapper. SSOT: the _zHTML/_zClass/_zStyle/zId rules
+    // live in MetadataProcessor.applyMetadata — the same path zKey containers use —
+    // so blocks, keys, and events all read styling identically (no per-tier idiom).
     let blockWrapper = contentElement;
-    if (blockData && typeof blockData === 'object' && blockData._zClass) {
-      // Create wrapper div for the entire block with block-level classes (using primitive)
-      const { createDiv } = await import('../primitives/generic_containers.js');
-      const blockLevelDiv = createDiv();
+    if (blockData && typeof blockData === 'object' && this.metadataProcessor.hasBlockMetadata(blockData)) {
+      const blockMeta = this.metadataProcessor.extractMetadata(blockData);
       const blockName = this.options.zBlock || 'zBlock';
-
-      // Apply block-level classes
-      const classes = Array.isArray(blockData._zClass)
-        ? blockData._zClass
-        : blockData._zClass.split(',').map(c => c.trim());
-      blockLevelDiv.className = classes.join(' ');
+      const blockLevelDiv = createSemanticElement(blockMeta._zHTML || 'div', {}, this.logger);
+      this.metadataProcessor.applyMetadata(blockLevelDiv, blockMeta);
       blockLevelDiv.setAttribute('data-zblock', blockName);
 
       contentElement.appendChild(blockLevelDiv);
@@ -167,24 +162,13 @@ export class ZDisplayOrchestrator {
         // First chunk with block metadata: create a wrapper for the entire block
         const blockName = message.zBlock || 'progressive';  // Use block name from backend
         
-        // Use centralized semantic element primitive (SSOT for _zHTML)
-        const elementType = data._zHTML || 'div';
-        const blockWrapper = createSemanticElement(elementType, {}, this.logger);
+        // Block-level metadata wrapper — same SSOT path as renderBlock / zKeys
+        // (MetadataProcessor.applyMetadata handles _zHTML/_zClass/_zStyle/zId).
+        const blockMeta = this.metadataProcessor.extractMetadata(data);
+        const blockWrapper = createSemanticElement(blockMeta._zHTML || 'div', {}, this.logger);
+        this.metadataProcessor.applyMetadata(blockWrapper, blockMeta);
         blockWrapper.setAttribute('data-zblock', 'progressive');
         blockWrapper.setAttribute('id', blockName);
-
-        // Apply block-level metadata to wrapper
-        for (const [key, value] of Object.entries(data)) {
-          if (key === '_zClass' && value) {
-            blockWrapper.className = value;
-          } else if (key === '_zStyle' && value) {
-            const cssString = convertStyleToString(value, this.logger);
-            if (cssString) {
-              blockWrapper.setAttribute('style', cssString);
-            }
-          }
-          // _zHTML is already handled above (element creation)
-        }
 
         contentDiv.appendChild(blockWrapper);
         targetContainer = blockWrapper;
