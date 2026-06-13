@@ -3,9 +3,8 @@
  *
  * Renders Bootstrap Icons in web mode with support for:
  * - Icon name (with or without 'bi-' prefix)
- * - Size classes (zTitle-*, zIcon-*)
- * - Color classes (zText-*)
- * - Additional CSS classes (_zClass)
+ * - SSOT semantic color value (primary, warning, …) — resolved via getTextColorClass
+ * - Additional CSS classes (_zClass) — also the channel for sizing
  *
  * Features:
  * - Clean HTML generation
@@ -16,6 +15,9 @@
  * Version: 1.0.0
  * Date: 2026-03-24
  */
+
+import { getTextColorClass } from '../../../zSys/theme/ztheme_utils.js';
+import { convertStyleToString } from '../../../zSys/dom/style_utils.js';
 
 export default class IconRenderer {
   /**
@@ -29,9 +31,9 @@ export default class IconRenderer {
    * Render Bootstrap Icon
    * @param {Object} data - Icon configuration
    * @param {string} data.name - Icon name (e.g., "tools", "bi-tools")
-   * @param {string} [data.size] - Size class (e.g., "zTitle-2")
-   * @param {string} [data.color] - Color class (e.g., "zText-primary")
-   * @param {string} [data._zClass] - Additional CSS classes
+   * @param {string} [data.color] - SSOT semantic color value (e.g., "primary", "warning")
+   * @param {string} [data._zClass] - Additional CSS classes (also sizing)
+   * @param {string|Object} [data._zStyle] - SSOT inline-style escape hatch
    * @param {HTMLElement} targetElement - Target element to render into
    */
   render(data, targetElement) {
@@ -47,14 +49,14 @@ export default class IconRenderer {
     const icon = document.createElement('i');
     icon.className = `bi bi-${cleanName}`;
 
-    // Wrap in span if size/color/additional classes provided
-    if (data.size || data.color || data._zClass) {
+    // Wrap in span if color / classes / inline-style provided (sizing comes via _zClass)
+    if (data.color || data._zClass || data._zStyle) {
       const wrapper = document.createElement('span');
       
-      // Build class list
+      // Build class list. color is an SSOT semantic value (primary, warning, …) —
+      // resolved through the same mapping zText/zH use, never a raw class.
       const classes = [];
-      if (data.size) classes.push(data.size);
-      if (data.color) classes.push(data.color);
+      if (data.color) classes.push(getTextColorClass(data.color));
       if (data._zClass) {
         // Handle _zClass as string or array
         if (Array.isArray(data._zClass)) {
@@ -66,6 +68,14 @@ export default class IconRenderer {
       
       if (classes.length > 0) {
         wrapper.className = classes.join(' ');
+      }
+
+      // _zStyle — the SSOT escape hatch, same as every other event.
+      if (data._zStyle) {
+        const cssString = convertStyleToString(data._zStyle, this.logger);
+        if (cssString) {
+          wrapper.setAttribute('style', cssString);
+        }
       }
       
       wrapper.appendChild(icon);
