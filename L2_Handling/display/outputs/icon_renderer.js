@@ -10,6 +10,8 @@
  * - Clean HTML generation
  * - Proper class composition
  * - Graceful fallback for missing icons
+ * - Accessible by default: role="img" + aria-label derived from the icon name
+ *   (or an explicit alt_text / aria_label override)
  *
  * Author: zOS Framework
  * Version: 1.0.0
@@ -49,6 +51,17 @@ export default class IconRenderer {
     // Create icon element
     const icon = document.createElement('i');
     icon.className = `bi bi-${cleanName}`;
+
+    // Accessibility — a bare <i> is silent to screen readers. Honour the page's
+    // "accessible by default" promise: give every icon role="img" and a readable
+    // aria-label. An explicit alt_text/aria_label wins; otherwise humanize the
+    // bi-* name (bi-heart-fill → "heart fill"), mirroring the terminal's
+    // bracketed [description] fallback.
+    const ariaLabel = (data.alt_text || data.aria_label || cleanName.replace(/-/g, ' ')).trim();
+    if (ariaLabel) {
+      icon.setAttribute('role', 'img');
+      icon.setAttribute('aria-label', ariaLabel);
+    }
 
     // Only wrap when the icon carries its OWN styling (colour / classes / inline
     // style). A bare icon returns the raw <i> so the container-unwrapper can
