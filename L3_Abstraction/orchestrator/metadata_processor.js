@@ -13,6 +13,37 @@
  * - _zScripts: Client-side scripts
  * 
  * Extracted from zdisplay_orchestrator.js (Phase 4.4a)
+ *
+ * ════════════════════════════════════════════════════════════════════════════
+ *  _zClass / _zStyle CONTRACT — SINGLE SOURCE OF TRUTH (do not re-implement)
+ * ════════════════════════════════════════════════════════════════════════════
+ *  applyMetadata() is the ONE place _zClass/_zStyle are read and applied across
+ *  all three tiers. Renderers must NOT hand-roll className/style parsing.
+ *
+ *  THREE TIERS, ONE FUNCTION:
+ *   • zBlock — renderBlock / renderChunkProgressive call applyMetadata (overwrite).
+ *   • zKey   — createContainer calls applyMetadata (overwrite).
+ *   • zEvent — renderZDisplayEvent runs a single APPEND-mode applyMetadata pass on
+ *              the returned element AFTER the switch. Leaf renderers own only their
+ *              CONTEXTUAL class (color → zText- / zBtn- / zSignal- variants); they
+ *              do NOT touch _zClass or _zStyle.
+ *
+ *  CLASS MODES:
+ *   • overwrite (default): _zClass OWNS className — for freshly-created wrappers.
+ *   • append (options.append): _zClass LAYERS via classList.add — for event nodes
+ *     that already carry intrinsic classes (zText, bi-*, zTable…). Dedupes.
+ *
+ *  _zStyle: MERGES onto any existing inline style (indent margin, media max-width),
+ *  never clobbers it. It is an additive escape hatch.
+ *
+ *  COMPOSITE OPT-OUT (`element.__zMetaScoped = true`):
+ *   A renderer that returns a WRAPPER but places _zClass on an INNER node sets
+ *   __zMetaScoped on the wrapper so the central event pass skips it (no mis-target,
+ *   no double-apply). Current composites: media-with-caption (<figure> → inner
+ *   <img>/<video>/<audio>) and zTable (.zTable-container → inner <table>).
+ *   Cases that return null (zDash, in-place table replace) skip the pass entirely
+ *   and therefore keep their own _zClass handling.
+ * ════════════════════════════════════════════════════════════════════════════
  */
 
 // Layer 0: Primitives
