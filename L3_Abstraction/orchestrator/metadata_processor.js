@@ -98,27 +98,50 @@ export class MetadataProcessor {
   }
 
   /**
-   * Apply metadata to an existing element
+   * Normalize a _zClass value (string with comma/space separators, or array)
+   * into a clean array of class tokens. SSOT for the "how do I read _zClass"
+   * question that every tier (block / key / event) used to answer differently.
+   * @param {string|Array} zClass
+   * @returns {string[]}
+   */
+  normalizeClasses(zClass) {
+    if (!zClass) return [];
+    const parts = Array.isArray(zClass)
+      ? zClass
+      : (zClass.includes(',') ? zClass.split(',') : zClass.split(' '));
+    return parts.map(c => String(c).trim()).filter(Boolean);
+  }
+
+  /**
+   * Apply metadata to an existing element.
+   *
+   * Two class modes:
+   *  - overwrite (default): _zClass OWNS className — used by zBlock/zKey wrappers
+   *    that are freshly created and have no intrinsic classes.
+   *  - append (options.append): _zClass LAYERS on top via classList.add — used by
+   *    zEvent elements that already carry renderer-intrinsic classes (zText,
+   *    bi-*, zTable …) which must survive. Empty/absent _zClass is a no-op.
+   *
    * @param {HTMLElement} element - Element to apply metadata to
-   * @param {Object} metadata - Metadata object
+   * @param {Object} metadata - Metadata object (_zClass, _zStyle, zId)
    * @param {string} [zKey] - Optional key for data-zkey attribute
    * @param {Object} [logger] - Optional logger instance
+   * @param {Object} [options] - { append?: boolean }
    */
-  applyMetadata(element, metadata, zKey = null, logger = this.logger) {
+  applyMetadata(element, metadata, zKey = null, logger = this.logger, options = {}) {
+    const append = options.append === true;
+
     // Apply custom classes
-    if (metadata._zClass !== undefined) {
+    if (append) {
+      // Event tier: layer on top of intrinsic classes, never clear.
+      const extra = this.normalizeClasses(metadata._zClass);
+      if (extra.length) element.classList.add(...extra);
+    } else if (metadata._zClass !== undefined) {
       if (metadata._zClass === '' || metadata._zClass === null) {
         // Empty string or null = no container classes
         element.className = '';
-      } else if (Array.isArray(metadata._zClass)) {
-        // Array of classes
-        element.className = metadata._zClass.join(' ');
-      } else if (typeof metadata._zClass === 'string') {
-        // String: comma-separated or space-separated classes
-        const classes = metadata._zClass.includes(',')
-          ? metadata._zClass.split(',').map(c => c.trim())
-          : metadata._zClass.split(' ').filter(c => c.trim());
-        element.className = classes.join(' ');
+      } else {
+        element.className = this.normalizeClasses(metadata._zClass).join(' ');
       }
     } else if (!element.className) {
       // Default: NO classes (bare element, following HTML/CSS convention)

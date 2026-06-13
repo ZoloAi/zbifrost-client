@@ -1488,6 +1488,22 @@ export class ZDisplayOrchestrator {
       }
     }
 
+    // ── SSOT: universal _zClass / _zStyle for EVERY event ────────────────────
+    // The same applyMetadata path zBlocks and zKeys use, in APPEND mode so the
+    // renderer's intrinsic classes (zText, bi-*, zTable …) survive. This is the
+    // single place an event's styling is applied; per-renderer _zClass/_zStyle
+    // handling is being retired in favour of this. `color` stays contextual
+    // (zText-* vs zBtn-* vs zSignal-*) and remains owned by each renderer.
+    if (element && element.nodeType === Node.ELEMENT_NODE && eventData && typeof eventData === 'object') {
+      this.metadataProcessor.applyMetadata(
+        element,
+        { _zClass: eventData._zClass, _zStyle: eventData._zStyle },
+        null,
+        this.logger,
+        { append: true }
+      );
+    }
+
     return element;
   }
 
