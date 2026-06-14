@@ -96,6 +96,18 @@ h4 { font-size: 1.5rem;  }
 h5 { font-size: 1.25rem; }
 h6 { font-size: 1rem;    }
 
+/* ─── Paragraph (zText default) ────────────────────────────────────────────── */
+/* Bifrost owns the <p> baseline so a bare zText carries deliberate vertical
+ * rhythm with no app CSS. Apps re-skin via _zClass — they never SUPPLY it. */
+
+p {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+p:last-child { margin-bottom: 0; }
+
 /* ─── zTheme semantic text colors — zCLI parity ───────────────────────────── */
 /* The client maps a header/text `color:` token → `.zText-<token>`. These are
  * the zOS defaults so `color: PRIMARY` paints in Bifrost without any _zClass,
@@ -141,6 +153,25 @@ blockquote {
 }
 
 blockquote > p { margin: 0; }
+
+/* ─── Preformatted block (zText semantic: pre) ─────────────────────────────── */
+/* Plain <pre> baseline — bifrost-owned so a raw preformatted block renders
+ * deliberately. Language-tagged pre (pre-zolo, pre-js…) routes through Prism
+ * and is left alone. Apps re-skin via _zClass. */
+
+pre {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+  font-size: 0.88em;
+  line-height: 1.5;
+  color: inherit;
+  background: color-mix(in srgb, var(--color-code, #5CA9FF) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-code, #5CA9FF) 22%, transparent);
+  border-radius: 8px;
+  overflow-x: auto;
+  white-space: pre;
+}
 
 /* ─── Form controls — canonical field base (Bootstrap-like) ────────────────── */
 /* The client emits a real field as `.zForm-control` (default) or `.zInput`
