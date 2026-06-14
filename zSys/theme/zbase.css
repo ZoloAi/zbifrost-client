@@ -201,6 +201,51 @@ pre {
   white-space: pre;
 }
 
+/* ─── Lists (zUL / zOL / zDL) ──────────────────────────────────────────────── */
+/* Bifrost owns the list baseline so a bare zUL/zOL/zDL — and every markdown list
+ * — renders deliberately and themed, never on raw browser UA defaults. Marker
+ * variants (circle/square/letter/roman) are set inline by the renderer; here we
+ * own the rhythm, indent, brand-tinted markers, and the dl term/definition look.
+ * Apps re-skin via _zClass — they never SUPPLY the baseline. */
+
+ul, ol {
+  margin: 0 0 1rem;
+  padding-left: 1.4rem;
+  line-height: 1.6;
+}
+ul:last-child, ol:last-child { margin-bottom: 0; }
+
+li { margin-bottom: 0.4rem; }
+li:last-child { margin-bottom: 0; }
+
+/* Themed markers — the modern touch (brand-tinted, not flat UA black). */
+li::marker { color: var(--color-secondary); }
+
+/* Nested lists tuck under their parent item with a single tight gap. */
+li > ul, li > ol { margin: 0.4rem 0 0; }
+
+/* Definition list (zDL) — term in ink, definition indented & muted. */
+dl { margin: 0 0 1rem; }
+dl:last-child { margin-bottom: 0; }
+dt { font-weight: 700; color: var(--ink); }
+dd {
+  margin: 0 0 0.6rem 1.2rem;
+  color: var(--ink-muted);
+  line-height: 1.6;
+}
+dd:last-child { margin-bottom: 0; }
+
+/* Inline list (zList-inline) — horizontal, marker-less row of items. */
+.zList-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  margin: 0 0 1rem;
+  padding-left: 0;
+  list-style: none;
+}
+.zList-inline-item { margin: 0; }
+
 /* ─── Form controls — canonical field base (Bootstrap-like) ────────────────── */
 /* The client emits a real field as `.zForm-control` (default) or `.zInput`
  * (input-groups / explicit). Style BOTH so a field on ANY page — not just
