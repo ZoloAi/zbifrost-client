@@ -108,6 +108,23 @@ p {
 
 p:last-child { margin-bottom: 0; }
 
+/* ─── Inline emphasis (zMD / zText markdown) ───────────────────────────────── */
+/* Bifrost owns the inline tags the markdown parser emits (**bold**, *italic*,
+ * __underline__, ~~strike~~, ==highlight==) so rich text renders deliberately
+ * and themed — never on raw browser UA defaults. Apps re-skin via _zClass. */
+
+strong, b { font-weight: 700; }
+em, i     { font-style: italic; }
+u         { text-decoration: underline; }
+del, s    { text-decoration: line-through; opacity: 0.7; }
+
+mark {
+  background: color-mix(in srgb, var(--color-warning, #FFB347) 30%, transparent);
+  color: inherit;
+  padding: 0.05em 0.25em;
+  border-radius: 4px;
+}
+
 /* ─── zTheme semantic text colors — zCLI parity ───────────────────────────── */
 /* The client maps a header/text `color:` token → `.zText-<token>`. These are
  * the zOS defaults so `color: PRIMARY` paints in Bifrost without any _zClass,
