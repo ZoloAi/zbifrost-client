@@ -45,6 +45,15 @@
     };
   }
 
+  // ─── core-import origin allowlist (SSOT) ────────────────────────────────────
+  // bifrost_core_url arrives over the WebSocket (attacker-influenceable), and the
+  // bootstrap import()s it — so the core may only load from a blessed origin.
+  // The page origin is always allowed (added at load time). Add new blessed CDNs
+  // HERE (this is the one place to edit). Outside self-hosters extend per-instance
+  // via opts.coreOriginAllowlist instead of forking.
+  //   ⚠ Phase 2: when the client serves from js.zolo.media, add it to this list.
+  const DEFAULT_CORE_ORIGINS = ['https://cdn.jsdelivr.net'];
+
   // ─── BifrostClient (bootstrap) ──────────────────────────────────────────────
 
   class BifrostClient {
@@ -122,7 +131,7 @@
       // would load attacker code into the page context.
       const allowedOrigins = [
         window.location.origin,
-        'https://cdn.jsdelivr.net',
+        ...DEFAULT_CORE_ORIGINS,
         ...(this._opts.coreOriginAllowlist || []),
       ];
       const coreOrigin = new URL(coreUrl).origin;
@@ -145,7 +154,6 @@
       // Instantiate BifrostCore — it reads zui-config itself, connects, sends execute_walker
       const core = new mod.BifrostCore(this._url, {
         autoConnect: true,
-        zTheme:      false,   // ztheme.js already loaded by zVaF.html
         ...this._opts,
       });
 
