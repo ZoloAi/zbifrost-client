@@ -32,6 +32,17 @@
   --color-success:   #52B788; /* Manifestation — organic & vibrant */
   --color-warning:   #FFB347; /* Caution — warm & approachable */
   --color-error:     #E63946; /* Decisive — clear & strong */
+
+  /* Neutral foundation — surfaces, ink & lines on the dark zOS canvas.
+   * SSOT for every NON-accent value so no component carries raw rgba/hex.
+   * Apps re-skin the whole chrome by redefining these once. */
+  --ink:           #f9fafb;                   /* primary text on dark   */
+  --ink-muted:     rgba(255, 255, 255, 0.65); /* secondary / captions   */
+  --surface-1:     rgba(255, 255, 255, 0.04); /* raised panel           */
+  --surface-2:     rgba(255, 255, 255, 0.08); /* input / hover fill     */
+  --border:        rgba(255, 255, 255, 0.12); /* hairline divider       */
+  --border-strong: rgba(255, 255, 255, 0.18); /* field / control outline*/
+  --shadow:        rgba(0, 0, 0, 0.20);       /* ambient drop shadow    */
 }
 
 /* ─── 1. Reset ─────────────────────────────────────────────────────────────── */
@@ -148,8 +159,8 @@ code:not(pre code) {
   font-size: 0.88em;
   font-weight: 600;
   color: var(--color-code, #5CA9FF);
-  background: rgba(92, 169, 255, 0.12);
-  border: 1px solid rgba(92, 169, 255, 0.25);
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-info) 25%, transparent);
   border-radius: 5px;
   padding: 0.1em 0.4em;
   letter-spacing: -0.01em;
@@ -208,9 +219,9 @@ input.zInput, textarea.zInput, select.zInput {
   font-family: inherit;
   font-size: 0.95rem;
   line-height: 1.5;
-  color: var(--zinput-color, #e2e8f0);
-  background: var(--zinput-bg, rgba(255, 255, 255, 0.14));
-  border: 1.5px solid var(--zinput-border, rgba(255, 255, 255, 0.18));
+  color: var(--zinput-color, var(--ink));
+  background: var(--zinput-bg, color-mix(in srgb, var(--ink) 14%, transparent));
+  border: 1.5px solid var(--zinput-border, var(--border-strong));
   border-radius: var(--zinput-radius, 10px);
   transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
 }
@@ -221,9 +232,9 @@ input.zInput, textarea.zInput, select.zInput {
 .zForm-control:focus,
 input.zInput:focus, textarea.zInput:focus, select.zInput:focus {
   outline: none;
-  border-color: var(--zinput-focus, var(--color-primary, #6366f1));
-  background: var(--zinput-bg-focus, rgba(255, 255, 255, 0.17));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zinput-focus, var(--color-primary, #6366f1)) 20%, transparent);
+  border-color: var(--zinput-focus, var(--color-primary));
+  background: var(--zinput-bg-focus, color-mix(in srgb, var(--ink) 17%, transparent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zinput-focus, var(--color-primary)) 20%, transparent);
 }
 
 .zForm-control:disabled, .zForm-control[readonly],
@@ -274,7 +285,7 @@ input[type="file"].zInput::file-selector-button {
   padding: 0.45rem 1rem;
   border: 0;
   border-radius: 8px;
-  background: var(--zinput-accent, #4f46e5);
+  background: var(--zinput-accent, var(--color-secondary));
   color: #fff;
   font-family: inherit;
   font-size: 0.85rem;
@@ -304,7 +315,7 @@ input[type="color"].zInput {
 }
 input[type="color"].zForm-control:hover,
 input[type="color"].zInput:hover {
-  border-color: var(--zinput-border-hover, rgba(255, 255, 255, 0.3));
+  border-color: var(--zinput-border-hover, color-mix(in srgb, var(--ink) 30%, transparent));
 }
 input[type="color"].zForm-control::-webkit-color-swatch-wrapper,
 input[type="color"].zInput::-webkit-color-swatch-wrapper { padding: 0; }
@@ -345,9 +356,9 @@ input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:ho
   align-items: center;
   padding: 0.55rem 0.85rem;
   font-size: 0.95rem;
-  color: var(--zinput-color, #e2e8f0);
-  background: var(--zinput-affix-bg, rgba(79, 70, 229, 0.14));
-  border: 1.5px solid var(--zinput-border, rgba(255, 255, 255, 0.14));
+  color: var(--zinput-color, var(--ink));
+  background: var(--zinput-affix-bg, color-mix(in srgb, var(--color-secondary) 14%, transparent));
+  border: 1.5px solid var(--zinput-border, color-mix(in srgb, var(--ink) 14%, transparent));
   white-space: nowrap;
 }
 .zInputGroup > .zInputGroup-text:first-child { border-radius: 10px 0 0 10px; border-right: 0; }
@@ -380,8 +391,8 @@ input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:ho
   margin: 0;
   display: inline-grid;
   place-content: center;
-  background: var(--zinput-bg, rgba(255, 255, 255, 0.14));
-  border: 1.5px solid var(--zinput-border, rgba(255, 255, 255, 0.3));
+  background: var(--zinput-bg, color-mix(in srgb, var(--ink) 14%, transparent));
+  border: 1.5px solid var(--zinput-border, color-mix(in srgb, var(--ink) 30%, transparent));
   cursor: pointer;
   transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
 }
@@ -393,8 +404,8 @@ input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:ho
 .zForm-check input[type="checkbox"]:checked,
 .zForm-check input[type="radio"]:checked,
 .zForm-check-input:checked {
-  background: var(--zinput-focus, var(--color-primary, #6366f1));
-  border-color: var(--zinput-focus, var(--color-primary, #6366f1));
+  background: var(--zinput-focus, var(--color-primary));
+  border-color: var(--zinput-focus, var(--color-primary));
 }
 /* checkmark glyph */
 .zForm-check input[type="checkbox"]:checked::after,
@@ -423,7 +434,7 @@ input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:ho
 .zForm-check input[type="radio"]:focus-visible,
 .zForm-check-input:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zinput-focus, var(--color-primary, #6366f1)) 30%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zinput-focus, var(--color-primary)) 30%, transparent);
 }
 
 .zForm-check-label {
@@ -442,7 +453,7 @@ input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:ho
 
 /* native radios/checkboxes NOT given the custom .zForm-check treatment
  * still pick up the theme color (belt-and-braces — groups now emit .zForm-check). */
-input[type="radio"], input[type="checkbox"] { accent-color: var(--color-primary, #6366f1); }
+input[type="radio"], input[type="checkbox"] { accent-color: var(--color-primary); }
 
 /* radio / checkbox group (zSelect type:radio|checkbox) — legend + row rhythm */
 .zForm-check-group .zLabel { margin-bottom: 0.45rem; }
@@ -464,9 +475,9 @@ select.zInput {
   font-family: inherit;
   font-size: 0.95rem;
   line-height: 1.5;
-  color: var(--zinput-color, #e2e8f0);
-  background-color: var(--zinput-bg, rgba(255, 255, 255, 0.14));
-  border: 1.5px solid var(--zinput-border, rgba(255, 255, 255, 0.18));
+  color: var(--zinput-color, var(--ink));
+  background-color: var(--zinput-bg, color-mix(in srgb, var(--ink) 14%, transparent));
+  border: 1.5px solid var(--zinput-border, var(--border-strong));
   border-radius: var(--zinput-radius, 10px);
   cursor: pointer;
   transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
@@ -481,9 +492,9 @@ select.zSelect:focus,
 select.zForm-control:focus,
 select.zInput:focus {
   outline: none;
-  border-color: var(--zinput-focus, var(--color-primary, #6366f1));
-  background-color: var(--zinput-bg-focus, rgba(255, 255, 255, 0.17));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zinput-focus, var(--color-primary, #6366f1)) 20%, transparent);
+  border-color: var(--zinput-focus, var(--color-primary));
+  background-color: var(--zinput-bg-focus, color-mix(in srgb, var(--ink) 17%, transparent));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zinput-focus, var(--color-primary)) 20%, transparent);
 }
 
 select.zSelect:disabled,
@@ -495,7 +506,7 @@ select.zSelect option,
 select.zForm-control option,
 select.zInput option { color: #1f2937; background: #fff; }
 select.zSelect option:disabled,
-select.zForm-control option:disabled { color: #9ca3af; }
+select.zForm-control option:disabled { color: var(--ink-muted); }
 
 /* multi-select / sized list box — themed box, no caret, themed inline options */
 select.zSelect[multiple],
@@ -509,7 +520,7 @@ select.zForm-control[multiple] {
 select.zSelect[multiple] option,
 select.zSelect[size] option,
 select.zForm-control[multiple] option {
-  color: var(--zinput-color, #e2e8f0);
+  color: var(--zinput-color, var(--ink));
   background: transparent;
   padding: 0.35rem 0.55rem;
   border-radius: 6px;
@@ -520,7 +531,7 @@ select.zSelect[multiple] option:checked,
 select.zSelect[size] option:checked,
 select.zForm-control[multiple] option:checked {
   color: #fff;
-  background: linear-gradient(var(--color-primary, #6366f1), var(--color-primary, #6366f1));
+  background: linear-gradient(var(--color-primary), var(--color-primary));
 }
 select.zSelect[multiple] option:disabled,
 select.zForm-control[multiple] option:disabled { color: var(--zinput-placeholder, rgba(156, 163, 175, 0.55)); }
@@ -539,9 +550,9 @@ zBifrostBadge {
 
 /* ─── zBifrostBadge states ─────────────────────────────────────────────────── */
 
-.zBadge-pending { color: #fbbf24; }
-.zBadge-success { color: #34d399; }
-.zBadge-error   { color: #f87171; }
+.zBadge-pending { color: var(--color-warning); }
+.zBadge-success { color: var(--color-success); }
+.zBadge-error   { color: var(--color-error); }
 .zBadge-dot     { border-radius: 50%; background: currentColor; }
 .zIcon          { display: inline-block; width: 0.75em; height: 0.75em; fill: currentColor; }
 
@@ -579,7 +590,7 @@ zNavBar .zNavbar {
   flex-wrap: wrap;
   padding: 0.75rem 1.5rem;
   background: var(--znav-bg, rgba(10, 14, 39, 0.92));
-  border-bottom: 1px solid var(--znav-border, rgba(79, 70, 229, 0.15));
+  border-bottom: 1px solid var(--znav-border, color-mix(in srgb, var(--color-secondary) 15%, transparent));
   backdrop-filter: blur(12px);
   font-family: var(--znav-font, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
 }
@@ -589,7 +600,7 @@ zNavBar .zNavbar-brand {
   font-weight: 800;
   letter-spacing: -0.02em;
   margin-right: 2rem;
-  color: var(--znav-brand-color, #f9fafb);
+  color: var(--znav-brand-color, var(--ink));
 }
 
 zNavBar .zNavbar-toggler {
@@ -599,9 +610,9 @@ zNavBar .zNavbar-toggler {
   font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
-  color: var(--znav-brand-color, #f9fafb);
-  background: var(--znav-link-hover-bg, rgba(79, 70, 229, 0.15));
-  border: 1px solid var(--znav-border, rgba(79, 70, 229, 0.3));
+  color: var(--znav-brand-color, var(--ink));
+  background: var(--znav-link-hover-bg, color-mix(in srgb, var(--color-secondary) 15%, transparent));
+  border: 1px solid var(--znav-border, color-mix(in srgb, var(--color-secondary) 30%, transparent));
   border-radius: 6px;
 }
 
@@ -628,14 +639,14 @@ zNavBar .zNav-link {
   font-size: 0.9rem;
   font-weight: 500;
   border-radius: 8px;
-  color: var(--znav-link-color, #d1d5db);
+  color: var(--znav-link-color, var(--ink-muted));
   transition: color 0.2s, background 0.2s;
 }
 
 zNavBar .zNav-link:hover,
 zNavBar .zNav-link.active {
-  color: var(--znav-link-hover-color, #f9fafb);
-  background: var(--znav-link-hover-bg, rgba(79, 70, 229, 0.15));
+  color: var(--znav-link-hover-color, var(--ink));
+  background: var(--znav-link-hover-bg, color-mix(in srgb, var(--color-secondary) 15%, transparent));
 }
 
 /* ─── zDropdown (navbar menus) — JS toggles .zShow ─────────────────────────── */
@@ -649,7 +660,7 @@ zNavBar .zNav-link.active {
   min-width: 11rem;
   padding: 0.4rem 0;
   background: var(--zdropdown-bg, rgba(20, 25, 45, 0.97));
-  border: 1px solid var(--znav-border, rgba(79, 70, 229, 0.25));
+  border: 1px solid var(--znav-border, color-mix(in srgb, var(--color-secondary) 25%, transparent));
   border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(12px);
@@ -660,12 +671,12 @@ zNavBar .zNav-link.active {
   display: block;
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
-  color: var(--znav-link-color, #d1d5db);
+  color: var(--znav-link-color, var(--ink-muted));
   transition: color 0.15s, background 0.15s;
 }
 .zDropdown-item:hover {
-  color: var(--znav-link-hover-color, #f9fafb);
-  background: var(--znav-link-hover-bg, rgba(79, 70, 229, 0.15));
+  color: var(--znav-link-hover-color, var(--ink));
+  background: var(--znav-link-hover-bg, color-mix(in srgb, var(--color-secondary) 15%, transparent));
 }
 
 /* ─── zNavbar-inblock — light, in-content navbar variant ────────────────────────
@@ -758,7 +769,7 @@ zNavBar .zNav-link.active {
     border: none;
     border-radius: 0;
     padding-left: 0.75rem;
-    background: var(--znav-link-hover-bg, rgba(79, 70, 229, 0.08));
+    background: var(--znav-link-hover-bg, color-mix(in srgb, var(--color-secondary) 8%, transparent));
   }
 }
 
@@ -1052,10 +1063,10 @@ zNavBar .zNav-link.active {
 }
 
 .zText-muted    { opacity: 0.6; }
-.zText-dark     { color: #f9fafb; }
-.zBorder        { border: 1px solid rgba(255, 255, 255, 0.12); }
-.zShadow-sm     { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
-.zBg-white      { background: rgba(255, 255, 255, 0.04); }
+.zText-dark     { color: var(--ink); }
+.zBorder        { border: 1px solid var(--border); }
+.zShadow-sm     { box-shadow: 0 1px 3px var(--shadow); }
+.zBg-white      { background: var(--surface-1); }
 .zText-center   { text-align: center !important; }
 .zText-start    { text-align: left !important; }
 .zText-end      { text-align: right !important; }
@@ -1078,7 +1089,7 @@ zNavBar .zNav-link.active {
   border: 1px solid transparent;
   text-decoration: none;
 }
-.zBtn:focus { outline: 2px solid rgba(79, 70, 229, 0.5); outline-offset: 2px; }
+.zBtn:focus { outline: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent); outline-offset: 2px; }
 
 /* ─── Button color variants — canonical fills (theme tokens) ───────────────── */
 /* The renderer maps a zBtn's `color:` (default primary) to .zBtn-{color}; these
@@ -1226,7 +1237,7 @@ zNavBar .zNav-link.active {
   }
   .zDash-format-sidebar > .zRow > .zCol-auto {
     border-right: none !important;
-    border-bottom: 1px solid rgba(79, 70, 229, 0.15);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-secondary) 15%, transparent);
   }
   .zDash-format-sidebar .zDash-sidebar {
     flex-direction: row !important;
@@ -1237,7 +1248,7 @@ zNavBar .zNav-link.active {
   }
   .zDash-format-sidebar .zDash-sidebar .zNav-link.zActive {
     box-shadow: none !important;
-    border-bottom: 2px solid #4F46E5;
+    border-bottom: 2px solid var(--color-secondary);
   }
   .zDash-panel { padding: 1.25rem 1rem; }
   .zDash-container .zDialog-form { grid-template-columns: 1fr 1fr; }
@@ -1262,7 +1273,7 @@ zNavBar .zNav-link.active {
     right: 0;
     z-index: 50;
     background: rgba(10, 14, 39, 0.98);
-    border-bottom: 1px solid rgba(79, 70, 229, 0.2);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-secondary) 20%, transparent);
     backdrop-filter: blur(12px);
   }
 
@@ -1288,18 +1299,18 @@ zNavBar .zNav-link.active {
     gap: 0.4rem;
     margin: 0.75rem 0.75rem 0;
     padding: 0.45rem 0.85rem;
-    background: rgba(79, 70, 229, 0.15);
-    border: 1px solid rgba(79, 70, 229, 0.3);
+    background: color-mix(in srgb, var(--color-secondary) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-secondary) 30%, transparent);
     border-radius: 8px;
-    color: #c7d2fe;
+    color: var(--ink);
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
     font-family: inherit;
   }
   .zDash-sidebar-toggle:hover {
-    background: rgba(79, 70, 229, 0.25);
-    color: #e0e7ff;
+    background: color-mix(in srgb, var(--color-secondary) 25%, transparent);
+    color: var(--ink);
   }
 
   .zDash-panel { padding: 1rem 0.75rem; }
@@ -1312,7 +1323,7 @@ zNavBar .zNav-link.active {
 .zDash-format-tabs .zDash-sidebar {
   display: flex;
   flex-direction: row;
-  border-bottom: 1px solid rgba(79, 70, 229, 0.2);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-secondary) 20%, transparent);
 }
 
 /* accordion format (future) */
@@ -1327,7 +1338,7 @@ zNavBar .zNav-link.active {
 /* Sidebar column chrome */
 .zDash-format-sidebar > .zRow > .zCol-auto {
   background: rgba(10, 14, 39, 0.6);
-  border-right: 1px solid rgba(79, 70, 229, 0.15);
+  border-right: 1px solid color-mix(in srgb, var(--color-secondary) 15%, transparent);
   padding: 0;
 }
 
@@ -1344,7 +1355,7 @@ zNavBar .zNav-link.active {
   align-items: center;
   padding: 0.55rem 0.85rem;
   border-radius: 8px;
-  color: #94a3b8;
+  color: var(--ink-muted);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -1353,13 +1364,13 @@ zNavBar .zNav-link.active {
   text-decoration: none;
 }
 .zDash-sidebar .zNav-link:hover {
-  color: #f1f5f9;
-  background: rgba(79, 70, 229, 0.12);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--color-secondary) 12%, transparent);
 }
 .zDash-sidebar .zNav-link.zActive {
-  color: #f9fafb;
-  background: rgba(79, 70, 229, 0.22);
-  box-shadow: inset 3px 0 0 #4F46E5;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--color-secondary) 22%, transparent);
+  box-shadow: inset 3px 0 0 var(--color-secondary);
 }
 
 /* Panel area */
@@ -1373,7 +1384,7 @@ zNavBar .zNav-link.active {
   box-sizing: border-box;
   margin-bottom: 1.25rem;
   background: rgba(15, 20, 48, 0.6);
-  border: 1px solid rgba(79, 70, 229, 0.15);
+  border: 1px solid color-mix(in srgb, var(--color-secondary) 15%, transparent);
   border-radius: 10px;
 }
 
@@ -1381,10 +1392,10 @@ zNavBar .zNav-link.active {
 .zDash-container .zDialog-title {
   font-size: 1rem;
   font-weight: 700;
-  color: #c7d2fe;
+  color: var(--ink);
   margin-bottom: 1rem;
   padding-bottom: 0.6rem;
-  border-bottom: 1px solid rgba(79, 70, 229, 0.15);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-secondary) 15%, transparent);
 }
 
 /* Multi-column form grid */
@@ -1403,7 +1414,7 @@ zNavBar .zNav-link.active {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #64748b;
+  color: var(--ink-muted);
   font-weight: 600;
   display: block;
   margin-bottom: 0.3rem;
@@ -1412,10 +1423,10 @@ zNavBar .zNav-link.active {
 /* Inputs & selects */
 .zDash-container .zInput {
   appearance: none;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(79, 70, 229, 0.2);
+  background: var(--surface-1);
+  border: 1px solid color-mix(in srgb, var(--color-secondary) 20%, transparent);
   border-radius: 7px;
-  color: #e2e8f0;
+  color: var(--ink);
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
   width: 100%;
@@ -1425,13 +1436,13 @@ zNavBar .zNav-link.active {
 }
 .zDash-container .zInput:focus {
   outline: none;
-  border-color: rgba(79, 70, 229, 0.6);
-  background: rgba(255, 255, 255, 0.07);
+  border-color: color-mix(in srgb, var(--color-secondary) 60%, transparent);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
 }
 
 /* Primary action button */
 .zDash-container .zBtn-primary {
-  background: #4F46E5;
+  background: var(--color-secondary);
   border: none;
   color: #fff;
   padding: 0.55rem 1.25rem;
@@ -1443,7 +1454,7 @@ zNavBar .zNav-link.active {
   transition: background 0.15s, transform 0.1s;
 }
 .zDash-container .zBtn-primary:hover {
-  background: #4338ca;
+  background: color-mix(in srgb, var(--color-secondary) 82%, black);
   transform: translateY(-1px);
 }
 
@@ -1454,10 +1465,10 @@ zNavBar .zNav-link.active {
   gap: 0.4rem;
   padding: 0.5rem 1rem;
   margin: 0 0.4rem 0.4rem 0;
-  background: rgba(79, 70, 229, 0.15);
-  border: 1px solid rgba(79, 70, 229, 0.3);
+  background: color-mix(in srgb, var(--color-secondary) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-secondary) 30%, transparent);
   border-radius: 8px;
-  color: #c7d2fe;
+  color: var(--ink);
   font-size: 0.875rem;
   font-weight: 500;
   font-family: inherit;
@@ -1465,9 +1476,9 @@ zNavBar .zNav-link.active {
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .zDash-container button[data-key]:hover {
-  background: rgba(79, 70, 229, 0.3);
-  border-color: rgba(79, 70, 229, 0.5);
-  color: #e0e7ff;
+  background: color-mix(in srgb, var(--color-secondary) 30%, transparent);
+  border-color: color-mix(in srgb, var(--color-secondary) 50%, transparent);
+  color: var(--ink);
 }
 
 /* Tables */
@@ -1475,32 +1486,32 @@ zNavBar .zNav-link.active {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
-  color: #e2e8f0;
+  color: var(--ink);
 }
 .zDash-container th {
   padding: 0.6rem 0.9rem;
-  background: rgba(79, 70, 229, 0.12);
-  color: #a5b4fc;
+  background: color-mix(in srgb, var(--color-secondary) 12%, transparent);
+  color: var(--color-secondary);
   font-weight: 600;
   text-align: left;
-  border-bottom: 1px solid rgba(79, 70, 229, 0.2);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-secondary) 20%, transparent);
 }
 .zDash-container td {
   padding: 0.55rem 0.9rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 5%, transparent);
 }
-.zDash-container tr:hover td { background: rgba(79, 70, 229, 0.07); }
+.zDash-container tr:hover td { background: color-mix(in srgb, var(--color-secondary) 7%, transparent); }
 
 /* Section headings */
 .zDash-container h2 {
   font-size: 1.2rem;
   font-weight: 700;
-  color: #f9fafb;
+  color: var(--ink);
   margin: 0 0 1rem;
 }
 
 /* Spinner */
-.zSpinner-border { color: #6366f1; }
+.zSpinner-border { color: var(--color-primary); }
 
 /* ============================================================================
    Tables (zTable) — canonical dark-theme data tables
@@ -1511,7 +1522,7 @@ zNavBar .zNav-link.active {
 .zTable-container { margin: 1.5rem 0; }
 
 .zTable-container h4 {
-  color: #f9fafb;
+  color: var(--ink);
   font-size: 1.1rem;
   font-weight: 700;
   margin: 0 0 0.75rem;
@@ -1520,7 +1531,7 @@ zNavBar .zNav-link.active {
 .zTable-responsive {
   overflow-x: auto;
   border-radius: 12px;
-  border: 1px solid rgba(79, 70, 229, 0.2);
+  border: 1px solid color-mix(in srgb, var(--color-secondary) 20%, transparent);
 }
 
 .zTable {
@@ -1532,30 +1543,30 @@ zNavBar .zNav-link.active {
   /* Default body text colour lives here so cells INHERIT it. Keeping it off the
      td selector lets a per-cell utility (zText-success/-danger…) win — a bare
      .zText-* class (0,1,0) would otherwise lose to `.zTable tbody td` (0,1,2). */
-  color: #d1d5db;
+  color: var(--ink-muted);
 }
 
 .zTable thead th {
-  background: rgba(79, 70, 229, 0.18);
-  color: #c7d2fe;
+  background: color-mix(in srgb, var(--color-secondary) 18%, transparent);
+  color: var(--ink);
   font-weight: 700;
   text-align: left;
   padding: 0.85rem 1rem;
   letter-spacing: 0.02em;
-  border-bottom: 1px solid rgba(79, 70, 229, 0.3);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-secondary) 30%, transparent);
   white-space: nowrap;
 }
 
 .zTable tbody td {
   padding: 0.8rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 6%, transparent);
   vertical-align: top;
 }
 
 .zTable tbody tr:last-child td { border-bottom: none; }
-.zTable tbody tr:nth-child(even) td { background: rgba(255, 255, 255, 0.02); }
-.zTable tbody tr:hover td { background: rgba(79, 70, 229, 0.08); }
-.zTable td strong { color: #f9fafb; }
+.zTable tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--ink) 2%, transparent); }
+.zTable tbody tr:hover td { background: color-mix(in srgb, var(--color-secondary) 8%, transparent); }
+.zTable td strong { color: var(--ink); }
 
 /* ════════════════════════════════════════════════════════════════════════════
    Progress bar (zProgress) — canonical animated progress component
@@ -1576,14 +1587,14 @@ zNavBar .zNav-link.active {
   align-items: baseline;
   margin-bottom: 0.4rem;
 }
-.zProgress-container .zFw-bold     { font-weight: 600; color: var(--zprogress-label, #e5e7eb); }
+.zProgress-container .zFw-bold     { font-weight: 600; color: var(--zprogress-label, var(--ink)); }
 .zProgress-container .zText-muted  { color: var(--zprogress-info, rgba(229, 231, 235, 0.6)); }
 
 /* Track — the rail behind the fill. Inset shadow gives the pill real depth. */
 .zProgress {
   width: 100%;
   height: 1rem;                 /* default; renderer may override inline via height prop */
-  background: var(--zprogress-track, rgba(255, 255, 255, 0.07));
+  background: var(--zprogress-track, color-mix(in srgb, var(--ink) 7%, transparent));
   border-radius: 999px;
   overflow: hidden;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -1599,11 +1610,11 @@ zNavBar .zNav-link.active {
   background-color: var(--color-primary, #A2D46E);  /* default; zBg-{color} overrides */
   background-image:
     linear-gradient(to bottom,
-      rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.04) 48%, rgba(0, 0, 0, 0.10)),
+      color-mix(in srgb, var(--ink) 28%, transparent), var(--surface-1) 48%, rgba(0, 0, 0, 0.10)),
     linear-gradient(-45deg,
-      rgba(255, 255, 255, 0.16) 25%, transparent 25%,
-      transparent 50%, rgba(255, 255, 255, 0.16) 50%,
-      rgba(255, 255, 255, 0.16) 75%, transparent 75%, transparent);
+      color-mix(in srgb, var(--ink) 16%, transparent) 25%, transparent 25%,
+      transparent 50%, color-mix(in srgb, var(--ink) 16%, transparent) 50%,
+      color-mix(in srgb, var(--ink) 16%, transparent) 75%, transparent 75%, transparent);
   background-size: 100% 100%, 1.15rem 1.15rem;
   background-repeat: no-repeat, repeat;
   border-radius: inherit;
@@ -1637,11 +1648,11 @@ zNavBar .zNav-link.active {
 .zProgress-bar-striped {
   background-image:
     linear-gradient(to bottom,
-      rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.04) 48%, rgba(0, 0, 0, 0.10)),
+      color-mix(in srgb, var(--ink) 28%, transparent), var(--surface-1) 48%, rgba(0, 0, 0, 0.10)),
     linear-gradient(-45deg,
-      rgba(255, 255, 255, 0.28) 25%, transparent 25%,
-      transparent 50%, rgba(255, 255, 255, 0.28) 50%,
-      rgba(255, 255, 255, 0.28) 75%, transparent 75%, transparent);
+      color-mix(in srgb, var(--ink) 28%, transparent) 25%, transparent 25%,
+      transparent 50%, color-mix(in srgb, var(--ink) 28%, transparent) 50%,
+      color-mix(in srgb, var(--ink) 28%, transparent) 75%, transparent 75%, transparent);
 }
 .zProgress-bar-animated { animation: zProgress-flow 0.9s linear infinite; }
 
@@ -1726,7 +1737,7 @@ zNavBar .zNav-link.active {
 .zMenu-nav .zNav-link:focus-visible,
 .zMenu-container .zMenu-option button:hover,
 .zMenu-container .zMenu-option button:focus-visible {
-  background: rgba(162, 212, 110, 0.12);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
   border-color: var(--color-primary, #A2D46E);
   transform: translateX(2px);
   outline: none;
@@ -1768,7 +1779,7 @@ zNavBar .zNav-link.active {
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--color-secondary, #9370DB);
-  background: rgba(147, 112, 219, 0.16);
+  background: color-mix(in srgb, var(--color-secondary) 16%, transparent);
   border-radius: 50%;
 }
 
