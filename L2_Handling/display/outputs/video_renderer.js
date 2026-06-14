@@ -75,9 +75,8 @@ export class VideoRenderer {
     video.controls = true;          // always give the user native controls
     video.preload = 'metadata';     // fetch dimensions/duration, not the whole file
 
-    // Safe default so an unstyled video never overflows its column; _zClass wins.
-    video.style.maxWidth = '100%';
-    video.style.height = 'auto';
+    // Responsive sizing (max-width:100% + height:auto) is bifrost-owned in
+    // zbase.css; _zClass still wins for app-specific shaping.
 
     if (_zClass) video.className = _zClass;
     if (_id) video.setAttribute('id', _id);

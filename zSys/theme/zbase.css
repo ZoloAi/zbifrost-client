@@ -65,7 +65,7 @@ body {
   line-height: 1.5;
 }
 
-img, svg { display: block; max-width: 100%; }
+img, svg, video { display: block; max-width: 100%; }
 
 /* Default link color — zCLI/info palette, overridable via --color-link.
  * Navbar links and buttons opt out below (they manage their own color). */
@@ -245,6 +245,21 @@ dd:last-child { margin-bottom: 0; }
   list-style: none;
 }
 .zList-inline-item { margin: 0; }
+
+/* ─── Media (zImage / zVideo) ──────────────────────────────────────────────── */
+/* Bifrost owns the media baseline. <img>/<video> stay responsive (display:block
+ * + max-width:100% in the reset above); <video> keeps its aspect via height:auto.
+ * A captioned media renders inside a <figure> — own it so the UA's default
+ * `margin: 1em 40px` side-indent never offsets the media. figcaption is themed by
+ * the renderer via bifrost utilities (zText-muted/zText-center/zmt-2). */
+
+video { height: auto; }
+
+figure { margin: 0 0 1rem; }
+figure:last-child { margin-bottom: 0; }
+figure > img,
+figure > video { margin-bottom: 0; }
+figcaption { line-height: 1.5; }
 
 /* ─── Form controls — canonical field base (Bootstrap-like) ────────────────── */
 /* The client emits a real field as `.zForm-control` (default) or `.zInput`
