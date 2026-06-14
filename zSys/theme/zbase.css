@@ -1052,6 +1052,9 @@ zNavBar .zNav-link.active {
 }
 
 .zText-muted    { opacity: 0.6; }
+.zText-dark     { color: #f9fafb; }
+.zBorder        { border: 1px solid rgba(255, 255, 255, 0.12); }
+.zShadow-sm     { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
 .zText-center   { text-align: center !important; }
 .zText-start    { text-align: left !important; }
 .zText-end      { text-align: right !important; }
@@ -1123,6 +1126,39 @@ zNavBar .zNav-link.active {
 .zBtn-danger    { background: var(--color-error,     #E63946); color: #ffffff; }
 .zBtn-warning   { background: var(--color-warning,   #FFB347); color: #3a2400; }
 .zBtn-info      { background: var(--color-info,       #5CA9FF); color: #07243d; }
+
+/* Size + outline + group variants — emitted by the renderer (e.g. the zTable
+ * paging control bar). Outline buttons keep the base box model and only swap the
+ * skin (transparent fill, token-tinted text/border). */
+.zBtn-sm { padding: 0.32rem 0.7rem; font-size: 0.82rem; border-radius: 7px; }
+.zBtn-lg { padding: 0.8rem 1.8rem;  font-size: 1.05rem; border-radius: 11px; }
+
+.zBtn-outline-primary,
+.zBtn-outline-secondary,
+.zBtn-outline-success,
+.zBtn-outline-warning,
+.zBtn-outline-info {
+  background: transparent;
+  border-color: currentColor;
+}
+.zBtn-outline-primary   { color: var(--color-primary,   #A2D46E); }
+.zBtn-outline-secondary { color: var(--color-secondary, #9370DB); }
+.zBtn-outline-success   { color: var(--color-success,   #52B788); }
+.zBtn-outline-warning   { color: var(--color-warning,   #FFB347); }
+.zBtn-outline-info      { color: var(--color-info,       #5CA9FF); }
+.zBtn-outline-primary:hover,
+.zBtn-outline-secondary:hover,
+.zBtn-outline-success:hover,
+.zBtn-outline-warning:hover,
+.zBtn-outline-info:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.zBtn-group { display: inline-flex; }
+.zBtn-group > .zBtn { border-radius: 0; }
+.zBtn-group > .zBtn:first-child { border-top-left-radius: 7px; border-bottom-left-radius: 7px; }
+.zBtn-group > .zBtn:last-child  { border-top-right-radius: 7px; border-bottom-right-radius: 7px; }
+.zBtn-group > .zBtn:not(:first-child) { margin-left: -1px; }
 
 /* Structural display defaults */
 .zSignal     { display: block; }

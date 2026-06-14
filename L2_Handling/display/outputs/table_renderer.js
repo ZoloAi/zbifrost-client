@@ -218,7 +218,7 @@ export class TableRenderer {
     // Render caption as a description line UNDER the title (not a full-width row
     // inside the table). Reads like a subtitle: what the table shows / source / date.
     if (caption) {
-      const captionElement = createElement('p', ['zMuted', 'zMb-3']);
+      const captionElement = createElement('p', ['zText-muted', 'zmb-3']);
       captionElement.style.fontSize = '0.875rem';
       captionElement.textContent = this._decodeUnicodeEscapes(caption);
       wrapper.appendChild(captionElement);
@@ -323,7 +323,7 @@ export class TableRenderer {
 
     // Apply zTheme styling
     setAttributes(titleElement, {
-      class: 'zMb-3 zText-dark',
+      class: 'zmb-3 zText-dark',
       style: `font-weight: ${TYPOGRAPHY.FONT_WEIGHTS.MEDIUM};`
     });
 
@@ -574,7 +574,7 @@ export class TableRenderer {
     const jumpContainer = createDiv();
     jumpContainer.classList.add(
       'zD-flex',
-      'zAlign-items-center',
+      'zFlex-items-center',
       getGapClass(2)
     );
 
