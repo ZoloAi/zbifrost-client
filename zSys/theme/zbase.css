@@ -1055,6 +1055,7 @@ zNavBar .zNav-link.active {
 .zText-dark     { color: #f9fafb; }
 .zBorder        { border: 1px solid rgba(255, 255, 255, 0.12); }
 .zShadow-sm     { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); }
+.zBg-white      { background: rgba(255, 255, 255, 0.04); }
 .zText-center   { text-align: center !important; }
 .zText-start    { text-align: left !important; }
 .zText-end      { text-align: right !important; }
@@ -1117,6 +1118,12 @@ zNavBar .zNav-link.active {
   opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; filter: none;
 }
 
+/* Generic disabled — covers outline/plain buttons (e.g. paging First/Prev at edge)
+ * so a disabled control always reads as muted and never out-ranks an active one. */
+.zBtn:disabled, .zBtn[disabled] {
+  opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none;
+}
+
 /* SSOT fills — keyed to --color-* (same tokens/hexes as .zText-*), so a button
  * matches a heading of the same color name. Dark text on the light hues
  * (primary/success/warning/info), white on the deep ones (secondary/danger). */
@@ -1138,8 +1145,16 @@ zNavBar .zNav-link.active {
 .zBtn-outline-success,
 .zBtn-outline-warning,
 .zBtn-outline-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.4;
   background: transparent;
   border-color: currentColor;
+  transition: background 0.15s ease, transform 0.08s ease;
 }
 .zBtn-outline-primary   { color: var(--color-primary,   #A2D46E); }
 .zBtn-outline-secondary { color: var(--color-secondary, #9370DB); }
