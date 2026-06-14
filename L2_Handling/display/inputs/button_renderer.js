@@ -251,16 +251,19 @@ export default class ButtonRenderer {
     }  // Pass _id to primitive
     const button = createButton(type, attrs);
 
-    // Render icon or label
+    // Render the button face.
+    // - Legacy discrete `zIcon` field (menus / standalone icon events): icon only.
+    // - Otherwise the `label` is icon-aware (SSOT, mirrors the server/zCLI): any
+    //   `bi-*` token becomes a <i> glyph, every other token is literal text, order
+    //   preserved — so `bi-gear`, `bi-gear Settings`, and `bi-x bi-y Done` all work.
     if (zIcon) {
-      // Render Bootstrap icon instead of label
       const iconName = zIcon.replace(/^bi-/, ''); // Strip 'bi-' prefix if present
       const icon = document.createElement('i');
       icon.className = `bi bi-${iconName}`;
       button.appendChild(icon);
       this.logger.log(`[ButtonRenderer] Rendered icon: bi-${iconName}`);
     } else {
-      button.textContent = label;
+      this._renderLabel(button, label);
     }
 
     // Apply semantic button variant classes (zTheme button components)
@@ -292,6 +295,55 @@ export default class ButtonRenderer {
     // Uses semantic button classes (.zBtn-primary) per zTheme conventions
 
     return button;
+  }
+
+  /**
+   * Render an icon-aware label into a button (SSOT contract, mirrors zCLI).
+   *
+   * The label is split on whitespace; each `bi-*` token becomes a Bootstrap
+   * `<i>` glyph and every other token is rendered as literal text, in author
+   * order. This natively covers icon-only (`bi-gear`), icon + text
+   * (`bi-gear Settings`) and multi-icon (`bi-x bi-y Done`) labels. When the
+   * label is icon-only, an `aria-label` is derived from the icon name(s) so the
+   * button still has an accessible name.
+   *
+   * @private
+   * @param {HTMLElement} button - Target button element
+   * @param {string} label - Icon-aware label string
+   */
+  _renderLabel(button, label) {
+    const raw = (label === null || label === undefined) ? '' : String(label);
+    const tokens = raw.split(/\s+/).filter(Boolean);
+    const iconRe = /^bi-[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+    // No icon tokens → plain text label (fast path, preserves original spacing).
+    if (!tokens.some((t) => iconRe.test(t))) {
+      button.textContent = raw;
+      return;
+    }
+
+    const iconNames = [];
+    const words = [];
+    tokens.forEach((tok) => {
+      if (button.childNodes.length) {
+        button.appendChild(document.createTextNode(' '));
+      }
+      if (iconRe.test(tok)) {
+        const icon = document.createElement('i');
+        icon.className = `bi ${tok}`;
+        button.appendChild(icon);
+        iconNames.push(tok.replace(/^bi-/, '').replace(/-/g, ' '));
+      } else {
+        button.appendChild(document.createTextNode(tok));
+        words.push(tok);
+      }
+    });
+
+    // Accessible name: visible text wins; otherwise spell out the icon(s).
+    if (!words.length && iconNames.length) {
+      button.setAttribute('aria-label', iconNames.join(', '));
+    }
+    this.logger.log(`[ButtonRenderer] Rendered icon-aware label: icons=[${iconNames.join('|')}] text="${words.join(' ')}"`);
   }
 
   /**
