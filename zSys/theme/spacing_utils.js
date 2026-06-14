@@ -13,7 +13,7 @@
  * Philosophy:
  * - "Spacing first" - Rhythm and breathing room for all layouts
  * - Pure functions (input → output, no side effects)
- * - Uses zTheme spacing scale exclusively (0-5, auto, negative)
+ * - Uses zTheme spacing scale exclusively (0-5, plus zmx-auto for centering)
  * - Generates class names programmatically (no hardcoded strings)
  *
  * zTheme Spacing Scale:
@@ -23,8 +23,7 @@
  * - 3: 1rem (16px)  Base unit
  * - 4: 1.5rem (24px)
  * - 5: 3rem (48px)
- * - auto: Auto (for centering)
- * - n1-n5: Negative margins (pull elements closer)
+ * - auto: horizontal centering only (zmx-auto)
  *
  * Dependencies:
  * - None (pure utility, no imports needed)
@@ -54,26 +53,26 @@
 /**
  * Generate margin class name (zTheme: zm-, zmt-, zmb-, zms-, zme-, zmx-, zmy-)
  *
- * Supports all zTheme margin patterns:
- * - All sides: zm-{0-5|auto}
- * - Top: zmt-{0-5|auto}
- * - Bottom: zmb-{0-5} (no auto)
- * - Start (left in LTR): zms-{0-5} (no auto)
- * - End (right in LTR): zme-{0-5|auto}
- * - X-axis (left + right): zmx-{0-5|auto}
- * - Y-axis (top + bottom): zmy-{0-5|auto}
- * - Negative: zm-n{1-5}, zmt-n{1-5}, zmb-n{1-5}, zms-n{1-5}, zme-n{1-5}, zmx-n{1-5}, zmy-n{1-5}
+ * Supports the zTheme margin patterns defined in zbase.css:
+ * - All sides: zm-{0-5}
+ * - Top: zmt-{0-5}
+ * - Bottom: zmb-{0-5}
+ * - Start (left in LTR): zms-{0-5}
+ * - End (right in LTR): zme-{0-5}
+ * - X-axis (left + right): zmx-{0-5} | zmx-auto
+ * - Y-axis (top + bottom): zmy-{0-5}
  *
- * @param {number|string|null} size - Size (0-5) or 'auto' or negative (e.g., -2)
+ * Note: 'auto' is supported only on the x-axis (zmx-auto, horizontal centering).
+ * Negative margins are not part of zbase and return null.
+ *
+ * @param {number|string|null} size - Size (0-5) or 'auto' (x-axis only)
  * @param {string} [side=''] - Side ('top', 'bottom', 'start', 'end', 'x', 'y', or '' for all)
  * @returns {string|null} Class name or null if invalid
  *
  * @example
  * getMarginClass(3);              // 'zm-3' (all sides)
  * getMarginClass(4, 'top');       // 'zmt-4'
- * getMarginClass('auto');         // 'zm-auto'
  * getMarginClass('auto', 'x');    // 'zmx-auto' (horizontal centering)
- * getMarginClass(-2, 'top');      // 'zmt-n2' (negative margin, pull up)
  */
 export function getMarginClass(size, side = '') {
   // Handle null/undefined
@@ -93,22 +92,11 @@ export function getMarginClass(size, side = '') {
   };
   const sideSuffix = sideMap[side] || '';
 
-  // Handle auto
+  // Handle auto — only zmx-auto exists in zbase (horizontal centering).
+  // Negative margins and other -auto sides were removed: nothing emitted them and
+  // zbase never defined the classes (they'd be silent no-ops).
   if (size === 'auto') {
-    // Only these sides support auto in zTheme
-    if (sideSuffix === '' || sideSuffix === 't' || sideSuffix === 'e' || sideSuffix === 'x' || sideSuffix === 'y') {
-      return `zm${sideSuffix}-auto`;
-    }
-    return null; // zmb-auto and zms-auto don't exist
-  }
-
-  // Handle negative margins
-  if (typeof size === 'number' && size < 0) {
-    const absSize = Math.abs(size);
-    if (absSize >= 1 && absSize <= 5) {
-      return `zm${sideSuffix}-n${absSize}`;
-    }
-    return null;
+    return sideSuffix === 'x' ? 'zmx-auto' : null;
   }
 
   // Handle positive sizes (0-5)

@@ -9,8 +9,8 @@
  * Sections:
  *   0. Base color tokens (SSOT — --color-*)
  *   1. Reset
- *   2. Grid  (zRow / zCol-* / zCol-auto, responsive xs→xl)
- *   3. Gutters (zG-0 … zG-5)
+ *   2. Grid  (zRow / zCol / zCol-auto — minimal, used by zDash)
+ *   3. Gutters (zG-0 only)
  *   4. Flex utilities
  *   5. Display helpers (.zD-flex, .zD-block, etc.)
  *   6. Spacing helpers (.zm-*, .zp-*, .zme-*, .zms-*)
@@ -69,8 +69,17 @@ zvaf,
 zNavBar,
 zBifrostBadge { display: block; }
 
-/* ─── zOS heading extensions ──────────────────────────────────────────────── */
-/* h0: zOS system/hero heading — not in HTML5 spec, used for page-level titles */
+/* ─── zOS heading scale (zH0–zH6) ──────────────────────────────────────────── */
+/* Bifrost owns the heading baseline so a bare <h1>…<h6> renders deliberately,
+ * identical to zCLI, with no app CSS. Apps re-skin via _zClass — they never
+ * SUPPLY the scale. h0 is the zOS system/hero heading (not in HTML5). */
+
+h0, h1, h2, h3, h4, h5, h6 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
 
 h0 {
   display: block;
@@ -78,9 +87,14 @@ h0 {
   font-weight: 800;
   line-height: 1.1;
   letter-spacing: -0.02em;
-  margin-top: 0;
-  margin-bottom: 0.5rem;
 }
+
+h1 { font-size: 2.5rem;  font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; }
+h2 { font-size: 2rem;    font-weight: 700; line-height: 1.2;  letter-spacing: -0.01em; }
+h3 { font-size: 1.75rem; }
+h4 { font-size: 1.5rem;  }
+h5 { font-size: 1.25rem; }
+h6 { font-size: 1rem;    }
 
 /* ─── zTheme semantic text colors — zCLI parity ───────────────────────────── */
 /* The client maps a header/text `color:` token → `.zText-<token>`. These are
@@ -720,106 +734,19 @@ zNavBar .zNav-link.active {
 .zCol      { flex: 1 0 0%; }
 .zCol-auto { flex: 0 0 auto; width: auto; }
 
-.zCol-1  { flex: 0 0 auto; width:  8.33333333%; }
-.zCol-2  { flex: 0 0 auto; width: 16.66666667%; }
-.zCol-3  { flex: 0 0 auto; width: 25%; }
-.zCol-4  { flex: 0 0 auto; width: 33.33333333%; }
-.zCol-5  { flex: 0 0 auto; width: 41.66666667%; }
-.zCol-6  { flex: 0 0 auto; width: 50%; }
-.zCol-7  { flex: 0 0 auto; width: 58.33333333%; }
-.zCol-8  { flex: 0 0 auto; width: 66.66666667%; }
-.zCol-9  { flex: 0 0 auto; width: 75%; }
-.zCol-10 { flex: 0 0 auto; width: 83.33333333%; }
-.zCol-11 { flex: 0 0 auto; width: 91.66666667%; }
-.zCol-12 { flex: 0 0 auto; width: 100%; }
-
-@media (min-width: 576px) {
-  .zCol-sm      { flex: 1 0 0%; }
-  .zCol-sm-auto { flex: 0 0 auto; width: auto; }
-  .zCol-sm-1  { flex: 0 0 auto; width:  8.33333333%; }
-  .zCol-sm-2  { flex: 0 0 auto; width: 16.66666667%; }
-  .zCol-sm-3  { flex: 0 0 auto; width: 25%; }
-  .zCol-sm-4  { flex: 0 0 auto; width: 33.33333333%; }
-  .zCol-sm-5  { flex: 0 0 auto; width: 41.66666667%; }
-  .zCol-sm-6  { flex: 0 0 auto; width: 50%; }
-  .zCol-sm-7  { flex: 0 0 auto; width: 58.33333333%; }
-  .zCol-sm-8  { flex: 0 0 auto; width: 66.66666667%; }
-  .zCol-sm-9  { flex: 0 0 auto; width: 75%; }
-  .zCol-sm-10 { flex: 0 0 auto; width: 83.33333333%; }
-  .zCol-sm-11 { flex: 0 0 auto; width: 91.66666667%; }
-  .zCol-sm-12 { flex: 0 0 auto; width: 100%; }
-}
-
-@media (min-width: 768px) {
-  .zCol-md      { flex: 1 0 0%; }
-  .zCol-md-auto { flex: 0 0 auto; width: auto; }
-  .zCol-md-1  { flex: 0 0 auto; width:  8.33333333%; }
-  .zCol-md-2  { flex: 0 0 auto; width: 16.66666667%; }
-  .zCol-md-3  { flex: 0 0 auto; width: 25%; }
-  .zCol-md-4  { flex: 0 0 auto; width: 33.33333333%; }
-  .zCol-md-5  { flex: 0 0 auto; width: 41.66666667%; }
-  .zCol-md-6  { flex: 0 0 auto; width: 50%; }
-  .zCol-md-7  { flex: 0 0 auto; width: 58.33333333%; }
-  .zCol-md-8  { flex: 0 0 auto; width: 66.66666667%; }
-  .zCol-md-9  { flex: 0 0 auto; width: 75%; }
-  .zCol-md-10 { flex: 0 0 auto; width: 83.33333333%; }
-  .zCol-md-11 { flex: 0 0 auto; width: 91.66666667%; }
-  .zCol-md-12 { flex: 0 0 auto; width: 100%; }
-}
-
-@media (min-width: 992px) {
-  .zCol-lg      { flex: 1 0 0%; }
-  .zCol-lg-auto { flex: 0 0 auto; width: auto; }
-  .zCol-lg-1  { flex: 0 0 auto; width:  8.33333333%; }
-  .zCol-lg-2  { flex: 0 0 auto; width: 16.66666667%; }
-  .zCol-lg-3  { flex: 0 0 auto; width: 25%; }
-  .zCol-lg-4  { flex: 0 0 auto; width: 33.33333333%; }
-  .zCol-lg-5  { flex: 0 0 auto; width: 41.66666667%; }
-  .zCol-lg-6  { flex: 0 0 auto; width: 50%; }
-  .zCol-lg-7  { flex: 0 0 auto; width: 58.33333333%; }
-  .zCol-lg-8  { flex: 0 0 auto; width: 66.66666667%; }
-  .zCol-lg-9  { flex: 0 0 auto; width: 75%; }
-  .zCol-lg-10 { flex: 0 0 auto; width: 83.33333333%; }
-  .zCol-lg-11 { flex: 0 0 auto; width: 91.66666667%; }
-  .zCol-lg-12 { flex: 0 0 auto; width: 100%; }
-}
-
-@media (min-width: 1200px) {
-  .zCol-xl      { flex: 1 0 0%; }
-  .zCol-xl-auto { flex: 0 0 auto; width: auto; }
-  .zCol-xl-1  { flex: 0 0 auto; width:  8.33333333%; }
-  .zCol-xl-2  { flex: 0 0 auto; width: 16.66666667%; }
-  .zCol-xl-3  { flex: 0 0 auto; width: 25%; }
-  .zCol-xl-4  { flex: 0 0 auto; width: 33.33333333%; }
-  .zCol-xl-5  { flex: 0 0 auto; width: 41.66666667%; }
-  .zCol-xl-6  { flex: 0 0 auto; width: 50%; }
-  .zCol-xl-7  { flex: 0 0 auto; width: 58.33333333%; }
-  .zCol-xl-8  { flex: 0 0 auto; width: 66.66666667%; }
-  .zCol-xl-9  { flex: 0 0 auto; width: 75%; }
-  .zCol-xl-10 { flex: 0 0 auto; width: 83.33333333%; }
-  .zCol-xl-11 { flex: 0 0 auto; width: 91.66666667%; }
-  .zCol-xl-12 { flex: 0 0 auto; width: 100%; }
-}
+/* zbase ships ONLY the minimal grid the renderer emits (zRow / zCol / zCol-auto —
+ * used by zDash). The full 12-column matrix and responsive breakpoint variants
+ * (zCol-1..12, zCol-{sm,md,lg,xl}-*) were evicted: zOS is not a CSS framework.
+ * An app that wants a column grid brings its own stylesheet. Strip, don't compile —
+ * it's CSS, trivially re-added if a real zOS event ever needs it. */
 
 /* ─── 3. Gutters ───────────────────────────────────────────────────────────── */
 
+/* Only zG-0 is kept — zDash builds its sidebar/content row with `.zRow.zG-0`
+ * (zero gutters). The zG-1..5 gutter scale was a framework convenience nothing
+ * emits; evicted with the 12-col grid above. */
 .zRow.zG-0 { margin-right: 0; margin-left: 0; }
 .zRow.zG-0 > [class*="zCol"] { padding-right: 0; padding-left: 0; }
-
-.zRow.zG-1 { margin-right: -0.25rem; margin-left: -0.25rem; }
-.zRow.zG-1 > [class*="zCol"] { padding-right: 0.25rem; padding-left: 0.25rem; }
-
-.zRow.zG-2 { margin-right: -0.5rem; margin-left: -0.5rem; }
-.zRow.zG-2 > [class*="zCol"] { padding-right: 0.5rem; padding-left: 0.5rem; }
-
-.zRow.zG-3 { margin-right: -0.75rem; margin-left: -0.75rem; }
-.zRow.zG-3 > [class*="zCol"] { padding-right: 0.75rem; padding-left: 0.75rem; }
-
-.zRow.zG-4 { margin-right: -1rem; margin-left: -1rem; }
-.zRow.zG-4 > [class*="zCol"] { padding-right: 1rem; padding-left: 1rem; }
-
-.zRow.zG-5 { margin-right: -1.5rem; margin-left: -1.5rem; }
-.zRow.zG-5 > [class*="zCol"] { padding-right: 1.5rem; padding-left: 1.5rem; }
 
 /* ─── 4. Flex utilities ────────────────────────────────────────────────────── */
 
@@ -844,13 +771,9 @@ zNavBar .zNav-link.active {
 .zFlex-items-stretch   { align-items: stretch !important; }
 .zFlex-items-baseline  { align-items: baseline !important; }
 
-.zFlex-fill            { flex: 1 1 auto !important; }
-.zFlex-1               { flex: 1 !important; }
-.zFlex-grow-0          { flex-grow: 0 !important; }
-.zFlex-grow-1          { flex-grow: 1 !important; }
-.zFlex-shrink-0        { flex-shrink: 0 !important; }
-.zFlex-shrink-1        { flex-shrink: 1 !important; }
-
+/* grow/shrink/fill helpers evicted — not in the _GUI container mapper
+ * (container_utils.js) and never emitted. Re-add only if a real zOS event needs
+ * flex grow/shrink. */
 .zGap-0 { gap: 0 !important; }
 .zGap-1 { gap: 0.25rem !important; }
 .zGap-2 { gap: 0.5rem !important; }
@@ -904,6 +827,22 @@ zNavBar .zNav-link.active {
 .zme-4 { margin-right: 1rem !important; }
 .zme-5 { margin-right: 1.5rem !important; }
 
+/* axis margins — emitted by spacing_utils (getMarginClass side 'x'/'y'). zmx-auto
+ * (centering) lives in the misc helpers section. */
+.zmx-0 { margin-left: 0 !important;       margin-right: 0 !important; }
+.zmx-1 { margin-left: 0.25rem !important; margin-right: 0.25rem !important; }
+.zmx-2 { margin-left: 0.5rem !important;  margin-right: 0.5rem !important; }
+.zmx-3 { margin-left: 0.75rem !important; margin-right: 0.75rem !important; }
+.zmx-4 { margin-left: 1rem !important;    margin-right: 1rem !important; }
+.zmx-5 { margin-left: 1.5rem !important;  margin-right: 1.5rem !important; }
+
+.zmy-0 { margin-top: 0 !important;       margin-bottom: 0 !important; }
+.zmy-1 { margin-top: 0.25rem !important; margin-bottom: 0.25rem !important; }
+.zmy-2 { margin-top: 0.5rem !important;  margin-bottom: 0.5rem !important; }
+.zmy-3 { margin-top: 0.75rem !important; margin-bottom: 0.75rem !important; }
+.zmy-4 { margin-top: 1rem !important;    margin-bottom: 1rem !important; }
+.zmy-5 { margin-top: 1.5rem !important;  margin-bottom: 1.5rem !important; }
+
 .zp-0 { padding: 0 !important; }
 .zp-1 { padding: 0.25rem !important; }
 .zp-2 { padding: 0.5rem !important; }
@@ -938,6 +877,21 @@ zNavBar .zNav-link.active {
 .zpe-3 { padding-right: 0.75rem !important; }
 .zpe-4 { padding-right: 1rem !important; }
 .zpe-5 { padding-right: 1.5rem !important; }
+
+/* axis padding — emitted by spacing_utils (getPaddingClass side 'x'/'y'). */
+.zpx-0 { padding-left: 0 !important;       padding-right: 0 !important; }
+.zpx-1 { padding-left: 0.25rem !important; padding-right: 0.25rem !important; }
+.zpx-2 { padding-left: 0.5rem !important;  padding-right: 0.5rem !important; }
+.zpx-3 { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+.zpx-4 { padding-left: 1rem !important;    padding-right: 1rem !important; }
+.zpx-5 { padding-left: 1.5rem !important;  padding-right: 1.5rem !important; }
+
+.zpy-0 { padding-top: 0 !important;       padding-bottom: 0 !important; }
+.zpy-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+.zpy-2 { padding-top: 0.5rem !important;  padding-bottom: 0.5rem !important; }
+.zpy-3 { padding-top: 0.75rem !important; padding-bottom: 0.75rem !important; }
+.zpy-4 { padding-top: 1rem !important;    padding-bottom: 1rem !important; }
+.zpy-5 { padding-top: 1.5rem !important;  padding-bottom: 1.5rem !important; }
 
 /* ─── 7. Tabs ──────────────────────────────────────────────────────────────── */
 

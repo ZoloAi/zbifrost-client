@@ -14,12 +14,8 @@
  * Philosophy:
  * - Semantic hierarchy (h0-h6 for document structure)
  * - Block-level text (paragraphs)
- * - NO styling, NO classes (dress up later)
- * - zReboot.css provides baseline (margins, font-sizes, line-height)
- *
- * zReboot Defaults (from zTheme):
- * - Headings: margin-top: 0, margin-bottom: 0.5rem, font-weight: 500, line-height: 1.2
- * - Paragraph: margin-top: 0, margin-bottom: 1rem
+ * - NO styling, NO classes here — zbase.css owns the heading/paragraph baseline
+ *   (sizes, weights, margins). These factories emit bare elements only.
  *
  * Dependencies:
  * - utils/dom_utils.js (createElement, setAttributes)
@@ -68,14 +64,9 @@ import { createElement, setAttributes } from '../../../zSys/dom/dom_utils.js';
  * - h3: Subsections
  * - h4-h6: Further nested subsections
  *
- * zReboot Defaults:
- * - h0: Custom zOS element (36-56px)
- * - h1: 2.5rem (40px)
- * - h2: 2rem (32px)
- * - h3: 1.75rem (28px)
- * - h4: 1.5rem (24px)
- * - h5: 1.25rem (20px)
- * - h6: 1rem (16px)
+ * Sizes (owned by zbase.css, not here):
+ * - h0: clamp(2.5rem, 5vw, 4rem) — zOS hero
+ * - h1: 2.5rem  h2: 2rem  h3: 1.75rem  h4: 1.5rem  h5: 1.25rem  h6: 1rem
  *
  * @param {number} [level=1] - Heading level (0-6), enforced and capped
  * @param {Object} [attributes={}] - HTML attributes (id, class, data-*, etc.)
@@ -135,10 +126,7 @@ export function createHeading(level = 1, attributes = {}) {
  *
  * Used for blocks of text content (body copy, descriptions, etc.).
  * The most common text container in web documents.
- *
- * zReboot Defaults:
- * - margin-top: 0
- * - margin-bottom: 1rem
+ * Spacing/baseline owned by zbase.css; this factory emits a bare <p>.
  *
  * @param {Object} [attributes={}] - HTML attributes (id, class, data-*, etc.)
  * @returns {HTMLParagraphElement} The created paragraph element
