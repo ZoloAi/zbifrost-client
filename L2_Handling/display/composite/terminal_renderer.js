@@ -41,6 +41,14 @@ import { TYPOGRAPHY } from '../../../L1_Foundation/constants/bifrost_constants.j
 // Layer 0: Primitives
 import { createButton } from '../primitives/interactive_primitives.js';
 
+// Byte-exact source store, keyed by terminalId. zTerminal source is
+// whitespace-significant (zUI/Python), and a DOM `data-*` attribute is NOT a
+// safe round-trip for multi-line, indentation-sensitive text — re-serialization
+// of the host node can silently drop leading spaces on a line, corrupting the
+// indentation the parser depends on. Holding the raw content in memory keeps the
+// Run payload identical to what the server sent.
+const _zTerminalSource = new Map();
+
 // 
 // Main Implementation
 // 
@@ -111,8 +119,11 @@ export default class TerminalRenderer {
     const outputArea = this._createOutputArea(terminalId);
     container.appendChild(outputArea);
 
-    // Store raw content and title for execution (backend parses fences)
-    container.dataset.content = rawContent;
+    // Store raw content + title for execution (backend parses fences). The
+    // content lives in an in-memory Map — NOT a data-* attribute — so its
+    // indentation survives byte-exact to the Run payload. Title is short and
+    // whitespace-insensitive, so the dataset is fine for it.
+    _zTerminalSource.set(terminalId, rawContent);
     container.dataset.title = title;
 
     return container;
@@ -433,7 +444,11 @@ export default class TerminalRenderer {
       return;
     }
 
-    const content = container.dataset.content;
+    // Read the byte-exact source from the in-memory store (indentation intact).
+    // Fall back to the legacy data-attribute only if the Map entry is missing.
+    const content = _zTerminalSource.has(terminalId)
+      ? _zTerminalSource.get(terminalId)
+      : container.dataset.content;
     const outputArea = document.getElementById(`${terminalId}_output`);
 
     if (!outputArea) {
