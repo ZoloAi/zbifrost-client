@@ -133,7 +133,7 @@ h6 { font-size: var(--h6-size); }
 
 p {
   margin-top: 0;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
   line-height: 1.5;
 }
 
@@ -192,8 +192,8 @@ code:not(pre code) {
  * with a higher-specificity rule. */
 
 blockquote {
-  margin: 0.75rem 0;
-  padding: 0.5rem 1rem;
+  margin: var(--space-3) 0;
+  padding: var(--space-2) var(--space-4);
   border-left: 4px solid var(--color-primary, #A2D46E);
   background: color-mix(in srgb, var(--color-primary, #A2D46E) 8%, transparent);
   border-radius: 0 6px 6px 0;
@@ -208,8 +208,8 @@ blockquote > p { margin: 0; }
  * and is left alone. Apps re-skin via _zClass. */
 
 pre {
-  margin: 0.75rem 0;
-  padding: 0.75rem 1rem;
+  margin: var(--space-3) 0;
+  padding: var(--space-3) var(--space-4);
   font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
   font-size: 0.88em;
   line-height: 1.5;
