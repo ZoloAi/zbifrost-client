@@ -72,6 +72,25 @@ import emojiAccessibility from '../../../zSys/accessibility/emoji_accessibility.
 import { convertZPathToURL, detectLinkType, LINK_TYPE_EXTERNAL } from '../primitives/link_primitives.js';
 import { escapeHtml, safeHref } from '../../../zSys/dom/encoding_utils.js';
 
+// Typography primitives: shared SSOT factories. zMD is a COMPILER OF EXISTING
+// EVENTS — its covered block constructs (headings, paragraphs, blockquotes) are
+// built through the SAME factories the zH*/zText events use, so the markup can
+// never drift from the events. Inline emphasis stays a string transform for now;
+// a later iteration extends this seam to lists / links / fenced code.
+import { createHeading, createParagraph } from '../primitives/typography_primitives.js';
+import { createSemanticElement } from '../primitives/semantic_element_primitive.js';
+
+// Inline emphasis marker → semantic tag (SSOT). Centralized here so the later
+// delegation iteration can extend/redirect inline markup from one place rather
+// than hunting individual regexes.
+const ZMD_INLINE_TAGS = {
+  strong: 'strong', // **bold**
+  em:     'em',     // *italic*
+  u:      'u',      // __underline__
+  del:    'del',    // ~~strike~~
+  mark:   'mark',   // ==highlight==
+};
+
 // 
 // Text Renderer Class
 // 
@@ -177,9 +196,12 @@ export class TextRenderer {
     // Process at line start or after newline, must be before bold/italic to avoid conflicts
     // Accept both "# Title" (standard) and "#Title" (lenient)
     html = html.replace(/(?:^|\n)(#{1,6})\s*(.+?)(?=\n|$)/g, (match, hashes, text) => {
-      const level = hashes.length;
-      const trimmedText = text.trim();
-      return `\n<h${level}>${trimmedText}</h${level}>\n`;
+      // Delegate to the zH* heading factory (SSOT). Inner text still carries raw
+      // inline markdown here; it stays in the string pipeline and is converted by
+      // the emphasis/code passes below, exactly as before.
+      const heading = createHeading(hashes.length);
+      heading.innerHTML = text.trim();
+      return `\n${heading.outerHTML}\n`;
     });
 
     // Tables: intentionally NOT supported in zMD. Tabular data is structured data
@@ -278,31 +300,39 @@ export class TextRenderer {
       
       // Join lines with <br>, treating empty strings as visual line breaks
       const quoteContent = lines.join('<br>');
-      // Clean semantic element — base styling lives in zSys/theme/zbase.css
-      // (zTheme base), not hardcoded here, so it themes per-app and per-mode.
-      return `\n<blockquote><p>${quoteContent}</p></blockquote>\n`;
+      // Delegate to the semantic + paragraph factories (SSOT). Clean bare element;
+      // base styling lives in zSys/theme/zbase.css (zTheme base), not hardcoded
+      // here, so it themes per-app and per-mode. Inner inline markdown is still
+      // converted by the passes below (output is a string in the pipeline).
+      const blockquote = createSemanticElement('blockquote');
+      const quotePara = createParagraph();
+      quotePara.innerHTML = quoteContent;
+      blockquote.appendChild(quotePara);
+      return `\n${blockquote.outerHTML}\n`;
     });
+
+    // Inline emphasis → semantic tags (tags from ZMD_INLINE_TAGS SSOT).
 
     // Bold: **text** -> <strong>text</strong>
     // Use non-greedy .*? to allow nested italics (e.g., **text with *italic* inside**)
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*\*(.+?)\*\*/g, `<${ZMD_INLINE_TAGS.strong}>$1</${ZMD_INLINE_TAGS.strong}>`);
 
     // Italic: *text* -> <em>text</em> (but not ** from bold)
     // Use non-greedy .*? for consistency
-    html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+    html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<${ZMD_INLINE_TAGS.em}>$1</${ZMD_INLINE_TAGS.em}>`);
 
     // Underline/Strikethrough/Highlight run BEFORE inline code restoration
     // so their syntax inside backtick spans stays shielded by placeholders
 
     // Underline: __text__ -> <u>text</u>
     // Negative lookaround prevents matching ___INLINE_CODE_N___ placeholders
-    html = html.replace(/(?<!_)__(?!_)([^_\n]+?)(?<!_)__(?!_)/g, '<u>$1</u>');
+    html = html.replace(/(?<!_)__(?!_)([^_\n]+?)(?<!_)__(?!_)/g, `<${ZMD_INLINE_TAGS.u}>$1</${ZMD_INLINE_TAGS.u}>`);
 
     // Strikethrough: ~~text~~ -> <del>text</del>
-    html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+    html = html.replace(/~~([^~]+)~~/g, `<${ZMD_INLINE_TAGS.del}>$1</${ZMD_INLINE_TAGS.del}>`);
 
     // Highlight: ==text== -> <mark>text</mark>
-    html = html.replace(/==([^=]+)==/g, '<mark>$1</mark>');
+    html = html.replace(/==([^=]+)==/g, `<${ZMD_INLINE_TAGS.mark}>$1</${ZMD_INLINE_TAGS.mark}>`);
 
     // Restore inline code blocks — must be last so all inline syntax above
     // was shielded by ___INLINE_CODE_N___ placeholders
@@ -445,8 +475,8 @@ export class TextRenderer {
             container.appendChild(child);
           });
         } else {
-          // Regular text content - wrap in <p>
-          const p = createElement('p', []);
+          // Regular text content - wrap in <p> via the zText paragraph factory (SSOT)
+          const p = createParagraph();
           p.innerHTML = accessibleHTML;
           container.appendChild(p);
         }
@@ -485,8 +515,9 @@ export class TextRenderer {
         element = createElement('div', classes);
         element.innerHTML = accessibleHTML;
       } else {
-        // Regular text content - wrap in <p>
-        element = createElement('p', classes);
+        // Regular text content - wrap in <p> via the zText paragraph factory (SSOT)
+        element = createParagraph();
+        if (classes.length) element.className = classes.join(' ');
         element.innerHTML = accessibleHTML;
       }
       
