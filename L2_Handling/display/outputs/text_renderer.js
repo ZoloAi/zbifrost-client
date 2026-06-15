@@ -70,7 +70,7 @@ import emojiAccessibility from '../../../zSys/accessibility/emoji_accessibility.
 
 // Link primitives: shared URL conversion and type detection (SSOT)
 import { convertZPathToURL, detectLinkType, LINK_TYPE_EXTERNAL } from '../primitives/link_primitives.js';
-import { escapeHtml, safeHref } from '../../../zSys/dom/encoding_utils.js';
+import { escapeHtml, safeHref, decodeUnicodeEscapes } from '../../../zSys/dom/encoding_utils.js';
 
 // Typography primitives: shared SSOT factories. zMD is a COMPILER OF EXISTING
 // EVENTS — its covered block constructs (headings, paragraphs, blockquotes) are
@@ -415,7 +415,7 @@ export class TextRenderer {
     });
     
     // Now decode escapes in the text OUTSIDE of inline code
-    const decodedContent = this._decodeUnicodeEscapes(protectedContent);
+    const decodedContent = decodeUnicodeEscapes(protectedContent);
     
     // Check if decoded content contains explicit \n (paragraph breaks)
     // If so, split into multiple paragraphs; otherwise, render as single paragraph
@@ -612,44 +612,6 @@ export class TextRenderer {
     this.logger.debug(`[TextRenderer] Rendered text (%s chars, indent: %s)`, content.length, indent);
 
     return p;
-  }
-
-  /**
-   * Decode Unicode escape sequences to actual characters
-   * Supports: \uXXXX (standard) and \UXXXXXXXX (extended) formats
-   * 
-   * Note: Basic escape sequences (\n, \t, etc.) are handled by JSON.parse()
-   * automatically when receiving data from backend. We only need to decode
-   * custom Unicode formats that JSON doesn't handle.
-   * 
-   * @param {string} text - Text containing Unicode escapes
-   * @returns {string} - Decoded text
-   * @private
-   */
-  _decodeUnicodeEscapes(text) {
-    if (!text || typeof text !== 'string') return text;
-    
-    // Replace \uXXXX format (standard 4-digit Unicode escape)
-    text = text.replace(/\\u([0-9A-Fa-f]{4})/g, (match, hexCode) => {
-      return String.fromCodePoint(parseInt(hexCode, 16));
-    });
-    
-    // Replace \UXXXXXXXX format (extended 4-8 digit for supplementary characters & emojis)
-    text = text.replace(/\\U([0-9A-Fa-f]{4,8})/g, (match, hexCode) => {
-      return String.fromCodePoint(parseInt(hexCode, 16));
-    });
-    
-    // Replace basic escape sequences (literal strings like \\n, \\t, etc.)
-    // These come from JSON where Python sends "\n" which becomes "\\n" in JSON
-    text = text
-      .replace(/\\n/g, '\n')   // Newline
-      .replace(/\\t/g, '\t')   // Tab
-      .replace(/\\r/g, '\r')   // Carriage return
-      .replace(/\\'/g, "'")    // Single quote
-      .replace(/\\"/g, '"')    // Double quote
-      .replace(/\\\\/g, '\\'); // Backslash (must be last!)
-    
-    return text;
   }
 
   /**

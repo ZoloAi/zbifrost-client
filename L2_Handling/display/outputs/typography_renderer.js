@@ -11,7 +11,7 @@
 // Layer 0: Primitives
 import { createHeading, createParagraph } from '../primitives/typography_primitives.js';
 import { createSemanticElement, createLanguagePre } from '../primitives/semantic_element_primitive.js';
-import { escapeHtml } from '../../../zSys/dom/encoding_utils.js';
+import { escapeHtml, decodeUnicodeEscapes } from '../../../zSys/dom/encoding_utils.js';
 
 export class TypographyRenderer {
   constructor(logger) {
@@ -61,7 +61,7 @@ export class TypographyRenderer {
     }
     
     // Decode content once at function scope for delegation
-    const content = this._decodeUnicodeEscapes(eventData.content || '');
+    const content = decodeUnicodeEscapes(eventData.content || '');
     
     // Check semantic parameter (_zHTML takes precedence, semantic for backward compatibility)
     const semantic = eventData._zHTML || eventData.semantic;
@@ -143,7 +143,7 @@ export class TypographyRenderer {
 
     // Decode Unicode escapes and convert newlines to <br> for Bifrost
     const content = eventData.label || eventData.content || '';
-    const decoded = this._decodeUnicodeEscapes(content);
+    const decoded = decodeUnicodeEscapes(content);
     h.innerHTML = this._convertNewlinesToBr(decoded);
     
     // Handle _zDelegate: update target element with this header's content
@@ -192,45 +192,6 @@ export class TypographyRenderer {
     // not here — this builder only owns the contextual color class.
 
     return classes.length > 0 ? classes.join(' ') : '';
-  }
-
-  /**
-   * Decode Unicode escape sequences to actual characters
-   * Supports: \uXXXX (standard) and \UXXXXXXXX (extended) formats
-   * 
-   * Note: Basic escape sequences (\n, \t, etc.) are handled by JSON.parse()
-   * automatically when receiving data from backend. We only need to decode
-   * custom Unicode formats that JSON doesn't handle.
-   * 
-   * @param {string} text - Text containing Unicode escapes
-   * @returns {string} - Decoded text
-   * @private
-   */
-  _decodeUnicodeEscapes(text) {
-    if (text === null || text === undefined) return '';
-    if (typeof text !== 'string') return String(text);
-    
-    // Replace \uXXXX format (standard 4-digit Unicode escape)
-    text = text.replace(/\\u([0-9A-Fa-f]{4})/g, (match, hexCode) => {
-      return String.fromCodePoint(parseInt(hexCode, 16));
-    });
-    
-    // Replace \UXXXXXXXX format (extended 4-8 digit for supplementary characters & emojis)
-    text = text.replace(/\\U([0-9A-Fa-f]{4,8})/g, (match, hexCode) => {
-      return String.fromCodePoint(parseInt(hexCode, 16));
-    });
-    
-    // Replace basic escape sequences (literal strings like \\n, \\t, etc.)
-    // These come from JSON where Python sends "\n" which becomes "\\n" in JSON
-    text = text
-      .replace(/\\n/g, '\n')   // Newline
-      .replace(/\\t/g, '\t')   // Tab
-      .replace(/\\r/g, '\r')   // Carriage return
-      .replace(/\\'/g, "'")    // Single quote
-      .replace(/\\"/g, '"')    // Double quote
-      .replace(/\\\\/g, '\\'); // Backslash (must be last!)
-    
-    return text;
   }
 
   /**

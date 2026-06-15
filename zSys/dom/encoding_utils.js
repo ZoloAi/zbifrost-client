@@ -86,15 +86,21 @@ export function safeHref(url) {
  * - Basic escape sequences: \n, \t, \r, etc.
  * 
  * @param {string} text - Text containing Unicode escapes
+ * @param {Object} [options]
+ * @param {boolean} [options.basicEscapes=true] - Also decode \n \t \r \' \" \\.
+ *   Inline-only contexts (table cells, dl terms) pass `false` so a literal "\n"
+ *   never becomes a real newline and breaks the cell/row layout.
  * @returns {string} Decoded text
  * 
  * @example
  * decodeUnicodeEscapes('Hello \\u2764\\uFE0F'); // "Hello ❤️"
  * decodeUnicodeEscapes('Line 1\\nLine 2'); // "Line 1\nLine 2"
+ * decodeUnicodeEscapes('Cell\\nA', { basicEscapes: false }); // "Cell\\nA" (literal)
  * decodeUnicodeEscapes('\\U0001F600'); // "😀"
  */
-export function decodeUnicodeEscapes(text) {
-  if (!text || typeof text !== 'string') return text;
+export function decodeUnicodeEscapes(text, { basicEscapes = true } = {}) {
+  if (text === null || text === undefined) return '';
+  if (typeof text !== 'string') return String(text);
   
   // Replace \uXXXX format (standard 4-digit Unicode escape)
   text = text.replace(/\\u([0-9A-Fa-f]{4})/g, (match, hexCode) => {
@@ -106,12 +112,16 @@ export function decodeUnicodeEscapes(text) {
     return String.fromCodePoint(parseInt(hexCode, 16));
   });
   
-  // Replace basic escape sequences (literal strings like \\n, \\t, etc.)
-  // These come from JSON where Python sends "\n" which becomes "\\n" in JSON
-  text = text.replace(/\\n/g, '\n');
-  text = text.replace(/\\r/g, '\r');
-  text = text.replace(/\\t/g, '\t');
-  text = text.replace(/\\\\/g, '\\');
+  if (basicEscapes) {
+    // Literal strings like "\\n" arriving via JSON (Python "\n" → JSON "\\n").
+    text = text
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '\t')
+      .replace(/\\r/g, '\r')
+      .replace(/\\'/g, "'")
+      .replace(/\\"/g, '"')
+      .replace(/\\\\/g, '\\'); // backslash must be last
+  }
   
   return text;
 }

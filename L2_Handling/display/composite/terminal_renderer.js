@@ -657,6 +657,7 @@ export default class TerminalRenderer {
   _ansiStyleMap = {
     '1': 'font-weight: bold',             // bold         — \033[1m
     '2': 'opacity: 0.65',                 // dim          — \033[2m
+    '4': 'text-decoration: underline',    // underline    — \033[4m
     '9': 'text-decoration: line-through', // strikethrough — \033[9m
   };
 
@@ -697,8 +698,8 @@ export default class TerminalRenderer {
         currentColor = null;
         currentBg    = null;
         currentStyle = null;
-      } else if (code === '22' || code === '23' || code === '29') {
-        // Normal intensity / italic off / strikethrough off — color + bg preserved
+      } else if (code === '22' || code === '23' || code === '24' || code === '29') {
+        // Normal intensity / italic off / underline off / strikethrough off — color + bg preserved
         currentStyle = null;
       } else if (this._ansiStyleMap[code]) {
         // Style code (bold, dim, strikethrough)

@@ -9,6 +9,8 @@
  * @layer L2 (Handling)
  */
 
+import { decodeUnicodeEscapes } from '../../../zSys/dom/encoding_utils.js';
+
 export class DLRenderer {
   constructor(logger) {
     this.logger = logger;
@@ -38,7 +40,7 @@ export class DLRenderer {
       // Create <dt> for the term
       const dt = document.createElement('dt');
       const termContent = item.term || '';
-      dt.innerHTML = this._sanitizeHTML(this._decodeUnicodeEscapes(termContent));
+      dt.innerHTML = this._sanitizeHTML(decodeUnicodeEscapes(termContent, { basicEscapes: false }));
       dl.appendChild(dt);
 
       // Create <dd> for description(s)
@@ -47,40 +49,12 @@ export class DLRenderer {
       descriptions.forEach(desc => {
         const dd = document.createElement('dd');
         const descContent = desc || '';
-        dd.innerHTML = this._sanitizeHTML(this._decodeUnicodeEscapes(descContent));
+        dd.innerHTML = this._sanitizeHTML(decodeUnicodeEscapes(descContent, { basicEscapes: false }));
         dl.appendChild(dd);
       });
     });
 
     return dl;
-  }
-
-  /**
-   * Decode Unicode escape sequences to actual characters
-   * Supports: \uXXXX (standard) and \UXXXXXXXX (extended) formats
-   * 
-   * Note: Basic escape sequences (\n, \t, etc.) are handled by JSON.parse()
-   * automatically when receiving data from backend. We only need to decode
-   * custom Unicode formats that JSON doesn't handle.
-   * 
-   * @param {string} text - Text containing Unicode escapes
-   * @returns {string} - Decoded text
-   * @private
-   */
-  _decodeUnicodeEscapes(text) {
-    if (!text || typeof text !== 'string') return text;
-    
-    // Replace \uXXXX format (standard 4-digit Unicode escape)
-    text = text.replace(/\\u([0-9A-Fa-f]{4})/g, (match, hexCode) => {
-      return String.fromCodePoint(parseInt(hexCode, 16));
-    });
-    
-    // Replace \UXXXXXXXX format (extended 4-8 digit for supplementary characters & emojis)
-    text = text.replace(/\\U([0-9A-Fa-f]{4,8})/g, (match, hexCode) => {
-      return String.fromCodePoint(parseInt(hexCode, 16));
-    });
-    
-    return text;
   }
 
   /**

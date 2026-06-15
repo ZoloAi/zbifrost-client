@@ -47,6 +47,7 @@
 
 // Layer 2: Utilities
 import { createElement, setAttributes } from '../../../zSys/dom/dom_utils.js';
+import { decodeUnicodeEscapes } from '../../../zSys/dom/encoding_utils.js';
 import { withErrorBoundary } from '../../../zSys/validation/error_boundary.js';
 
 // Layer 0: Primitives
@@ -217,7 +218,7 @@ export class TableRenderer {
     // inside the table). Reads like a subtitle: what the table shows / source / date.
     if (caption) {
       const captionElement = createElement('p', ['zTable-caption']);
-      captionElement.textContent = this._decodeUnicodeEscapes(caption);
+      captionElement.textContent = decodeUnicodeEscapes(caption, { basicEscapes: false });
       wrapper.appendChild(captionElement);
     }
 
@@ -312,10 +313,10 @@ export class TableRenderer {
     if (limit !== null && limit !== undefined && limit > 0 && totalRowCount > 0) {
       const showingStart = offset + 1;
       const showingEnd = Math.min(offset + displayedRowCount, totalRowCount);
-      const decodedTitle = this._decodeUnicodeEscapes(title);
+      const decodedTitle = decodeUnicodeEscapes(title, { basicEscapes: false });
       titleElement.textContent = `${decodedTitle} (showing ${showingStart}-${showingEnd} of ${totalRowCount})`;
     } else {
-      titleElement.textContent = this._decodeUnicodeEscapes(title);
+      titleElement.textContent = decodeUnicodeEscapes(title, { basicEscapes: false });
     }
 
     // Styling is owned by zbase (.zTable-container h4) — no utility/inline here.
@@ -335,7 +336,7 @@ export class TableRenderer {
     columns.forEach(column => {
       const th = createTh();
       // Decode Unicode escapes in column names
-      th.textContent = this._decodeUnicodeEscapes(column); // XSS safe
+      th.textContent = decodeUnicodeEscapes(column, { basicEscapes: false }); // XSS safe
       const colClass = _zColumn?.[column];
       if (colClass) th.className = colClass;
       headerRow.appendChild(th);
@@ -660,40 +661,12 @@ export class TableRenderer {
     // Handle strings (decode Unicode escapes)
     const str = String(value);
     
-    // Decode Unicode escapes (\UXXXX or U+XXXX format)
-    const decoded = this._decodeUnicodeEscapes(str);
+    // Decode Unicode escapes only — inline context, so basic \n\t stay literal.
+    const decoded = decodeUnicodeEscapes(str, { basicEscapes: false });
     
     // No truncation - let CSS handle overflow with text wrapping or ellipsis
     // This ensures markdown links and formatted text aren't broken mid-parse
     return decoded;
-  }
-
-  /**
-   * Decode Unicode escape sequences to actual characters
-   * Supports: \uXXXX (standard) and \UXXXXXXXX (extended) formats
-   * 
-   * Note: Basic escape sequences (\n, \t, etc.) are handled by JSON.parse()
-   * automatically when receiving data from backend. We only need to decode
-   * custom Unicode formats that JSON doesn't handle.
-   * 
-   * @param {string} text - Text containing Unicode escapes
-   * @returns {string} - Decoded text
-   * @private
-   */
-  _decodeUnicodeEscapes(text) {
-    if (!text || typeof text !== 'string') return text;
-    
-    // Replace \uXXXX format (standard 4-digit Unicode escape)
-    text = text.replace(/\\u([0-9A-Fa-f]{4})/g, (match, hexCode) => {
-      return String.fromCodePoint(parseInt(hexCode, 16));
-    });
-    
-    // Replace \UXXXXXXXX format (extended 4-8 digit for supplementary characters & emojis)
-    text = text.replace(/\\U([0-9A-Fa-f]{4,8})/g, (match, hexCode) => {
-      return String.fromCodePoint(parseInt(hexCode, 16));
-    });
-    
-    return text;
   }
 
   /**
