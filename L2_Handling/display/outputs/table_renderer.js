@@ -46,7 +46,6 @@
 // ─────────────────────────────────────────────────────────────────
 
 // Layer 2: Utilities
-import { TYPOGRAPHY } from '../../../L1_Foundation/constants/bifrost_constants.js';
 import { createElement, setAttributes } from '../../../zSys/dom/dom_utils.js';
 import { withErrorBoundary } from '../../../zSys/validation/error_boundary.js';
 
@@ -62,9 +61,8 @@ import {
 import { createDiv, createSpan } from '../primitives/generic_containers.js';
 import { createButton } from '../primitives/interactive_primitives.js';
 import { createInput } from '../primitives/form_primitives.js';
-import { getBackgroundClass, getTextColorClass } from '../../../zSys/theme/color_utils.js';
-import { getPaddingClass, getMarginClass, getGapClass } from '../../../zSys/theme/spacing_utils.js';
 import { TextRenderer } from '../outputs/text_renderer.js';
+import emojiAccessibility from '../../../zSys/accessibility/emoji_accessibility.js';
 
 // 
 // Table Renderer Class
@@ -218,8 +216,7 @@ export class TableRenderer {
     // Render caption as a description line UNDER the title (not a full-width row
     // inside the table). Reads like a subtitle: what the table shows / source / date.
     if (caption) {
-      const captionElement = createElement('p', ['zText-muted', 'zmb-3']);
-      captionElement.style.fontSize = '0.875rem';
+      const captionElement = createElement('p', ['zTable-caption']);
       captionElement.textContent = this._decodeUnicodeEscapes(caption);
       wrapper.appendChild(captionElement);
     }
@@ -321,12 +318,7 @@ export class TableRenderer {
       titleElement.textContent = this._decodeUnicodeEscapes(title);
     }
 
-    // Apply zTheme styling
-    setAttributes(titleElement, {
-      class: 'zmb-3 zText-dark',
-      style: `font-weight: ${TYPOGRAPHY.FONT_WEIGHTS.MEDIUM};`
-    });
-
+    // Styling is owned by zbase (.zTable-container h4) — no utility/inline here.
     return titleElement;
   }
 
@@ -460,9 +452,7 @@ export class TableRenderer {
    * @returns {HTMLElement} Footer element (p)
    */
   _renderMoreRowsFooter(moreCount) {
-    const footer = createElement('p', ['zText-info', 'zMt-2', 'zMs-3']);
-    footer.style.fontStyle = 'italic';
-    footer.style.fontSize = '0.875rem';
+    const footer = createElement('p', ['zTable-more']);
     footer.textContent = `... ${moreCount} more rows`;
 
     return footer;
@@ -494,45 +484,23 @@ export class TableRenderer {
     // Row 2: Navigation Buttons (flexed, centered)
     // 
 
-    // Full-width wrapper (primitive + utilities)
+    // Canonical nav part — zbase (.zTable-nav*) owns all chrome styling via vars.
     const navWrapper = createDiv();
-    navWrapper.classList.add(
-      getMarginClass('top', 3),
-      getPaddingClass('all', 3),
-      getBackgroundClass('white'),
-      'zBorder',
-      'zRounded',
-      'zShadow-sm'
-    );
+    navWrapper.classList.add('zTable-nav');
 
-    // ROW 1: Page Info Container (centered with proper zTheme classes)
+    // ROW 1: Page info
     const pageInfoRow = createDiv();
-    pageInfoRow.classList.add(
-      'zD-flex',
-      'zFlex-center',           // Correct zTheme centering class
-      'zFlex-items-center',     // Vertical alignment
-      getMarginClass('bottom', 3)
-    );
+    pageInfoRow.classList.add('zTable-nav-info');
 
-    // Page info text (primitive + utilities)
     const pageInfo = createSpan();
-    pageInfo.classList.add(getTextColorClass('muted'));
-    pageInfo.style.fontSize = '0.875rem';
-    pageInfo.style.fontWeight = TYPOGRAPHY.FONT_WEIGHTS.MEDIUM;
-    pageInfo.innerHTML = `<span class="zText-dark">Page ${currentPage}</span> of <span class="zText-dark">${totalPages}</span> <span class="zText-muted">(${totalRows} total rows)</span>`;
+    pageInfo.innerHTML = `Page <strong>${currentPage}</strong> of <strong>${totalPages}</strong> <span>(${totalRows} total rows)</span>`;
 
     pageInfoRow.appendChild(pageInfo);
     navWrapper.appendChild(pageInfoRow);
 
-    // ROW 2: Navigation Controls Container (centered with proper zTheme classes)
+    // ROW 2: Navigation controls
     const navControlsRow = createDiv();
-    navControlsRow.classList.add(
-      'zD-flex',
-      'zFlex-center',           // Correct zTheme centering class
-      'zFlex-items-center',     // Vertical alignment
-      'zFlex-wrap',             // Wrap on small screens
-      getGapClass(3)
-    );
+    navControlsRow.classList.add('zTable-nav-controls');
 
     // 
     // NAVIGATION BUTTONS (primitives + utilities)
@@ -572,14 +540,9 @@ export class TableRenderer {
     // JUMP TO PAGE (primitives + utilities)
     // 
     const jumpContainer = createDiv();
-    jumpContainer.classList.add(
-      'zD-flex',
-      'zFlex-items-center',
-      getGapClass(2)
-    );
+    jumpContainer.classList.add('zTable-nav-jump');
 
     const jumpLabel = createSpan();
-    jumpLabel.classList.add(getTextColorClass('muted'));
     jumpLabel.textContent = 'Jump to:';
     jumpContainer.appendChild(jumpLabel);
 
@@ -588,8 +551,6 @@ export class TableRenderer {
     jumpInput.setAttribute('min', '1');
     jumpInput.setAttribute('max', totalPages.toString());
     jumpInput.setAttribute('placeholder', '#');
-    jumpInput.style.width = '60px';
-    jumpInput.style.textAlign = 'center';
 
     const jumpBtn = createButton('button');
     jumpBtn.classList.add('zBtn', 'zBtn-sm', 'zBtn-primary');
@@ -736,25 +697,23 @@ export class TableRenderer {
   }
 
   /**
-   * Parse markdown and HTML in table cells
-   * Reuses TextRenderer._parseMarkdown() logic (DRY - same as zMD)
-   * 
-   * Supports:
-   * - `code` -> <code>code</code>
-   * - **bold** -> <strong>bold</strong>
-   * - *italic* -> <em>italic</em>
-   * - HTML tags pass through (e.g., <h1>text</h1>)
-   * 
-   * @param {string} text - Cell content with potential markdown or HTML
-   * @returns {string} - HTML string with markdown parsed and HTML preserved
+   * Parse a cell's INLINE markdown via the zMD inline seam (DRY/SSOT).
+   *
+   * A cell is inline-only — exactly like the zCLI truth where a table cell calls
+   * MarkdownParser.parse_inline (NOT the block parse). So we delegate to
+   * TextRenderer._parseInline (bold/italic/code/links/highlight/strike), never the
+   * full _parseMarkdown — a cell must not be able to emit a heading/list/blockquote.
+   * Emojis then run through the shared safe-emoji a11y util, matching renderRichText
+   * and the zCLI cell path (convert_emojis_for_terminal).
+   *
+   * @param {string} text - Cell content with potential inline markdown
+   * @returns {string} - HTML string with inline markdown parsed + emoji a11y applied
    * @private
    */
   _parseCellMarkdown(text) {
     if (!text || typeof text !== 'string') return text;
-    
-    // Reuse TextRenderer's markdown parser (DRY principle)
-    // This handles: `code`, **bold**, *italic*, [links](url), etc.
-    return this.textRenderer._parseMarkdown(text);
+    const inlineHtml = this.textRenderer._parseInline(text);
+    return emojiAccessibility.enhanceText(inlineHtml);
   }
 }
 

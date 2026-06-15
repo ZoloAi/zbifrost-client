@@ -1664,6 +1664,60 @@ zNavBar .zNav-link.active {
 .zTable tbody tr:hover td { background: color-mix(in srgb, var(--color-secondary) 8%, transparent); }
 .zTable td strong { color: var(--ink); }
 
+/* Caption — subtitle line under the title (what the table shows / source / date).
+   The renderer emits .zTable-caption; styling lives here (no utility/inline). */
+.zTable-caption {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+}
+
+/* "… N more rows" truncation footer. */
+.zTable-more {
+  margin: 0.5rem 0 0 0.75rem;
+  font-size: 0.875rem;
+  font-style: italic;
+  color: var(--ink-faint);
+}
+
+/* Pagination nav — canonical part. The renderer emits the structure
+   (.zTable-nav > .zTable-nav-info + .zTable-nav-controls > [.zBtn-group] +
+   .zTable-nav-jump); zbase owns ALL chrome here via vars. Buttons/inputs inside
+   delegate to the zBtn / zInput events and cascade from their own SSOT. */
+.zTable-nav {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-secondary) 20%, transparent);
+  border-radius: 12px;
+}
+
+.zTable-nav-info {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+}
+.zTable-nav-info strong { color: var(--ink); font-weight: 700; }
+
+.zTable-nav-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.zTable-nav-jump {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink-muted);
+}
+.zTable-nav-jump .zInput { width: 64px; text-align: center; }
+
 /* ════════════════════════════════════════════════════════════════════════════
    Progress bar (zProgress) — canonical animated progress component
 

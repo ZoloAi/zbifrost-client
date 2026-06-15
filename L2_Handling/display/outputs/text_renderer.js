@@ -126,6 +126,83 @@ export class TextRenderer {
   }
 
   /**
+   * Parse INLINE markdown only — the JS twin of zCLI MarkdownParser.parse_inline.
+   *
+   * The leaf inline SSOT: inline code, links, and emphasis (bold / italic /
+   * underline / strike / highlight). It deliberately does NOT touch block
+   * constructs (headings, lists, blockquotes, fenced code, line breaks) — those
+   * belong to _parseMarkdown (the block seam), which delegates each block's inner
+   * text back here. Table cells call THIS directly: a cell is inline-only, exactly
+   * like zCLI cells → parse_inline, so a cell can never emit a heading or list.
+   *
+   * @param {string} text - Raw inline markdown
+   * @returns {string} HTML with inline elements
+   * @private
+   */
+  _parseInline(text) {
+    if (!text || typeof text !== 'string') return text;
+    let html = text;
+
+    // Inline code → <code>, protected as placeholders so links/emphasis never
+    // touch literal code content; restored at the very end.
+    const inlineCodeBlocks = [];
+    html = html.replace(/``(.+?)``/g, (match, code) => {
+      const escaped = escapeHtml(code);
+      const placeholder = `___INLINE_CODE_${inlineCodeBlocks.length}___`;
+      inlineCodeBlocks.push(`<code>${escaped}</code>`);
+      return placeholder;
+    });
+    html = html.replace(/`([^`]+)`/g, (match, code) => {
+      const escaped = escapeHtml(code)
+        .replace(/\n/g, '\\n')
+        .replace(/\t/g, '\\t');
+      const placeholder = `___INLINE_CODE_${inlineCodeBlocks.length}___`;
+      inlineCodeBlocks.push(`<code>${escaped}</code>`);
+      return placeholder;
+    });
+
+    // Links: [text](url){attrs} → <a>. Shared SSOT href conversion + safe escaping.
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)(?:\{([^}]*)\})?/g, (match, label, url, attrs) => {
+      const href = safeHref(convertZPathToURL(url));
+      const safeLabel = escapeHtml(label);
+      const ltype = detectLinkType(url);
+      let target = ltype === LINK_TYPE_EXTERNAL ? '_blank' : '_self';
+      const classTokens = [];
+      if (attrs && attrs.trim()) {
+        for (const tok of attrs.trim().split(/\s+/)) {
+          const t = tok.toLowerCase();
+          if (t === '_blank' || t === 'newtab' || t === 'new-tab') {
+            target = '_blank';
+          } else if (t === '_self' || t === 'sametab' || t === 'same-tab') {
+            target = '_self';
+          } else {
+            classTokens.push(tok);
+          }
+        }
+      }
+      const rel = target === '_blank' ? ' rel="noopener noreferrer"' : '';
+      let classAttr = '';
+      if (classTokens.length) {
+        const sanitized = classTokens.join(' ').replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, ' ').trim();
+        if (sanitized) classAttr = ` class="${sanitized}"`;
+      }
+      return `<a href="${href}" target="${target}"${rel}${classAttr}>${safeLabel}</a>`;
+    });
+
+    // Inline emphasis → semantic tags (tags from ZMD_INLINE_TAGS SSOT).
+    html = html.replace(/\*\*(.+?)\*\*/g, `<${ZMD_INLINE_TAGS.strong}>$1</${ZMD_INLINE_TAGS.strong}>`);
+    html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<${ZMD_INLINE_TAGS.em}>$1</${ZMD_INLINE_TAGS.em}>`);
+    html = html.replace(/(?<!_)__(?!_)([^_\n]+?)(?<!_)__(?!_)/g, `<${ZMD_INLINE_TAGS.u}>$1</${ZMD_INLINE_TAGS.u}>`);
+    html = html.replace(/~~([^~]+)~~/g, `<${ZMD_INLINE_TAGS.del}>$1</${ZMD_INLINE_TAGS.del}>`);
+    html = html.replace(/==([^=]+)==/g, `<${ZMD_INLINE_TAGS.mark}>$1</${ZMD_INLINE_TAGS.mark}>`);
+
+    // Restore inline code last (all inline syntax above was shielded).
+    html = html.replace(/___INLINE_CODE_(\d+)___/g, (match, index) => inlineCodeBlocks[parseInt(index)]);
+
+    return html;
+  }
+
+  /**
    * Parse markdown inline syntax to HTML
    *
    * @param {string} text - Text with markdown syntax
@@ -192,87 +269,31 @@ export class TextRenderer {
       return placeholder;
     });
 
-    // Headings: # H1 through ###### H6
-    // Process at line start or after newline, must be before bold/italic to avoid conflicts
-    // Accept both "# Title" (standard) and "#Title" (lenient)
-    html = html.replace(/(?:^|\n)(#{1,6})\s*(.+?)(?=\n|$)/g, (match, hashes, text) => {
-      // Delegate to the zH* heading factory (SSOT). Inner text still carries raw
-      // inline markdown here; it stays in the string pipeline and is converted by
-      // the emphasis/code passes below, exactly as before.
+    // Block constructs become placeholders so the paragraph-level inline pass
+    // below never re-touches their generated HTML. Each block builds its OWN
+    // markup via the SSOT factories and delegates inner text to _parseInline —
+    // mirroring zCLI parse() → parse_inline() per block.
+    const blockPlaceholders = [];
+    const stashBlock = (markup) => {
+      const placeholder = `___BLOCK_${blockPlaceholders.length}___`;
+      blockPlaceholders.push(markup);
+      return placeholder;
+    };
+
+    // Headings: # H1 through ###### H6 → zH* factory; inner text via the inline seam.
+    // Accept both "# Title" (standard) and "#Title" (lenient).
+    html = html.replace(/(?:^|\n)(#{1,6})\s*(.+?)(?=\n|$)/g, (match, hashes, headingText) => {
       const heading = createHeading(hashes.length);
-      heading.innerHTML = text.trim();
-      return `\n${heading.outerHTML}\n`;
+      heading.innerHTML = this._parseInline(headingText.trim());
+      return `\n${stashBlock(heading.outerHTML)}\n`;
     });
 
     // Tables: intentionally NOT supported in zMD. Tabular data is structured data
     // and belongs to the dedicated zTable event (columns/rows/alignment/pagination
     // + clean zCLI rendering). Removed 2026-06 to force zTable + tighter zMD.
 
-    // Inline Code: `code` -> <code>code</code> (after code blocks to avoid conflicts)
-    // Use placeholders to protect code content from further markdown processing
-    const inlineCodeBlocks = [];
-    // Double-backtick spans FIRST: `` `text` `` -> <code>`text`</code>
-    // Allows single backticks inside; must precede single-backtick regex
-    html = html.replace(/``(.+?)``/g, (match, code) => {
-      const escaped = escapeHtml(code);
-      const placeholder = `___INLINE_CODE_${inlineCodeBlocks.length}___`;
-      inlineCodeBlocks.push(`<code>${escaped}</code>`);
-      return placeholder;
-    });
-    html = html.replace(/`([^`]+)`/g, (match, code) => {
-      // Escape HTML entities (SSOT) AND convert special chars to display literally
-      const escaped = escapeHtml(code)
-        .replace(/\n/g, '\\n')   // Convert actual newlines to literal \n for display
-        .replace(/\t/g, '\\t');  // Convert actual tabs to literal \t for display
-      const placeholder = `___INLINE_CODE_${inlineCodeBlocks.length}___`;
-      inlineCodeBlocks.push(`<code>${escaped}</code>`);
-      return placeholder;
-    });
-
-    // Links: [text](url){attrs} -> <a href="url" target=… class="classes">text</a>
-    // MUST run AFTER inline code extraction so `[text](url)` inside backticks
-    // is already shielded by ___INLINE_CODE_N___ placeholders.
-    // Uses shared convertZPathToURL + detectLinkType from link_primitives.js (SSOT).
-    //
-    // The optional {…} brace is an attribute list (kramdown/pandoc-style):
-    //   • target tokens override how the link opens —
-    //       _blank | newtab | new-tab  → new tab
-    //       _self  | sametab | same-tab → same tab
-    //   • every other token is treated as a CSS class.
-    // With no token, target falls back to link type (external → new tab).
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)(?:\{([^}]*)\})?/g, (match, text, url, attrs) => {
-      // Harden against DOM-XSS: block dangerous href schemes + attr-escape the
-      // resolved URL, and HTML-escape the link label (it can carry user content).
-      // Inline markdown markers (**/*/etc.) survive escaping and convert later.
-      const href = safeHref(convertZPathToURL(url));
-      const label = escapeHtml(text);
-      const ltype = detectLinkType(url);
-
-      // Default target by link type; explicit {…} token wins.
-      let target = ltype === LINK_TYPE_EXTERNAL ? '_blank' : '_self';
-      const classTokens = [];
-      if (attrs && attrs.trim()) {
-        for (const tok of attrs.trim().split(/\s+/)) {
-          const t = tok.toLowerCase();
-          if (t === '_blank' || t === 'newtab' || t === 'new-tab') {
-            target = '_blank';
-          } else if (t === '_self' || t === 'sametab' || t === 'same-tab') {
-            target = '_self';
-          } else {
-            classTokens.push(tok);
-          }
-        }
-      }
-
-      // _blank always carries rel="noopener noreferrer" (security), regardless of source.
-      const rel = target === '_blank' ? ' rel="noopener noreferrer"' : '';
-      let classAttr = '';
-      if (classTokens.length) {
-        const sanitized = classTokens.join(' ').replace(/[^a-zA-Z0-9\-_ ]/g, '').replace(/\s+/g, ' ').trim();
-        if (sanitized) classAttr = ` class="${sanitized}"`;
-      }
-      return `<a href="${href}" target="${target}"${rel}${classAttr}>${label}</a>`;
-    });
+    // Inline code, links, and emphasis are owned by _parseInline (the inline seam):
+    // applied to each block's inner text above and to the paragraph remainder below.
 
     // Lists -> <ul class="zList"> / <ol class="zList">. The marker is the type:
     //   UL  - * +              (disc / circle / square; - * + alone = empty nesting)
@@ -281,63 +302,34 @@ export class TextRenderer {
     // Process before bold/italic to avoid conflicts with * markers.
     html = html.replace(
       /(?:^|\n)((?:[ \t]*(?:[-*+](?:[ \t]+[^\n]*|[ \t]*)|(?:\d+|[ivxlcdmIVXLCDM]+|[A-Za-z])-[ \t]+[^\n]*)(?:\n|$))+)/g,
-      (match, listBlock) => '\n' + this._parseListBlock(listBlock.trimEnd()) + '\n'
+      (match, listBlock) => `\n${stashBlock(this._parseListBlock(listBlock.trimEnd()))}\n`
     );
 
     // Blockquotes: > text -> <blockquote>text</blockquote>
     // Process before bold/italic to avoid conflicts
     // Updated: Keep empty > lines as line breaks within the same blockquote
     html = html.replace(/(?:^|\n)((?:>.*?(?:\n|$))+)/g, (match, quoteBlock) => {
-      const lines = quoteBlock
+      // Each line: strip the > prefix and run through the inline seam; empty >
+      // lines become <br> (visual line breaks within the same quote).
+      const quoteContent = quoteBlock
         .trim()
         .split(/\n/)
-        .map(line => {
-          // Remove > prefix (and optional space after it)
-          const content = line.replace(/^>\s?/, '');
-          // If line had just >, it becomes empty string which will become <br>
-          return content;
-        });
-      
-      // Join lines with <br>, treating empty strings as visual line breaks
-      const quoteContent = lines.join('<br>');
-      // Delegate to the semantic + paragraph factories (SSOT). Clean bare element;
-      // base styling lives in zSys/theme/zbase.css (zTheme base), not hardcoded
-      // here, so it themes per-app and per-mode. Inner inline markdown is still
-      // converted by the passes below (output is a string in the pipeline).
+        .map(line => this._parseInline(line.replace(/^>\s?/, '')))
+        .join('<br>');
+      // Delegate to the semantic + paragraph factories (SSOT). Base styling lives
+      // in zSys/theme/zbase.css, not hardcoded here, so it themes per-app/per-mode.
       const blockquote = createSemanticElement('blockquote');
       const quotePara = createParagraph();
       quotePara.innerHTML = quoteContent;
       blockquote.appendChild(quotePara);
-      return `\n${blockquote.outerHTML}\n`;
+      return `\n${stashBlock(blockquote.outerHTML)}\n`;
     });
 
-    // Inline emphasis → semantic tags (tags from ZMD_INLINE_TAGS SSOT).
-
-    // Bold: **text** -> <strong>text</strong>
-    // Use non-greedy .*? to allow nested italics (e.g., **text with *italic* inside**)
-    html = html.replace(/\*\*(.+?)\*\*/g, `<${ZMD_INLINE_TAGS.strong}>$1</${ZMD_INLINE_TAGS.strong}>`);
-
-    // Italic: *text* -> <em>text</em> (but not ** from bold)
-    // Use non-greedy .*? for consistency
-    html = html.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, `<${ZMD_INLINE_TAGS.em}>$1</${ZMD_INLINE_TAGS.em}>`);
-
-    // Underline/Strikethrough/Highlight run BEFORE inline code restoration
-    // so their syntax inside backtick spans stays shielded by placeholders
-
-    // Underline: __text__ -> <u>text</u>
-    // Negative lookaround prevents matching ___INLINE_CODE_N___ placeholders
-    html = html.replace(/(?<!_)__(?!_)([^_\n]+?)(?<!_)__(?!_)/g, `<${ZMD_INLINE_TAGS.u}>$1</${ZMD_INLINE_TAGS.u}>`);
-
-    // Strikethrough: ~~text~~ -> <del>text</del>
-    html = html.replace(/~~([^~]+)~~/g, `<${ZMD_INLINE_TAGS.del}>$1</${ZMD_INLINE_TAGS.del}>`);
-
-    // Highlight: ==text== -> <mark>text</mark>
-    html = html.replace(/==([^=]+)==/g, `<${ZMD_INLINE_TAGS.mark}>$1</${ZMD_INLINE_TAGS.mark}>`);
-
-    // Restore inline code blocks — must be last so all inline syntax above
-    // was shielded by ___INLINE_CODE_N___ placeholders
-    html = html.replace(/___INLINE_CODE_(\d+)___/g, (match, index) => {
-      return inlineCodeBlocks[parseInt(index)];
+    // Paragraph remainder: everything left is inline content → delegate to the
+    // seam (the JS twin of zCLI parse_inline), then restore the stashed blocks.
+    html = this._parseInline(html);
+    blockPlaceholders.forEach((block, index) => {
+      html = html.replace(`___BLOCK_${index}___`, block);
     });
 
     // Line breaks: backslash + newline -> <br> (won't be stripped by YAML)
@@ -792,7 +784,7 @@ export class TextRenderer {
       const styleAttr = node.style ? ` style="list-style-type: ${node.style};"` : '';
       let html = `<${node.tag} class="zList"${styleAttr}>`;
       for (const item of node.items) {
-        html += `<li>${item.text || ''}`;
+        html += `<li>${this._parseInline(item.text || '')}`;
         if (item.children) html += renderNode(item.children);
         html += '</li>';
       }
