@@ -44,6 +44,9 @@
   --border:        rgba(255, 255, 255, 0.12); /* hairline divider       */
   --border-strong: rgba(255, 255, 255, 0.18); /* field / control outline*/
   --shadow:        rgba(0, 0, 0, 0.20);       /* ambient drop shadow    */
+  --surface-base:  #1e1e2e;                   /* opaque dark CARD base — event cards
+                                                 (zTable, zTerminal…) read identically
+                                                 on a light OR dark page, not page-tied */
 
   /* Canonical spacing scale — SSOT for every margin/padding rhythm across
    * events. Mirrors the zCLI step scale. Events consume these vars directly;
@@ -1619,8 +1622,10 @@ zNavBar .zNav-link.active {
    ========================================================================== */
 .zTable-container { margin: 1.5rem 0; }
 
+/* Title sits on the PAGE (outside the card) → inherit so it reads on light AND
+   dark doc pages (white --ink would vanish on a light page). */
 .zTable-container h4 {
-  color: var(--ink);
+  color: inherit;
   font-size: 1.1rem;
   font-weight: 700;
   margin: 0 0 0.75rem;
@@ -1630,9 +1635,12 @@ zNavBar .zNav-link.active {
   overflow-x: auto;
   border-radius: 12px;
   border: 1px solid var(--border);
-  /* Clean on-brand dark panel — a whisper of secondary lifts it off "gray".
-     No raw rgba / muddy gradient; the table itself sits transparent on top. */
-  background: color-mix(in srgb, var(--color-secondary) 6%, var(--surface-1));
+  /* Self-contained dark CARD (matches the zTerminal card). Page-independent, so
+     the table reads identically on a light OR dark page — white ink works on it
+     everywhere. Border + shadow seat it on a dark page; it reads as an embedded
+     panel on a light one. */
+  background: var(--surface-base);
+  box-shadow: 0 8px 28px var(--shadow);
 }
 
 .zTable {
@@ -1648,7 +1656,7 @@ zNavBar .zNav-link.active {
 }
 
 .zTable thead th {
-  background: color-mix(in srgb, var(--color-secondary) 20%, transparent);
+  background: color-mix(in srgb, var(--color-secondary) 22%, transparent);
   color: var(--ink);
   font-weight: 700;
   text-align: left;
@@ -1666,7 +1674,7 @@ zNavBar .zNav-link.active {
 
 .zTable tbody tr:last-child td { border-bottom: none; }
 .zTable tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--ink) 3%, transparent); }
-.zTable tbody tr:hover td { background: color-mix(in srgb, var(--color-secondary) 12%, transparent); }
+.zTable tbody tr:hover td { background: color-mix(in srgb, var(--color-secondary) 14%, transparent); }
 .zTable td strong { color: var(--ink); }
 
 /* Caption — subtitle line under the title (what the table shows / source / date).
@@ -1674,7 +1682,8 @@ zNavBar .zNav-link.active {
 .zTable-caption {
   margin: 0 0 0.75rem;
   font-size: 0.875rem;
-  color: var(--ink-muted);
+  color: inherit;       /* on the page, outside the card — adapt to light/dark */
+  opacity: 0.7;
 }
 
 /* "… N more rows" truncation footer. */
@@ -1682,7 +1691,8 @@ zNavBar .zNav-link.active {
   margin: 0.5rem 0 0 0.75rem;
   font-size: 0.875rem;
   font-style: italic;
-  color: var(--ink-faint);
+  color: inherit;       /* on the page, outside the card — adapt to light/dark */
+  opacity: 0.6;
 }
 
 /* Pagination nav — canonical part. The renderer emits the structure
@@ -1692,8 +1702,10 @@ zNavBar .zNav-link.active {
 .zTable-nav {
   margin-top: 0.75rem;
   padding: 0.75rem;
-  background: color-mix(in srgb, var(--ink) 3%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-secondary) 20%, transparent);
+  /* Matching dark CARD (sibling to the table) so its white ink reads on a light
+     OR dark page — consistent with .zTable-responsive. */
+  background: var(--surface-base);
+  border: 1px solid var(--border);
   border-radius: 12px;
 }
 
