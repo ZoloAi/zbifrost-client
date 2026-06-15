@@ -1,6 +1,6 @@
 {
   "name": "@zolomedia/bifrost-client",
-  "version": "1.7.100",
+  "version": "1.7.101",
   "description": "Browser client for zBifrost — the WebSocket bridge that turns JSON events from a zOS server into live DOM. Thin bootstrap + server-controlled core.",
   "homepage": "https://github.com/ZoloAi/zbifrost-client#readme",
   "repository": {
