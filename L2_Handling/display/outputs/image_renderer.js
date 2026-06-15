@@ -111,8 +111,7 @@ export class ImageRenderer {
       figure.appendChild(img);
 
       const figcaption = document.createElement('figcaption');
-      figcaption.textContent = caption;
-      figcaption.className = 'zText-muted zText-center zmt-2';
+      figcaption.textContent = caption;  // bare semantic node — styled by zbase.css figcaption (SSOT)
       figure.appendChild(figcaption);
 
       // _zClass/_zStyle already live on the inner <img> — tell the orchestrator's

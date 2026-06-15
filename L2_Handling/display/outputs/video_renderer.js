@@ -91,8 +91,7 @@ export class VideoRenderer {
       const figure = document.createElement('figure');
       figure.appendChild(video);
       const figcaption = document.createElement('figcaption');
-      figcaption.textContent = caption;
-      figcaption.className = 'zText-muted zText-center zmt-2';
+      figcaption.textContent = caption;  // bare semantic node — styled by zbase.css figcaption (SSOT)
       figure.appendChild(figcaption);
       // _zClass/_zStyle live on the inner <video>; skip the central pass on the wrapper.
       figure.__zMetaScoped = true;

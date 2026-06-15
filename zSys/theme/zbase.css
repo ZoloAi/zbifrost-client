@@ -297,8 +297,8 @@ dd:last-child { margin-bottom: 0; }
 /* Bifrost owns the media baseline. <img>/<video> stay responsive (display:block
  * + max-width:100% in the reset above); <video> keeps its aspect via height:auto.
  * A captioned media renders inside a <figure> — own it so the UA's default
- * `margin: 1em 40px` side-indent never offsets the media. figcaption is themed by
- * the renderer via bifrost utilities (zText-muted/zText-center/zmt-2). */
+ * `margin: 1em 40px` side-indent never offsets the media. figcaption is themed
+ * HERE (SSOT) — the renderer emits a bare <figcaption>, no utility classes. */
 
 video { height: auto; }
 
@@ -306,7 +306,15 @@ figure { margin: 0 0 1rem; }
 figure:last-child { margin-bottom: 0; }
 figure > img,
 figure > video { margin-bottom: 0; }
-figcaption { line-height: 1.5; }
+/* Caption: centred, slightly smaller, dimmed via opacity so it follows the base
+ * --text colour on light pages AND a re-skinned --text on dark (no hardcoded ink). */
+figcaption {
+  margin-top: var(--space-2);
+  text-align: center;
+  font-size: 0.9em;
+  line-height: 1.5;
+  opacity: 0.7;
+}
 
 /* ─── Form controls — canonical field base (Bootstrap-like) ────────────────── */
 /* The client emits a real field as `.zForm-control` (default) or `.zInput`
