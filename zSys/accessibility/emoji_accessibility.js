@@ -44,7 +44,9 @@ class EmojiAccessibility {
         // Start loading
         this.loading = (async () => {
             try {
-                const response = await fetch('/static/js/emoji-a11y.en.json');
+                // Canonical zSys route — zServer streams zOS's own SSOT data file,
+                // so this is the exact JSON the zCLI loads (no per-app static copy).
+                const response = await fetch('/zsys/accessibility/emoji-a11y.en.json');
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
