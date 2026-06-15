@@ -329,7 +329,7 @@ select.zForm-control,   select.zInput   { cursor: pointer; }
 }
 
 /* File selector — native file inputs (emitted as .zForm-control) styled to match
-   the theme: muted "no file" text + an indigo pill for the browse button. */
+   the theme: muted "no file" text + a secondary-token pill for the browse button. */
 input[type="file"].zForm-control,
 input[type="file"].zInput {
   display: block;
@@ -400,14 +400,21 @@ input[type="month"].zForm-control::-webkit-calendar-picker-indicator,
 input[type="week"].zForm-control::-webkit-calendar-picker-indicator,
 input[type="date"].zInput::-webkit-calendar-picker-indicator,
 input[type="time"].zInput::-webkit-calendar-picker-indicator,
-input[type="datetime-local"].zInput::-webkit-calendar-picker-indicator {
+input[type="datetime-local"].zInput::-webkit-calendar-picker-indicator,
+input[type="month"].zInput::-webkit-calendar-picker-indicator,
+input[type="week"].zInput::-webkit-calendar-picker-indicator {
   filter: var(--zinput-picker-filter, invert(0.85));
   opacity: 0.75;
   cursor: pointer;
 }
 input[type="date"].zForm-control::-webkit-calendar-picker-indicator:hover,
 input[type="time"].zForm-control::-webkit-calendar-picker-indicator:hover,
-input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:hover {
+input[type="datetime-local"].zForm-control::-webkit-calendar-picker-indicator:hover,
+input[type="month"].zForm-control::-webkit-calendar-picker-indicator:hover,
+input[type="week"].zForm-control::-webkit-calendar-picker-indicator:hover,
+input[type="date"].zInput::-webkit-calendar-picker-indicator:hover,
+input[type="time"].zInput::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"].zInput::-webkit-calendar-picker-indicator:hover {
   opacity: 1;
 }
 
