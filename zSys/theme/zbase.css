@@ -614,7 +614,9 @@ zBifrostBadge {
 .zBadge-success { color: var(--color-success); }
 .zBadge-error   { color: var(--color-error); }
 .zBadge-dot     { border-radius: 50%; background: currentColor; }
-.zIcon          { display: inline-block; width: 0.75em; height: 0.75em; fill: currentColor; }
+/* Inline SVG sprite icon (e.g. the connection/dev badge dot). Named zSvgIcon to
+ * stay distinct from the zIcon EVENT, which renders a Bootstrap <i class="bi">. */
+.zSvgIcon       { display: inline-block; width: 0.75em; height: 0.75em; fill: currentColor; }
 
 /* ─── zVaF content host ─────────────────────────────────────────────────────── */
 /* The re-rendered subtree under the <zVaF> root. Chrome (navbar/badge/errors) are

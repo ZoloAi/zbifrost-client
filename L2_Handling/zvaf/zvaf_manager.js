@@ -154,7 +154,7 @@ export class ZVaFManager {
     // Set initial badge content (will be updated by connection hooks)
     this.client._zConnectionBadge.className = 'zConnection zBadge zBadge-connection zBadge-pending';
     this.client._zConnectionBadge.innerHTML = `
-      <svg class="zIcon zIcon-sm zBadge-dot" aria-hidden="true">
+      <svg class="zSvgIcon zBadge-dot" aria-hidden="true">
         <use xlink:href="#icon-circle-fill"></use>
       </svg>
       <span class="zBadge-text">Connecting...</span>
