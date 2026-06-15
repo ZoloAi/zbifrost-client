@@ -181,11 +181,12 @@ code:not(pre code) {
   font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
   font-size: 0.88em;
   font-weight: 600;
-  /* Brighter ink + a touch more fill/border so the chip stays legible on tinted
-     surfaces (e.g. zTable rows), not just on the page background. */
-  color: var(--color-code, #8FC5FF);
-  background: color-mix(in srgb, var(--color-info) 18%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-info) 36%, transparent);
+  /* Self-contained chip: opaque light-blue fill + dark-blue ink, anchored to the
+     info hue. Fixed contrast (not page-dependent translucency) so it reads on
+     light pages, dark pages, AND the dark zTable card. Override via --color-code. */
+  color: var(--color-code, color-mix(in srgb, var(--color-info) 52%, #000));
+  background: color-mix(in srgb, var(--color-info) 22%, #fff);
+  border: 1px solid color-mix(in srgb, var(--color-info) 40%, #fff);
   border-radius: 5px;
   padding: 0.1em 0.4em;
   letter-spacing: -0.01em;
