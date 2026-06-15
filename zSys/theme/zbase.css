@@ -33,6 +33,13 @@
   --color-warning:   #FFB347; /* Caution — warm & approachable */
   --color-error:     #E63946; /* Decisive — clear & strong */
 
+  /* Default document/body text — page-level ink for bare zText, <p>, headings
+   * (zH0–zH6), and ul/ol/dl items that carry NO zOS color property. Soft
+   * near-black (never pure #000) so it reads deliberately on light doc pages.
+   * Dark CARDS (zTable/zTerminal) set their own --ink; a dark theme re-skins by
+   * redefining --text once. SSOT for "the default text colour". */
+  --text:          #1d2230;
+
   /* Neutral foundation — surfaces, ink & lines on the dark zOS canvas.
    * SSOT for every NON-accent value so no component carries raw rgba/hex.
    * Apps re-skin the whole chrome by redefining these once. */
@@ -86,6 +93,9 @@ body {
   overflow-x: hidden;
   font-size: 1rem;
   line-height: 1.5;
+  /* Default text colour (SSOT) — bare zText/<p>/headings/ul-ol-dl inherit this
+     instead of the UA pure-black. zText-* and dark cards override explicitly. */
+  color: var(--text);
 }
 
 img, svg, video { display: block; max-width: 100%; }
