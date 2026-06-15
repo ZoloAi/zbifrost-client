@@ -255,8 +255,8 @@ ul:last-child, ol:last-child { margin-bottom: 0; }
 li { margin-bottom: 0.4rem; }
 li:last-child { margin-bottom: 0; }
 
-/* Themed markers — the modern touch (brand-tinted, not flat UA black). */
-li::marker { color: var(--color-secondary); }
+/* Markers follow the base text colour (SSOT) — same ink as the item text. */
+li::marker { color: var(--text); }
 
 /* Nested lists tuck under their parent item with a single tight gap. */
 li > ul, li > ol { margin: 0.4rem 0 0; }
@@ -270,13 +270,14 @@ li > ul, li > ol { margin: 0.4rem 0 0; }
 .zList-roman  { list-style-type: lower-roman; }
 .zList-none   { list-style-type: none; padding-left: 0; }
 
-/* Definition list (zDL) — term in ink, definition indented & muted. */
+/* Definition list (zDL) — term bold, definition indented. Both inherit the base
+   --text colour (no hardcoded --ink, which is the dark-card near-white and would
+   vanish on a light doc page). A dark theme re-skins via --text. */
 dl { margin: 0 0 1rem; }
 dl:last-child { margin-bottom: 0; }
-dt { font-weight: 700; color: var(--ink); }
+dt { font-weight: 700; }
 dd {
   margin: 0 0 0.6rem 1.2rem;
-  color: var(--ink-muted);
   line-height: 1.6;
 }
 dd:last-child { margin-bottom: 0; }
