@@ -193,8 +193,7 @@ export class WizardGateHandler {
       // Input-only gate (no authored button): inject the default Submit control.
       const submitBtn = document.createElement('button');
       submitBtn.textContent = 'Submit';
-      submitBtn.className = 'zBtn zBtn-primary mt-2';
-      submitBtn.style.marginTop = '0.5rem';
+      submitBtn.className = 'zBtn zBtn-primary zmt-2';
       submitBtn.addEventListener('click', () => doGateSubmit(submitBtn, false));
 
       // When _zDelegate is set, hide the default Submit button (delegate takes over)

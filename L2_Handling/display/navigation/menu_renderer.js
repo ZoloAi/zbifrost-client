@@ -112,8 +112,8 @@ export class MenuRenderer {
 
     return `
       <div class="zMenu-option zmb-2" data-key="${this._escapeHtml(key)}">
-        <button class="zBtn zBtn-outline-primary w-100 text-start zp-3" data-index="${index}">
-          <span class="zBadge zBadge-secondary me-2">${index + 1}</span>
+        <button class="zBtn zBtn-outline-primary zW-100 zText-start zp-3" data-index="${index}">
+          <span class="zBadge zBadge-secondary zme-2">${index + 1}</span>
           ${this._escapeHtml(label.replace(/[*~^$]/g, ''))}
         </button>
       </div>

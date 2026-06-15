@@ -816,7 +816,7 @@ export class ZDisplayOrchestrator {
       // label reads cleanly ("$Edit_Profile" → "Edit Profile"). The raw optKey is
       // preserved on data-key for selection/resolution.
       const label = menuValue.labels?.[optKey] ?? optKey.replace(/^[$^~]+/, '').replace(/_/g, ' ');
-      btn.innerHTML = `<span class="zBadge zBadge-secondary me-2">${idx + 1}</span>${label}`;
+      btn.innerHTML = `<span class="zBadge zBadge-secondary zme-2">${idx + 1}</span>${label}`;
 
       btn.addEventListener('click', async () => {
         // Guard: prevent re-entry while a zfunc is already in-flight for this option
@@ -925,10 +925,10 @@ export class ZDisplayOrchestrator {
       const backLi = document.createElement('li');
       backLi.className = 'zNav-item';
       const backNav = document.createElement('button');
-      backNav.className = 'zNav-link zBtn w-100 text-start zp-2';
+      backNav.className = 'zNav-link zBtn zW-100 zText-start zp-2';
       backNav.setAttribute('role', 'menuitem');
       backNav.dataset.key = 'zBack';
-      backNav.innerHTML = `<span class="zBadge zBadge-secondary me-2">${options.length + 1}</span>Back`;
+      backNav.innerHTML = `<span class="zBadge zBadge-secondary zme-2">${options.length + 1}</span>Back`;
       backNav.addEventListener('click', () => {
         const parentPh = containerDiv.closest('.zMenu-option-content');
         if (parentPh) {

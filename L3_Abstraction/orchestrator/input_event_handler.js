@@ -577,7 +577,7 @@ export class InputEventHandler {
           value: optionVal,
           disabled: disabled,
           required: required,
-          class: elementClasses || 'zCheck-input'
+          class: elementClasses || 'zForm-check-input'
         });
         
         // Set checked state
