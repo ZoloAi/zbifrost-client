@@ -1157,8 +1157,11 @@ zNavBar .zNav-link.active {
   white-space: nowrap;
   vertical-align: middle;
   user-select: none;
+  padding: 0.7rem 1.5rem;
   border: 1px solid transparent;
   border-radius: 980px;
+  font-size: 0.95rem;
+  line-height: 1.4;
   letter-spacing: -0.01em;
   text-decoration: none;
 }
