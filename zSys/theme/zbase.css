@@ -38,6 +38,7 @@
    * Apps re-skin the whole chrome by redefining these once. */
   --ink:           #f9fafb;                   /* primary text on dark   */
   --ink-muted:     rgba(255, 255, 255, 0.65); /* secondary / captions   */
+  --ink-faint:     rgba(255, 255, 255, 0.45); /* placeholders / hints   */
   --surface-1:     rgba(255, 255, 255, 0.04); /* raised panel           */
   --surface-2:     rgba(255, 255, 255, 0.08); /* input / hover fill     */
   --border:        rgba(255, 255, 255, 0.12); /* hairline divider       */
@@ -287,7 +288,7 @@ input.zInput, textarea.zInput, select.zInput {
 }
 
 .zForm-control::placeholder,
-.zInput::placeholder { color: var(--zinput-placeholder, rgba(156, 163, 175, 0.5)); }
+.zInput::placeholder { color: var(--zinput-placeholder, var(--ink-faint)); }
 
 .zForm-control:focus,
 input.zInput:focus, textarea.zInput:focus, select.zInput:focus {
@@ -322,7 +323,7 @@ select.zForm-control,   select.zInput   { cursor: pointer; }
 
 /* Required-field marker — red asterisk suffix on the label (SSOT). */
 .zRequired {
-  color: var(--zrequired-color, #ef4444);
+  color: var(--zrequired-color, var(--color-error));
   margin-left: 0.15rem;
   font-weight: 600;
 }
@@ -335,7 +336,7 @@ input[type="file"].zInput {
   width: 100%;
   padding: 0.5rem 0.65rem;
   font-size: 0.9375rem;
-  color: var(--zinput-placeholder, rgba(156, 163, 175, 0.85));
+  color: var(--zinput-placeholder, var(--ink-muted));
   line-height: 1.6;
   cursor: pointer;
 }
@@ -594,7 +595,7 @@ select.zForm-control[multiple] option:checked {
   background: linear-gradient(var(--color-primary), var(--color-primary));
 }
 select.zSelect[multiple] option:disabled,
-select.zForm-control[multiple] option:disabled { color: var(--zinput-placeholder, rgba(156, 163, 175, 0.55)); }
+select.zForm-control[multiple] option:disabled { color: var(--zinput-placeholder, var(--ink-faint)); }
 
 /* size variants */
 select.zSelect.zSelect-lg { padding-top: 0.7rem;  padding-bottom: 0.7rem;  font-size: 1.05rem; }
@@ -1650,7 +1651,7 @@ zNavBar .zNav-link.active {
   margin-bottom: 0.4rem;
 }
 .zProgress-container .zFw-bold     { font-weight: 600; color: var(--zprogress-label, var(--ink)); }
-.zProgress-container .zText-muted  { color: var(--zprogress-info, rgba(229, 231, 235, 0.6)); }
+.zProgress-container .zText-muted  { color: var(--zprogress-info, var(--ink-muted)); }
 
 /* Track — the rail behind the fill. Inset shadow gives the pill real depth. */
 .zProgress {
