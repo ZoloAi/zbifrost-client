@@ -178,9 +178,11 @@ code:not(pre code) {
   font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
   font-size: 0.88em;
   font-weight: 600;
-  color: var(--color-code, #5CA9FF);
-  background: color-mix(in srgb, var(--color-info) 12%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-info) 25%, transparent);
+  /* Brighter ink + a touch more fill/border so the chip stays legible on tinted
+     surfaces (e.g. zTable rows), not just on the page background. */
+  color: var(--color-code, #8FC5FF);
+  background: color-mix(in srgb, var(--color-info) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-info) 36%, transparent);
   border-radius: 5px;
   padding: 0.1em 0.4em;
   letter-spacing: -0.01em;
@@ -1627,41 +1629,44 @@ zNavBar .zNav-link.active {
 .zTable-responsive {
   overflow-x: auto;
   border-radius: 12px;
-  border: 1px solid color-mix(in srgb, var(--color-secondary) 20%, transparent);
+  border: 1px solid var(--border);
+  /* Clean on-brand dark panel — a whisper of secondary lifts it off "gray".
+     No raw rgba / muddy gradient; the table itself sits transparent on top. */
+  background: color-mix(in srgb, var(--color-secondary) 6%, var(--surface-1));
 }
 
 .zTable {
   width: 100%;
   border-collapse: collapse;
-  background: linear-gradient(145deg, rgba(30, 35, 60, 0.5) 0%, rgba(20, 25, 45, 0.6) 100%);
+  background: transparent;
   font-size: 0.95rem;
   text-align: left;
-  /* Default body text colour lives here so cells INHERIT it. Keeping it off the
-     td selector lets a per-cell utility (zText-success/-danger…) win — a bare
-     .zText-* class (0,1,0) would otherwise lose to `.zTable tbody td` (0,1,2). */
+  /* Default body colour lives here (not on td) so a per-cell utility
+     (zText-success/-danger…) wins on equal specificity — a bare .zText-* (0,1,0)
+     would otherwise lose to `.zTable tbody td` (0,1,2). */
   color: var(--ink-muted);
 }
 
 .zTable thead th {
-  background: color-mix(in srgb, var(--color-secondary) 18%, transparent);
+  background: color-mix(in srgb, var(--color-secondary) 20%, transparent);
   color: var(--ink);
   font-weight: 700;
   text-align: left;
   padding: 0.85rem 1rem;
   letter-spacing: 0.02em;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-secondary) 30%, transparent);
+  border-bottom: 1px solid var(--border-strong);
   white-space: nowrap;
 }
 
 .zTable tbody td {
   padding: 0.8rem 1rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--ink) 6%, transparent);
+  border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
 
 .zTable tbody tr:last-child td { border-bottom: none; }
-.zTable tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--ink) 2%, transparent); }
-.zTable tbody tr:hover td { background: color-mix(in srgb, var(--color-secondary) 8%, transparent); }
+.zTable tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+.zTable tbody tr:hover td { background: color-mix(in srgb, var(--color-secondary) 12%, transparent); }
 .zTable td strong { color: var(--ink); }
 
 /* Caption — subtitle line under the title (what the table shows / source / date).
