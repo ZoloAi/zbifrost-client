@@ -44,7 +44,6 @@ export const MODULE_REGISTRY = {
   // L2 Display: Inputs
   form_renderer: 'L2_Handling/display/inputs/form_renderer.js',
   button_renderer: 'L2_Handling/display/inputs/button_renderer.js',
-  input_renderer: 'L2_Handling/display/inputs/input_renderer.js',
   
   // L2 Display: Outputs
   text_renderer: 'L2_Handling/display/outputs/text_renderer.js',

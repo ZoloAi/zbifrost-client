@@ -54,6 +54,11 @@
   --surface-base:  #1e1e2e;                   /* opaque dark CARD base — event cards
                                                  (zTable, zTerminal…) read identically
                                                  on a light OR dark page, not page-tied */
+  --surface-field: #26263a;                   /* opaque FIELD surface — inputs read as a
+                                                 dark island on light pages AND stay
+                                                 distinct (a touch lighter) inside dark
+                                                 cards. Same balance as --surface-base. */
+  --surface-field-focus: #2d2d46;             /* field surface on focus (slightly lifted) */
 
   /* Canonical spacing scale — SSOT for every margin/padding rhythm across
    * events. Mirrors the zCLI step scale. Events consume these vars directly;
@@ -335,7 +340,7 @@ input.zInput, textarea.zInput, select.zInput {
   font-size: 0.95rem;
   line-height: 1.5;
   color: var(--zinput-color, var(--ink));
-  background: var(--zinput-bg, color-mix(in srgb, var(--ink) 14%, transparent));
+  background: var(--zinput-bg, var(--surface-field));
   border: 1.5px solid var(--zinput-border, var(--border-strong));
   border-radius: var(--zinput-radius, 10px);
   transition: border-color 0.18s, background 0.18s, box-shadow 0.18s;
@@ -348,7 +353,7 @@ input.zInput, textarea.zInput, select.zInput {
 input.zInput:focus, textarea.zInput:focus, select.zInput:focus {
   outline: none;
   border-color: var(--zinput-focus, var(--color-primary));
-  background: var(--zinput-bg-focus, color-mix(in srgb, var(--ink) 17%, transparent));
+  background: var(--zinput-bg-focus, var(--surface-field-focus));
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--zinput-focus, var(--color-primary)) 20%, transparent);
 }
 
@@ -479,8 +484,8 @@ input[type="datetime-local"].zInput::-webkit-calendar-picker-indicator:hover {
   padding: 0.55rem 0.85rem;
   font-size: 0.95rem;
   color: var(--zinput-color, var(--ink));
-  background: var(--zinput-affix-bg, color-mix(in srgb, var(--color-secondary) 14%, transparent));
-  border: 1.5px solid var(--zinput-border, color-mix(in srgb, var(--ink) 14%, transparent));
+  background: var(--zinput-affix-bg, color-mix(in srgb, var(--color-secondary) 22%, var(--surface-field)));
+  border: 1.5px solid var(--zinput-border, var(--border-strong));
   white-space: nowrap;
 }
 .zInputGroup > .zInputGroup-text:first-child { border-radius: 10px 0 0 10px; border-right: 0; }

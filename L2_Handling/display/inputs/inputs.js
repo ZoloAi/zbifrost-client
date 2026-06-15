@@ -9,4 +9,3 @@
 
 export * from './button_renderer.js';
 export * from './form_renderer.js';
-export * from './input_renderer.js';
