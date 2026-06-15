@@ -229,8 +229,9 @@ pre {
 /* ─── Lists (zUL / zOL / zDL) ──────────────────────────────────────────────── */
 /* Bifrost owns the list baseline so a bare zUL/zOL/zDL — and every markdown list
  * — renders deliberately and themed, never on raw browser UA defaults. Marker
- * variants (circle/square/letter/roman) are set inline by the renderer; here we
- * own the rhythm, indent, brand-tinted markers, and the dl term/definition look.
+ * variants are CANONICAL classes (.zList-circle/square/letter/roman) the renderer
+ * appends — never inline list-style on the element. Here we own the rhythm,
+ * indent, brand-tinted markers, the variants, and the dl term/definition look.
  * Apps re-skin via _zClass — they never SUPPLY the baseline. */
 
 ul, ol {
@@ -248,6 +249,15 @@ li::marker { color: var(--color-secondary); }
 
 /* Nested lists tuck under their parent item with a single tight gap. */
 li > ul, li > ol { margin: 0.4rem 0 0; }
+
+/* Marker variants — canonical, renderer-appended (zList event `style`). The
+ * renderer picks <ul> vs <ol>; these only set the marker glyph/sequence. */
+.zList-circle { list-style-type: circle; }
+.zList-square { list-style-type: square; }
+.zList-number { list-style-type: decimal; }
+.zList-letter { list-style-type: lower-alpha; }
+.zList-roman  { list-style-type: lower-roman; }
+.zList-none   { list-style-type: none; padding-left: 0; }
 
 /* Definition list (zDL) — term in ink, definition indented & muted. */
 dl { margin: 0 0 1rem; }

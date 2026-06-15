@@ -10,10 +10,22 @@
 // Layer 2: Utilities
 import { withErrorBoundary } from '../../../zSys/validation/error_boundary.js';
 
+// Layer 0: Primitives (semantic factories — renderer never hand-builds tags)
+import { createList, createListItem } from '../primitives/lists_primitives.js';
+
+// zMD inline seam + emoji a11y — a list item is an inline context, exactly like
+// a table cell, so item text delegates here (SSOT) instead of raw textContent.
+import { TextRenderer } from '../outputs/text_renderer.js';
+import emojiAccessibility from '../../../zSys/accessibility/emoji_accessibility.js';
+
 export class ListRenderer {
   constructor(logger, client) {
     this.client = client;
     this.logger = logger;
+
+    // TextRenderer gives us _parseInline (bold/italic/underline/code/links) —
+    // the same inline seam table cells use. DRY: never reinvent inline markdown.
+    this.textRenderer = new TextRenderer(this.logger);
 
     // Wrap render method with error boundary
     const originalRender = this.render.bind(this);
@@ -21,6 +33,23 @@ export class ListRenderer {
       component: 'ListRenderer',
       logger: this.logger
     });
+  }
+
+  /**
+   * Parse a list item's INLINE markdown via the zMD inline seam (DRY/SSOT).
+   *
+   * A list item is inline-only — like a table cell — so it delegates to
+   * TextRenderer._parseInline (never the block parser: an item must not emit a
+   * heading/list/blockquote). Emojis then run through the shared safe-emoji a11y
+   * util, matching the zCLI list path (parse_inline + convert_emojis_for_terminal).
+   * @param {string} text - Raw item text
+   * @returns {string} Inline HTML
+   * @private
+   */
+  _parseItemContent(text) {
+    if (!text || typeof text !== 'string') return text || '';
+    const inlineHtml = this.textRenderer._parseInline(text);
+    return emojiAccessibility.enhanceText(inlineHtml);
   }
 
   /**
@@ -48,35 +77,34 @@ export class ListRenderer {
       currentStyle = eventData.style || 'bullet';
     }
 
-    // Determine list element type and CSS list-style-type
+    // Pick <ol> vs <ul> and the canonical marker class. The glyph/sequence is
+    // owned by zbase (.zList-circle/square/letter/roman) — NEVER inline style.
     let listElement;
-    let listStyleType = null;
-    
+    let markerClass = null;
+
     if (currentStyle === 'number') {
-      listElement = document.createElement('ol');
+      listElement = createList(true);
     } else if (currentStyle === 'letter') {
-      listElement = document.createElement('ol');
-      listStyleType = 'lower-alpha';  // a, b, c
+      listElement = createList(true);
+      markerClass = 'zList-letter';
     } else if (currentStyle === 'roman') {
-      listElement = document.createElement('ol');
-      listStyleType = 'lower-roman';  // i, ii, iii
+      listElement = createList(true);
+      markerClass = 'zList-roman';
     } else if (currentStyle === 'circle') {
-      listElement = document.createElement('ul');
-      listStyleType = 'circle';  // 
+      listElement = createList(false);
+      markerClass = 'zList-circle';
     } else if (currentStyle === 'square') {
-      listElement = document.createElement('ul');
-      listStyleType = 'square';  // 
+      listElement = createList(false);
+      markerClass = 'zList-square';
     } else {
       // bullet (default) or any other style
-      listElement = document.createElement('ul');
+      listElement = createList(false);
     }
 
-    // Apply base zTheme class
+    // Apply base zTheme class + canonical marker variant
     listElement.className = 'zList';
-
-    // Apply list-style-type if specified
-    if (listStyleType) {
-      listElement.style.listStyleType = listStyleType;
+    if (markerClass) {
+      listElement.classList.add(markerClass);
     }
 
     // _zClass is applied centrally by the orchestrator (SSOT, append mode) on the
@@ -125,7 +153,7 @@ export class ListRenderer {
         } else {
           this.logger.warn('[ListRenderer] Nested array without previous list item - creating standalone');
           // Fallback: create a new <li> if no previous item exists
-          const li = document.createElement('li');
+          const li = createListItem();
           try {
             const nestedEventData = {
               items: item,
@@ -147,8 +175,8 @@ export class ListRenderer {
         continue;
       }
 
-      // Create new <li> for non-array items
-      const li = document.createElement('li');
+      // Create new <li> for non-array items (via primitive — no hand-built tags)
+      const li = createListItem();
 
       // Apply zList-inline-item class if this is an inline list
       if (isInline) {
@@ -173,9 +201,10 @@ export class ListRenderer {
           li.textContent = `[Error: ${error.message}]`;
         }
       } else {
-        // Plain text item (original behavior)
+        // Plain text item — inline context: delegate to the zMD inline seam
+        // (parse_inline + emoji), exactly like a table cell. SSOT, not textContent.
         const content = typeof item === 'string' ? item : (item.content || '');
-        li.textContent = content;
+        li.innerHTML = this._parseItemContent(content);
       }
 
       listElement.appendChild(li);
