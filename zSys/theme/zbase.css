@@ -1439,6 +1439,8 @@ zNavBar .zNav-link.active {
 .zCard       { position: relative; }
 .zInputGroup { display: flex; align-items: stretch; }
 .zInputGroup > .zInputGroup-text { display: flex; align-items: center; }
+/* zDialog actions row — Submit + Reset side by side with rhythm. */
+.zDialog-actions { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
 
 /* Badge (structural — no color) */
 .zBadge {

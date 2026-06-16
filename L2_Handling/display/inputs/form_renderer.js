@@ -104,7 +104,8 @@ export class FormRenderer {
       model,
       table,
       onSubmit,
-      fields
+      fields,
+      title
     });
 
     // dialog_mode: "confirm" → confirm button (backend-declared, SSOT signal)
@@ -137,22 +138,38 @@ export class FormRenderer {
       form.appendChild(fieldGroup);
     });
 
-    // Error display area (hidden by default)
-    const errorContainer = createElement('div', ['zDialog-errors', 'zAlert', 'zAlert-danger', 'zmt-3']);
-    errorContainer.style.display = 'none';
-    form.appendChild(errorContainer);
+    // Actions row — Submit + Reset. Reset is a native type=reset (restores each
+    // field to its default for free); we only clear the feedback slot on top.
+    const actions = createElement('div', ['zDialog-actions']);
 
-    // Submit button using primitive
-    const submitButton = createElement('button', ['zBtn', 'zBtn-primary', 'zmt-3'], {
+    const submitButton = createElement('button', ['zBtn', 'zBtn-primary'], {
       type: 'submit'
     });
     submitButton.textContent = 'Submit';
-    form.appendChild(submitButton);
+    actions.appendChild(submitButton);
+
+    const resetButton = createElement('button', ['zBtn', 'zBtn-outline-secondary'], {
+      type: 'reset'
+    });
+    resetButton.textContent = 'Reset';
+    actions.appendChild(resetButton);
+
+    form.appendChild(actions);
+
+    // Feedback slot — success/error signals render here, below the actions.
+    const feedback = createElement('div', ['zDialog-feedback']);
+    form.appendChild(feedback);
 
     // Handle form submission
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       this._handleSubmit(form, _dialogId);
+    });
+
+    // Reset clears any standing feedback (native reset restores field defaults).
+    form.addEventListener('reset', () => {
+      const slot = form.querySelector('.zDialog-feedback');
+      if (slot) clearElement(slot);
     });
 
     formContainer.appendChild(form);
@@ -187,18 +204,13 @@ export class FormRenderer {
       container.appendChild(titleElement);
     }
 
-    // Error display area (hidden by default)
-    const errorContainer = createElement('div', ['zDialog-errors', 'zAlert', 'zAlert-danger', 'zmt-3']);
-    errorContainer.style.display = 'none';
-    container.appendChild(errorContainer);
-
     const btn = createElement('button', ['zBtn', btnClass]);
     btn.textContent = btnLabel;
     btn.addEventListener('click', async () => {
       btn.disabled = true;
       btn.textContent = 'Processing...';
-      errorContainer.style.display = 'none';
-      clearElement(errorContainer);
+      const slot = container.querySelector('.zDialog-feedback');
+      if (slot) clearElement(slot);
 
       try {
         const formContext = this.formContexts.get(dialogId);
@@ -216,27 +228,27 @@ export class FormRenderer {
         });
 
         if (response.success) {
-          clearElement(container);
-          const successMsg = createElement('div', ['zAlert', 'zAlert-success']);
-          successMsg.innerHTML = `<strong>Done!</strong> ${response.message || 'Action completed.'}`;
-          container.appendChild(successMsg);
+          await this._emitSignal(container, 'success', response.message || 'Action completed.');
+          btn.textContent = 'Done';
           this.formContexts.delete(dialogId);
         } else {
-          errorContainer.style.display = 'block';
-          errorContainer.textContent = response.message || 'Action failed.';
+          await this._emitSignal(container, 'error', response.message || 'Action failed.');
           btn.disabled = false;
           btn.textContent = btnLabel;
         }
       } catch (error) {
         this.logger.error('[FormRenderer] Confirm button error:', error);
-        errorContainer.style.display = 'block';
-        errorContainer.textContent = 'Failed to execute action. Please try again.';
+        await this._emitSignal(container, 'error', 'Failed to execute action. Please try again.');
         btn.disabled = false;
         btn.textContent = btnLabel;
       }
     });
 
     container.appendChild(btn);
+
+    // Feedback slot — success/error signals render here, below the button.
+    const feedback = createElement('div', ['zDialog-feedback']);
+    container.appendChild(feedback);
     return container;
   }
 
@@ -439,12 +451,9 @@ export class FormRenderer {
       return;
     }
 
-    // Clear previous errors
-    const errorContainer = formElement.querySelector('.zDialog-errors');
-    if (errorContainer) {
-      errorContainer.style.display = 'none';
-      clearElement(errorContainer);
-    }
+    // Clear any standing feedback signal before re-submitting.
+    const feedback = formElement.querySelector('.zDialog-feedback');
+    if (feedback) clearElement(feedback);
 
     // Collect form data
     const formData = new FormData(formElement);
@@ -480,6 +489,11 @@ export class FormRenderer {
         this._handleError(formElement, response);
       }
 
+      // Integration seam: announce the outcome on the DOM so client plugins
+      // (zScripts) can react with the submitted values — confetti, overlays,
+      // analytics — without touching the renderer. Same data the backend got.
+      this._emitFormEvent(formElement, formContext, response.success, data, response);
+
     } catch (error) {
       this.logger.error('[FormRenderer] Submission error:', error);
       this._handleError(formElement, {
@@ -503,39 +517,19 @@ export class FormRenderer {
   _handleSuccess(formElement, response) {
     this.logger.log('[FormRenderer] Form submission successful');
 
-    // Display success message
-    const successContainer = createElement('div', ['zAlert', 'zAlert-success', 'zmt-3']);
-    successContainer.innerHTML = `
-      <strong>Success!</strong> ${response.message || 'Form submitted successfully.'}
-    `;
-
-    // Replace form with success message
-    const formContainer = formElement.closest('.zDialog-container');
-    if (formContainer) {
-      clearElement(formContainer);
-      formContainer.appendChild(successContainer);
-      
-      // Clean up form context from Map using dialogId from form container
-      const dialogId = formContainer.getAttribute('data-dialog-id');
-      if (dialogId) {
-        this.formContexts.delete(dialogId);
-        this.logger.log('[FormRenderer] Cleaned up form context for:', dialogId);
-      }
-    }
-
-    // Server-requested navigation (e.g. login → home page).
-    // Converts @. zPaths to URL paths before client-side SPA navigation.
+    // Terminal states first — navigate/reload leave this view, so the form and
+    // its context are done. Fire the signal, drop context, then hand off.
     if (response.navigate) {
+      this._emitSignal(formElement, 'success', response.message || 'Done.');
+      this._dropFormContext(formElement);
       const routePath = convertZPathToURL(response.navigate);
       this.logger.log('[FormRenderer] Server requested navigation to:', routePath);
       setTimeout(() => {
         if (this.client && typeof this.client._navigateToRoute === 'function') {
           // Navigate, THEN refresh the navbar — login changed the session, so the
           // RBAC-filtered nav (zAccount/logout) must rebuild for the new role.
-          // Mirrors the bounce-back path; without it the navbar is stale until reload.
           this.client._navigateToRoute(routePath).then(() => {
             if (typeof this.client._fetchAndPopulateNavBar === 'function') {
-              this.logger.log('[FormRenderer] Refreshing navbar after post-login navigation');
               this.client._fetchAndPopulateNavBar().catch(err => {
                 this.logger.error('[FormRenderer] Failed to refresh navbar:', err);
               });
@@ -550,19 +544,22 @@ export class FormRenderer {
       return;
     }
 
-    // If the server requests a full reload (e.g., after login, to rebuild the
-    // RBAC-filtered zDash sidebar with the new session), honour it with a short
-    // delay so the success message is briefly visible before navigation.
     if (response.reload === true) {
+      this._emitSignal(formElement, 'success', response.message || 'Done.');
+      this._dropFormContext(formElement);
       this.logger.log('[FormRenderer] Server requested page reload for RBAC sidebar refresh');
       setTimeout(() => { window.location.reload(); }, 800);
       return;
     }
 
-    // Refresh navbar after successful submission (e.g., after login)
-    // This ensures RBAC-filtered navbar items are updated
+    // Plain success — the form STAYS (like a real website): emit a success
+    // signal below the actions and reset fields to their defaults so the user
+    // can submit again. The form context is kept for the next submit.
+    this._emitSignal(formElement, 'success', response.message || 'Form submitted successfully.');
+    formElement.reset();
+
+    // Refresh navbar (e.g. RBAC change) without leaving the form.
     if (this.client && typeof this.client._fetchAndPopulateNavBar === 'function') {
-      this.logger.log('[FormRenderer] Refreshing navbar for RBAC update');
       this.client._fetchAndPopulateNavBar().catch(err => {
         this.logger.error('[FormRenderer] Failed to refresh navbar:', err);
       });
@@ -570,43 +567,77 @@ export class FormRenderer {
   }
 
   /**
-   * Handle form submission error
+   * Handle form submission error — surface it as an inline error signal,
+   * keeping the form (and the user's input) in place.
    * @private
    * @param {HTMLFormElement} formElement - Form element
    * @param {Object} response - Server error response
    */
   _handleError(formElement, response) {
     this.logger.error('[FormRenderer] Form submission failed:', response);
+    const messages = (Array.isArray(response.errors) && response.errors.length)
+      ? response.errors
+      : [response.message || 'Validation failed. Please check your input.'];
+    this._emitSignal(formElement, 'error', messages.join(' · '));
+  }
 
-    const errorContainer = formElement.querySelector('.zDialog-errors');
-    if (errorContainer) {
-      errorContainer.style.display = 'block';
+  /**
+   * Render a zSignal (success/error/…) into a root's .zDialog-feedback slot,
+   * via the display orchestrator — the same SSOT path standalone signals use.
+   * @private
+   * @param {HTMLElement} root - Form or container holding the feedback slot
+   */
+  async _emitSignal(root, event, content) {
+    const slot = root.querySelector('.zDialog-feedback');
+    if (!slot) return;
+    clearElement(slot);
 
-      const errorList = createElement('ul', ['zmb-0']);
-
-      // Display validation errors
-      if (response.errors && Array.isArray(response.errors)) {
-        response.errors.forEach(error => {
-          const errorItem = createElement('li');
-          errorItem.textContent = error;
-          errorList.appendChild(errorItem);
-        });
-      } else {
-        const errorItem = createElement('li');
-        errorItem.textContent = response.message || 'Validation failed. Please check your input.';
-        errorList.appendChild(errorItem);
-      }
-
-      clearElement(errorContainer);
-      const errorHeader = createElement('strong');
-      errorHeader.textContent = 'Error:';
-      errorContainer.appendChild(errorHeader);
-      errorContainer.appendChild(errorList);
+    const orch = this.client && this.client.zDisplayOrchestrator;
+    if (orch && typeof orch.renderZDisplayEvent === 'function') {
+      const el = await orch.renderZDisplayEvent({ event, content }, slot);
+      if (el) slot.appendChild(el);
+      return;
     }
+    // Fallback (orchestrator unavailable): build the canonical signal card.
+    const card = createElement('div', ['zSignal', `zSignal-${event}`, 'zAlert']);
+    card.textContent = content;
+    slot.appendChild(card);
+  }
 
-    // Scroll to errors
-    if (errorContainer) {
-      errorContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  /**
+   * Emit a bubbling DOM CustomEvent (zForm:success / zForm:error) carrying the
+   * submitted values, the form title, and the server response — the public hook
+   * client plugins use to react to a form result.
+   * @private
+   * @param {HTMLFormElement} formElement - Form element
+   * @param {Object} formContext - Stored context (title/model/table)
+   * @param {boolean} success - Whether the submission succeeded
+   * @param {Object} data - Collected field values
+   * @param {Object} response - Server response
+   */
+  _emitFormEvent(formElement, formContext, success, data, response) {
+    const name = success ? 'zForm:success' : 'zForm:error';
+    const detail = {
+      title: (formContext && formContext.title) || null,
+      data,
+      response
+    };
+    (formElement || document).dispatchEvent(
+      new CustomEvent(name, { bubbles: true, detail })
+    );
+    this.logger.log(`[FormRenderer] dispatched ${name}`, detail.title);
+  }
+
+  /**
+   * Drop a form's stored context (used on terminal navigate/reload).
+   * @private
+   */
+  _dropFormContext(formElement) {
+    const container = formElement.closest('.zDialog-container');
+    const dialogId = container && container.getAttribute('data-dialog-id');
+    if (dialogId) {
+      this.formContexts.delete(dialogId);
+      this.logger.log('[FormRenderer] Cleaned up form context for:', dialogId);
     }
   }
 }
