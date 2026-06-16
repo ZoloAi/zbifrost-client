@@ -45,6 +45,19 @@ import {
   createLabel
 } from '../primitives/form_primitives.js';
 
+/**
+ * Append a red required marker (*) to a label/legend when the field is required.
+ * SSOT — styled by .zRequired in zbase.css. Mirrors input_event_handler so a
+ * field looks identical whether it is standalone or inside a zDialog form.
+ */
+function appendRequiredMark(labelEl, required) {
+  if (!required || !labelEl) return;
+  const star = createElement('span', ['zRequired']);
+  star.textContent = ' *';
+  star.setAttribute('aria-hidden', 'true');
+  labelEl.appendChild(star);
+}
+
 export class FormRenderer {
   constructor(logger, client = null) {
     if (!logger) {
@@ -257,18 +270,18 @@ export class FormRenderer {
     const fieldLabel = typeof fieldDef === 'object' ? (fieldDef.label || fieldName) : fieldName;
     const required = typeof fieldDef === 'object' ? (fieldDef.required === true) : false;
 
+    // radio / checkbox → canonical .zForm-check-group (label lives inside the group)
+    if (fieldType === 'radio' || fieldType === 'checkbox') {
+      return this._createCheckGroup(fieldName, fieldType, fieldLabel, required, fieldDef);
+    }
+
     // Field group container
     const fieldGroup = createElement('div', ['zmb-3']);
 
-    // Label using primitive
+    // Label using primitive — canonical .zLabel + .zRequired marker
     const label = createLabel(fieldName, { class: 'zLabel' });
     label.textContent = this._formatLabel(fieldLabel);
-
-    if (required) {
-      const requiredMark = createElement('span', ['zText-danger']);
-      requiredMark.textContent = ' *';
-      label.appendChild(requiredMark);
-    }
+    appendRequiredMark(label, required);
     fieldGroup.appendChild(label);
 
     // Input field using primitive
@@ -276,6 +289,48 @@ export class FormRenderer {
     fieldGroup.appendChild(input);
 
     return fieldGroup;
+  }
+
+  /**
+   * Create a radio / checkbox field as a canonical .zForm-check-group.
+   * Mirrors input_event_handler emission: a .zLabel heading followed by
+   * .zForm-check rows (.zForm-check-input + .zForm-check-label) so dialog
+   * choices look identical to standalone zSelect/zCheckbox controls.
+   * @private
+   */
+  _createCheckGroup(fieldName, fieldType, fieldLabel, required, fieldDef) {
+    const isRadio = fieldType === 'radio';
+    const defaultOpts = isRadio ? ['true', 'false'] : ['true'];
+    const options = (fieldDef && typeof fieldDef === 'object' && Array.isArray(fieldDef.options))
+      ? fieldDef.options : defaultOpts;
+    const defaultVal = (fieldDef && typeof fieldDef === 'object' && fieldDef.default != null)
+      ? String(fieldDef.default) : null;
+
+    const group = createElement('div', ['zForm-check-group', 'zmb-3']);
+
+    const heading = createElement('div', ['zLabel']);
+    heading.textContent = this._formatLabel(fieldLabel);
+    appendRequiredMark(heading, required);
+    group.appendChild(heading);
+
+    options.forEach((opt, i) => {
+      const optId = `${fieldName}_${i}`;
+      const row = createElement('div', ['zForm-check', 'zmb-2']);
+      const control = createInput(isRadio ? 'radio' : 'checkbox', {
+        id: optId,
+        name: fieldName,
+        value: opt,
+        class: 'zForm-check-input'
+      });
+      if (String(opt) === defaultVal) control.checked = true;
+      const optLabel = createLabel(optId, { class: 'zForm-check-label' });
+      optLabel.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
+      row.appendChild(control);
+      row.appendChild(optLabel);
+      group.appendChild(row);
+    });
+
+    return group;
   }
 
   /**
@@ -291,13 +346,13 @@ export class FormRenderer {
     let input;
 
     if (fieldType === 'select') {
-      // Render <select> for enum fields
+      // Render <select> for enum fields — canonical .zSelect (dropdown styling)
       const options = (fieldDef && typeof fieldDef === 'object' && fieldDef.options) ? fieldDef.options : [];
       const defaultVal = (fieldDef && typeof fieldDef === 'object') ? fieldDef.default : null;
 
       input = createSelect({
         name: fieldName,
-        class: 'zInput',
+        class: 'zSelect',
         required: required
       });
 
@@ -317,61 +372,35 @@ export class FormRenderer {
         input.appendChild(optEl);
       });
 
-    } else if (fieldType === 'radio') {
-      // Render radio button group for bool fields (True / False [/ null if not required])
-      const options = (fieldDef && typeof fieldDef === 'object' && fieldDef.options) ? fieldDef.options : ['true', 'false'];
-      const defaultVal = (fieldDef && typeof fieldDef === 'object' && fieldDef.default != null) ? String(fieldDef.default) : null;
-
-      const wrapper = createElement('div', ['zRadio-group', 'zd-flex', 'zgap-3']);
-      options.forEach(opt => {
-        const optLabel = createElement('label', ['zRadio-label', 'zd-flex', 'zalign-items-center', 'zgap-1']);
-        const radio = createInput('radio', { name: fieldName, value: opt });
-        if (String(opt) === defaultVal) radio.checked = true;
-        const caption = createElement('span');
-        caption.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
-        optLabel.appendChild(radio);
-        optLabel.appendChild(caption);
-        wrapper.appendChild(optLabel);
-      });
-      input = wrapper;
-
     } else if (fieldType === 'textarea') {
       const defaultVal = (fieldDef && typeof fieldDef === 'object') ? fieldDef.default : null;
       input = createTextarea({
         name: fieldName,
-        class: 'zInput',
+        class: 'zForm-control',
         rows: 4,
         required: required,
         placeholder: `Enter ${this._formatLabel(fieldName).toLowerCase()}`,
         ...(defaultVal != null && { value: String(defaultVal) })
       });
     } else {
-      // Use input primitive with appropriate type
-      let inputType = 'text';
+      // Map field types to HTML5 input types (covered field primitives)
+      const TYPE_MAP = {
+        password: 'password', email: 'email', number: 'number',
+        tel: 'tel', phone: 'tel',
+        date: 'date', time: 'time',
+        datetime: 'datetime-local', 'datetime-local': 'datetime-local',
+        week: 'week', month: 'month', color: 'color'
+      };
+      const inputType = TYPE_MAP[fieldType] || 'text';
 
-      // Map field types to HTML5 input types
-      if (fieldType === 'password') {
-        inputType = 'password';
-      } else if (fieldType === 'email') {
-        inputType = 'email';
-      } else if (fieldType === 'number') {
-        inputType = 'number';
-      } else if (fieldType === 'tel' || fieldType === 'phone') {
-        inputType = 'tel';
-      } else if (fieldType === 'date') {
-        inputType = 'date';
-      } else if (fieldType === 'time') {
-        inputType = 'time';
-      } else if (fieldType === 'datetime') {
-        inputType = 'datetime-local';
-      }
-
+      // Date/time/color carry their own value, not a text placeholder
+      const isPicker = ['date', 'time', 'datetime-local', 'week', 'month', 'color'].includes(inputType);
       const defaultVal = (fieldDef && typeof fieldDef === 'object') ? fieldDef.default : null;
       input = createInput(inputType, {
         name: fieldName,
-        class: 'zInput',
+        class: 'zForm-control',
         required: required,
-        placeholder: `Enter ${this._formatLabel(fieldName).toLowerCase()}`,
+        ...(isPicker ? {} : { placeholder: `Enter ${this._formatLabel(fieldName).toLowerCase()}` }),
         ...(defaultVal != null && { value: String(defaultVal) })
       });
     }
