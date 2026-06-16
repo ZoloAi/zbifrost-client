@@ -45,6 +45,75 @@ import {
   createLabel
 } from '../primitives/form_primitives.js';
 
+// ─────────────────────────────────────────────────────────────────
+// Field-rules SSOT (JS mirror of field_rules.py → TYPE_PRESETS)
+// These are the SAME canonical regexes + messages the Python input hub uses.
+//
+// WHY THE MIRROR LIVES HERE (the dual-path architectural truth):
+//   zDialog reaches the client by TWO routes —
+//     1. INLINE page forms stream as raw zUI metadata through the display-tree
+//        path (zdisplay_orchestrator → renderForm). The Python display layer
+//        never enriches these; the fields arrive exactly as authored in .zolo.
+//     2. RUNTIME/interactive dialogs go through display.zDialog →
+//        send_gui_event, where the server DOES enrich (display_primitives
+//        ._resolve_dialog_field_rules / field_rules.html_attrs).
+//   Because route (1) bypasses the server entirely, the rule (pattern) and the
+//   message MUST be resolved client-side to cover BOTH routes. Server-sent
+//   enrichment alone would silently miss every inline page form. Hence this
+//   mirror — fetching from the server would add a round-trip AND still leave
+//   route (1) unenriched until it arrived. Keep these strings in lock-step
+//   with field_rules.py (TYPE_PRESETS) — that file is the canonical source.
+// ─────────────────────────────────────────────────────────────────
+const _TYPE_PRESETS = {
+  email:  { pattern: '^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$',
+            message: 'Invalid email address — expected format: user@domain.com' },
+  url:    { pattern: '^[a-zA-Z][a-zA-Z0-9+\\-.]*:(?:\\/\\/[^\\s]+|(?!\\/\\/)[^\\s]+)$',
+            message: 'Invalid URL — include the scheme (e.g. https://example.com)' },
+  tel:    { pattern: '^[+\\d\\(*#][0-9\\s\\-\\(\\)+*#xX.]*$',
+            message: 'Invalid phone number — use digits and separators only (e.g. +1 555 000 0000)' },
+  color:  { pattern: '^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$',
+            message: 'Invalid color — use a hex value (e.g. #5CA9FF or #FFF)' },
+  number: { message: 'Invalid number — enter a numeric value (e.g. 42, 3.14, -7)' },
+};
+
+/** Name-based type auto-detection — mirrors Python field_rules.detect_type(). */
+function _detectType(fieldName) {
+  const lower = (fieldName || '').toLowerCase();
+  if (lower.includes('password'))          return 'password';
+  if (lower.includes('email'))             return 'email';
+  if (lower === 'tel' || lower === 'phone' || lower.includes('phone')) return 'tel';
+  return null;
+}
+
+/**
+ * Resolve a field definition to a dict carrying any applicable preset HTML
+ * attrs. Mirrors Python field_rules.html_attrs() — author-declared keys always
+ * win; we only fill what's absent (e.g. an email field's pattern).
+ * Returns the (possibly enriched) fieldDef; bare strings become dicts.
+ */
+function _resolveFieldRules(fieldDef) {
+  let f, identity;
+  if (typeof fieldDef === 'string') {
+    f = { zConv: fieldDef };
+    identity = fieldDef;
+  } else if (fieldDef && typeof fieldDef === 'object') {
+    f = Object.assign({}, fieldDef);
+    identity = f.zConv || f.name || f.field || '';
+  } else {
+    return fieldDef;
+  }
+
+  const type = f.type || _detectType(identity);
+  const preset = type && _TYPE_PRESETS[type];
+  if (!preset) return f;
+
+  // Fill attrs the preset provides but the author omitted.
+  Object.entries(preset).forEach(([k, v]) => {
+    if (f[k] == null) f[k] = v;
+  });
+  return f;
+}
+
 /**
  * Append a red required marker (*) to a label/legend when the field is required.
  * SSOT — styled by .zRequired in zbase.css. Mirrors input_event_handler so a
@@ -96,15 +165,18 @@ export class FormRenderer {
       fields = [],
       dialog_mode,
       onSubmit,
+      zReset,
       _dialogId
     } = eventData;
 
-    // Store form context in Map, keyed by unique _dialogId
+    // Store form context in Map, keyed by unique _dialogId.
+    // Store as-is (fields array pre-resolution); _resolveFieldRules runs below
+    // at render time so every code path that calls renderForm benefits.
     this.formContexts.set(_dialogId, {
       model,
       table,
       onSubmit,
-      fields,
+      fields: fields.map(_resolveFieldRules),
       title
     });
 
@@ -132,14 +204,20 @@ export class FormRenderer {
       'data-dialog-id': _dialogId
     });
 
-    // Render fields
-    fields.forEach(fieldDef => {
+    // Resolve field rules (preset patterns, etc.) before rendering.
+    // Covers BOTH paths: tree-streaming (fields arrive as raw .zolo data) AND
+    // the runtime zDialog event (server already enriched, setdefault is a no-op).
+    const resolvedFields = fields.map(_resolveFieldRules);
+
+    resolvedFields.forEach(fieldDef => {
       const fieldGroup = this._createFieldGroup(fieldDef);
       form.appendChild(fieldGroup);
     });
 
-    // Actions row — Submit + Reset. Reset is a native type=reset (restores each
-    // field to its default for free); we only clear the feedback slot on top.
+    // Actions row — Submit always; Reset ONLY when the author opted in with
+    // `zReset: true` (parity with the zCLI Submit/Reset chooser). Reset is a
+    // native type=reset (restores each field to its default for free); we only
+    // clear the feedback slot on top.
     const actions = createElement('div', ['zDialog-actions']);
 
     const submitButton = createElement('button', ['zBtn', 'zBtn-primary'], {
@@ -148,11 +226,13 @@ export class FormRenderer {
     submitButton.textContent = 'Submit';
     actions.appendChild(submitButton);
 
-    const resetButton = createElement('button', ['zBtn', 'zBtn-outline-secondary'], {
-      type: 'reset'
-    });
-    resetButton.textContent = 'Reset';
-    actions.appendChild(resetButton);
+    if (zReset) {
+      const resetButton = createElement('button', ['zBtn', 'zBtn-outline-secondary'], {
+        type: 'reset'
+      });
+      resetButton.textContent = 'Reset';
+      actions.appendChild(resetButton);
+    }
 
     form.appendChild(actions);
 
@@ -259,8 +339,13 @@ export class FormRenderer {
    * @returns {HTMLElement} Field group element
    */
   _createFieldGroup(fieldDef) {
-    // Handle both string and object field definitions
-    const fieldName = typeof fieldDef === 'string' ? fieldDef : fieldDef.name;
+    // Handle both string and object field definitions. The identity key (the
+    // zConv binding) is canonical `zConv:`; `name`/`field` are back-compat
+    // aliases. This value becomes the input's HTML name → the submitted data key
+    // → zConv.<key>, matching the zCLI parser (SSOT).
+    const fieldName = typeof fieldDef === 'string'
+      ? fieldDef
+      : (fieldDef.zConv || fieldDef.name || fieldDef.field);
 
     // Auto-detect field type from field name if not explicitly provided
     let fieldType = 'text';
@@ -312,11 +397,30 @@ export class FormRenderer {
    */
   _createCheckGroup(fieldName, fieldType, fieldLabel, required, fieldDef) {
     const isRadio = fieldType === 'radio';
+    const authorOptions = (fieldDef && typeof fieldDef === 'object' && Array.isArray(fieldDef.options));
     const defaultOpts = isRadio ? ['true', 'false'] : ['true'];
-    const options = (fieldDef && typeof fieldDef === 'object' && Array.isArray(fieldDef.options))
-      ? fieldDef.options : defaultOpts;
+    const options = authorOptions ? fieldDef.options : defaultOpts;
     const defaultVal = (fieldDef && typeof fieldDef === 'object' && fieldDef.default != null)
       ? String(fieldDef.default) : null;
+
+    // Single boolean checkbox (no author options) → one box whose inline label IS
+    // the field label, like a consent toggle. Checked submits 'true'; unchecked
+    // submits nothing, so _handleSubmit injects 'false' for zCLI parity (the zCLI
+    // picker always returns 'true'/'false').
+    if (!isRadio && !authorOptions) {
+      const row = createElement('div', ['zForm-check', 'zmb-3']);
+      const optId = `${fieldName}_0`;
+      const control = createInput('checkbox', {
+        id: optId, name: fieldName, value: 'true', class: 'zForm-check-input'
+      });
+      if (defaultVal === 'true') control.checked = true;
+      const lbl = createLabel(optId, { class: 'zForm-check-label' });
+      lbl.textContent = this._formatLabel(fieldLabel);
+      appendRequiredMark(lbl, required);
+      row.appendChild(control);
+      row.appendChild(lbl);
+      return row;
+    }
 
     const group = createElement('div', ['zForm-check-group', 'zmb-3']);
 
@@ -385,39 +489,186 @@ export class FormRenderer {
       });
 
     } else if (fieldType === 'textarea') {
-      const defaultVal = (fieldDef && typeof fieldDef === 'object') ? fieldDef.default : null;
-      input = createTextarea({
+      const fieldObj = (fieldDef && typeof fieldDef === 'object') ? fieldDef : {};
+      const defaultVal = fieldObj.default;
+      const taAttrs = {
         name: fieldName,
         class: 'zForm-control',
         rows: 4,
         required: required,
-        placeholder: `Enter ${this._formatLabel(fieldName).toLowerCase()}`,
+        placeholder: fieldObj.placeholder || `Enter ${this._formatLabel(fieldName).toLowerCase()}`,
         ...(defaultVal != null && { value: String(defaultVal) })
+      };
+      // readonly / disabled — parity with the zCLI input hub (which handles them
+      // before the textarea branch). Length constraints only: <textarea> honours
+      // minlength/maxlength but not pattern, matching field_rules' length subset.
+      if (fieldObj.readonly) taAttrs.readonly = true;
+      if (fieldObj.disabled) taAttrs.disabled = true;
+      ['minlength', 'maxlength'].forEach((k) => {
+        if (fieldObj[k] != null) taAttrs[k] = fieldObj[k];
       });
+      input = createTextarea(taAttrs);
+      // D2 — message SSOT: tooShort/tooLong bubbles read like the zCLI prompt.
+      this._wireValidationMessages(input, fieldObj, fieldType);
     } else {
-      // Map field types to HTML5 input types (covered field primitives)
+      // Map field types to HTML5 input types — SSOT parity with the zCLI input hub
+      // (Text Fields · Files · Dates · Color). Unknown types fall back to text.
       const TYPE_MAP = {
         password: 'password', email: 'email', number: 'number',
-        tel: 'tel', phone: 'tel',
+        tel: 'tel', phone: 'tel', url: 'url', search: 'search',
         date: 'date', time: 'time',
         datetime: 'datetime-local', 'datetime-local': 'datetime-local',
-        week: 'week', month: 'month', color: 'color'
+        week: 'week', month: 'month', color: 'color', file: 'file'
       };
       const inputType = TYPE_MAP[fieldType] || 'text';
 
-      // Date/time/color carry their own value, not a text placeholder
-      const isPicker = ['date', 'time', 'datetime-local', 'week', 'month', 'color'].includes(inputType);
-      const defaultVal = (fieldDef && typeof fieldDef === 'object') ? fieldDef.default : null;
-      input = createInput(inputType, {
+      const fieldObj = (fieldDef && typeof fieldDef === 'object') ? fieldDef : {};
+      // Pickers carry their own native value/affordance — no text placeholder unless
+      // the author explicitly sets one.
+      const isPicker = ['date', 'time', 'datetime-local', 'week', 'month', 'color', 'file'].includes(inputType);
+      const defaultVal = fieldObj.default;
+      const datalistOpts = Array.isArray(fieldObj.datalist) ? fieldObj.datalist : null;
+
+      const attrs = {
         name: fieldName,
         class: 'zForm-control',
-        required: required,
-        ...(isPicker ? {} : { placeholder: `Enter ${this._formatLabel(fieldName).toLowerCase()}` }),
-        ...(defaultVal != null && { value: String(defaultVal) })
+        required: required
+      };
+      // readonly / disabled — native attrs, parity with the zCLI input hub
+      // (shows the value, blocks editing). Disabled values are re-joined on
+      // submit (the browser omits disabled fields; zCLI returns them).
+      if (fieldObj.readonly) attrs.readonly = true;
+      if (fieldObj.disabled) attrs.disabled = true;
+      // Field constraints — native HTML attrs the browser enforces. These apply
+      // with or without a type (the developer escape hatch); the matching rules
+      // run in the zCLI input hub via field_rules (SSOT). The backend resolves
+      // type presets (email→pattern, etc.) into these same attrs before send, so
+      // the exact regex is identical on both surfaces. Attrs that don't apply to
+      // a given input type are simply ignored by the browser.
+      ['pattern', 'min', 'max', 'step', 'minlength', 'maxlength'].forEach((k) => {
+        if (fieldObj[k] != null) attrs[k] = fieldObj[k];
       });
+      if (!isPicker) {
+        attrs.placeholder = fieldObj.placeholder || `Enter ${this._formatLabel(fieldName).toLowerCase()}`;
+      } else if (fieldObj.placeholder) {
+        attrs.placeholder = fieldObj.placeholder;
+      }
+      if (defaultVal != null) attrs.value = String(defaultVal);
+
+      // File picker: forward the cross-surface accept/multiple contract.
+      if (inputType === 'file') {
+        if (fieldObj.accept) attrs.accept = fieldObj.accept;
+        if (fieldObj.multiple) attrs.multiple = true;
+      }
+
+      // Datalist: native <datalist> + list= so the field offers suggestions while
+      // still accepting free text (mirrors the zCLI numbered-suggestion behavior).
+      let datalistEl = null;
+      if (datalistOpts && inputType !== 'file') {
+        const listId = `${fieldName}-datalist`;
+        attrs.list = listId;
+        datalistEl = createElement('datalist', [], { id: listId });
+        datalistOpts.forEach(opt => datalistEl.appendChild(createOption(String(opt), String(opt))));
+      }
+
+      input = createInput(inputType, attrs);
+
+      // D2 — message SSOT: make the native validation bubble read identically to
+      // the zCLI prompt. The browser already knows WHICH rule failed (its
+      // ValidityState); we only translate that to our message string.
+      this._wireValidationMessages(input, fieldObj, fieldType);
+
+      // Prefix / suffix affixes — wrap in a canonical .zInputGroup so the field
+      // reads like the zCLI prompt's [$…] / […@co] group. Pickers / file own
+      // their native affordance, so affixes are skipped there. The submitted
+      // value is re-joined with the affixes in _handleSubmit so zConv is
+      // prefix + value + suffix on BOTH surfaces (SSOT with zCLI).
+      const prefix = isPicker || inputType === 'file' ? '' : this._affixText(fieldObj.prefix);
+      const suffix = isPicker || inputType === 'file' ? '' : this._affixText(fieldObj.suffix);
+      let rendered = input;
+      if (prefix || suffix) {
+        const group = createElement('div', ['zInputGroup']);
+        if (prefix) {
+          const pre = createElement('span', ['zInputGroup-text']);
+          pre.textContent = prefix;
+          group.appendChild(pre);
+        }
+        group.appendChild(input);
+        if (suffix) {
+          const suf = createElement('span', ['zInputGroup-text']);
+          suf.textContent = suffix;
+          group.appendChild(suf);
+        }
+        rendered = group;
+      }
+
+      // input (or its affix group) + its datalist must both reach the field
+      // group — return a fragment.
+      if (datalistEl) {
+        const frag = document.createDocumentFragment();
+        frag.appendChild(rendered);
+        frag.appendChild(datalistEl);
+        return frag;
+      }
+      return rendered;
     }
 
     return input;
+  }
+
+  /**
+   * Wire SSOT validation messages onto an input (D2 — message parity).
+   *
+   * The browser's native bubble normally shows its own wording ("Please match
+   * the requested format."). We override it so the message matches the zCLI
+   * prompt exactly — the SAME strings field_rules.py returns. Rather than
+   * re-running validate_value in JS, we read the native ValidityState (which
+   * already says WHICH rule failed) and map each flag to our message. The
+   * length / range / step wording mirrors field_rules.validate_value; the
+   * format wording mirrors TYPE_PRESETS (preset) or the raw-pattern message.
+   * @private
+   */
+  _wireValidationMessages(input, fieldObj, fieldType) {
+    const preset = _TYPE_PRESETS[fieldType];
+    const rawPattern = fieldObj.pattern;
+
+    const messageFor = (v) => {
+      if (v.tooShort)       return `Must be at least ${input.getAttribute('minlength')} characters`;
+      if (v.tooLong)        return `Must be at most ${input.getAttribute('maxlength')} characters`;
+      if (v.rangeUnderflow) return `Must be ≥ ${input.getAttribute('min')}`;
+      if (v.rangeOverflow)  return `Must be ≤ ${input.getAttribute('max')}`;
+      if (v.stepMismatch)   return `Must be in steps of ${input.getAttribute('step')}`;
+      if (v.patternMismatch || v.typeMismatch) {
+        if (preset && preset.message) return preset.message;
+        if (rawPattern != null) return `Must match the required format: ${rawPattern}`;
+        return '';  // no SSOT message → fall back to native
+      }
+      if (v.badInput && fieldType === 'number' && preset) return preset.message;
+      return '';  // valueMissing / valid → native default (required gate is separate)
+    };
+
+    // Recompute on every check: clear first so native flags re-evaluate, then
+    // apply our message if still invalid. Bound to both `input` (proactive, so
+    // the bubble is ready before submit) and `invalid` (safety net).
+    const sync = () => {
+      input.setCustomValidity('');
+      if (!input.validity.valid) {
+        const msg = messageFor(input.validity);
+        if (msg) input.setCustomValidity(msg);
+      }
+    };
+    input.addEventListener('input', sync);
+    input.addEventListener('invalid', sync);
+  }
+
+  /**
+   * Normalize a prefix/suffix value to display text. Mirrors the zCLI
+   * _format_affix contract: strings as-is, numbers stringified, nullish → ''.
+   * @private
+   */
+  _affixText(value) {
+    if (value == null || value === '') return '';
+    return String(value);
   }
 
   /**
@@ -461,6 +712,42 @@ export class FormRenderer {
     for (const [key, value] of formData.entries()) {
       data[key] = value;
     }
+
+    // Affix parity (SSOT): zCLI bakes prefix/suffix into the value (prefix +
+    // input + suffix). The browser shows them as cosmetic .zInputGroup chips, so
+    // re-join them here so the plugin receives the same zConv string on both
+    // surfaces. Matches _terminal_single_line in input_string.py.
+    (formContext.fields || []).forEach(f => {
+      if (!f || typeof f !== 'object') return;
+      if (f.prefix == null && f.suffix == null) return;
+      const key = f.zConv || f.name || f.field;
+      if (!(key in data)) return;
+      const pre = f.prefix != null && f.prefix !== '' ? String(f.prefix) : '';
+      const suf = f.suffix != null && f.suffix !== '' ? String(f.suffix) : '';
+      data[key] = `${pre}${data[key]}${suf}`;
+    });
+
+    // Disabled fields aren't submitted by the browser, but the zCLI input hub
+    // returns their declared value into zConv — re-inject the default so both
+    // surfaces hand the plugin the same data.
+    (formContext.fields || []).forEach(f => {
+      if (!f || typeof f !== 'object' || !f.disabled) return;
+      const key = f.zConv || f.name || f.field;
+      if (key in data) return;
+      data[key] = f.default != null ? String(f.default) : '';
+    });
+
+    // Unchecked checkboxes submit nothing, but the zCLI picker always returns
+    // 'true'/'false'. Re-inject 'false' for a single boolean checkbox whose key
+    // is absent so both surfaces hand the plugin the same value. (Multi-select
+    // checkbox — author `options:` — is out of scope; zCLI doesn't multi-pick.)
+    (formContext.fields || []).forEach(f => {
+      if (!f || typeof f !== 'object' || f.type !== 'checkbox') return;
+      if (Array.isArray(f.options)) return;
+      const key = f.zConv || f.name || f.field;
+      if (key in data) return;
+      data[key] = 'false';
+    });
 
     this.logger.log('[FormRenderer] Collected form data:', Object.keys(data));
 
