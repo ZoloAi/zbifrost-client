@@ -1205,6 +1205,7 @@ export class ZDisplayOrchestrator {
     const event = eventData.event;
     this.logger.debug(`[renderZDisplayEvent] Rendering event: ${event}`);
     let element;
+    let isToast = false;
 
     switch (event) {
       case 'text': {
@@ -1464,17 +1465,43 @@ export class ZDisplayOrchestrator {
       case 'error':
       case 'warning':
       case 'success':
-      case 'info': {
-        // zSignals — semantic status feedback (zTheme: zSignal + zSignal-*)
+      case 'info':
+      case 'primary':
+      case 'secondary': {
+        // zSignals — semantic status feedback (zTheme: zSignal + zSignal-*).
+        // Bifrost renders every signal as a dismissible card (.zAlert box + ×),
+        // in flow by default. flush:true promotes it to an out-of-flow timed
+        // TOAST (.zToast) in the top-right stack. Colour single-sourced from
+        // .zSignal-*; the terminal still prints a plain colored line.
         const colorClass = getAlertColorClass(event);
         element = document.createElement('div');
-        element.className = `zSignal ${colorClass}`;
+        element.className = `zSignal ${colorClass} zAlert`;
         element.setAttribute('role', 'alert');
-        element.textContent = eventData.content || '';
+
+        const msgEl = document.createElement('span');
+        msgEl.className = 'zSignal-text';
+        msgEl.textContent = eventData.content || '';
+        element.appendChild(msgEl);
+
+        const closeEl = document.createElement('button');
+        closeEl.type = 'button';
+        closeEl.className = 'zSignal-close';
+        closeEl.setAttribute('aria-label', 'Dismiss');
+        closeEl.textContent = '×';
+        closeEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this._dismissSignal(element);
+        });
+        element.appendChild(closeEl);
+
         if (eventData.indent > 0) {
           element.style.marginLeft = `${eventData.indent}rem`;
         }
-        this.logger.log(`[renderZDisplayEvent] Rendered ${event} signal`);
+        if (eventData.flush) {
+          element.classList.add('zToast');
+          isToast = true;
+        }
+        this.logger.log(`[renderZDisplayEvent] Rendered ${event} signal${isToast ? ' (toast)' : ''}`);
         break;
       }
 
@@ -1508,7 +1535,55 @@ export class ZDisplayOrchestrator {
       );
     }
 
+    // flush:true signals are out of flow — portal into the toast stack and
+    // return null so the caller never appends them inline. _zClass (applied
+    // above) still lands on the toast element before it floats.
+    if (isToast && element) {
+      this._showSignalToast(element);
+      return null;
+    }
+
     return element;
+  }
+
+  /**
+   * Lazily create the fixed-corner toast stack (SSOT styling in zbase.css).
+   * Lives under <zVaF> so it shares the bifrost chrome root.
+   * @private
+   */
+  _ensureToastContainer() {
+    let container = document.getElementById('zToast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'zToast-container';
+      container.className = 'zToast-container';
+      const root = document.querySelector('zVaF') || document.body;
+      root.appendChild(container);
+    }
+    return container;
+  }
+
+  /**
+   * Float a flush signal as a timed toast: append to the stack, auto-dismiss
+   * after `timeout`ms (the × dismisses early). Animation is canonical CSS.
+   * @private
+   */
+  _showSignalToast(element, timeout = 5000) {
+    const container = this._ensureToastContainer();
+    container.appendChild(element);
+    setTimeout(() => this._dismissSignal(element), timeout);
+  }
+
+  /**
+   * Dismiss a signal card with the matching exit animation, then remove it.
+   * Toasts slide out; in-flow cards fade. Idempotent.
+   * @private
+   */
+  _dismissSignal(element) {
+    if (!element || !element.parentNode) return;
+    const out = element.classList.contains('zToast') ? 'zToast-out' : 'zSignal-out';
+    element.classList.add(out);
+    setTimeout(() => { if (element.parentNode) element.remove(); }, 250);
   }
 
   // ─── zFunc execution ────────────────────────────────────────────────────────

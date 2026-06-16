@@ -33,6 +33,16 @@
   --color-warning:   #FFB347; /* Caution — warm & approachable */
   --color-error:     #E63946; /* Decisive — clear & strong */
 
+  /* Light hues — pastel fills derived once from the base palette. Reuse anywhere
+   * a soft tint of a brand colour is needed (signals, badges, highlights) rather
+   * than re-mixing per component. SSOT: change the base above, these follow. */
+  --color-primary-light:   color-mix(in srgb, var(--color-primary)   14%, #fff);
+  --color-secondary-light: color-mix(in srgb, var(--color-secondary) 14%, #fff);
+  --color-info-light:      color-mix(in srgb, var(--color-info)      14%, #fff);
+  --color-success-light:   color-mix(in srgb, var(--color-success)   14%, #fff);
+  --color-warning-light:   color-mix(in srgb, var(--color-warning)   14%, #fff);
+  --color-error-light:     color-mix(in srgb, var(--color-error)     14%, #fff);
+
   /* Default document/body text — page-level ink for bare zText, <p>, headings
    * (zH0–zH6), and ul/ol/dl items that carry NO zOS color property. Soft
    * near-black (never pure #000) so it reads deliberately on light doc pages.
@@ -1347,6 +1357,85 @@ zNavBar .zNav-link.active {
 
 /* Structural display defaults */
 .zSignal     { display: block; }
+/* zSignals — semantic status feedback. Inline colored text, 1:1 with the
+   zCLI signal lines (success/error/warning/info). Flush-card variant TBD. */
+/* Each type binds the base hue (--signal) and its light fill (--signal-light)
+   from the palette; the card (.zAlert) consumes both. No per-component mixing. */
+.zSignal-success   { --signal: var(--color-success);   --signal-light: var(--color-success-light);   color: var(--color-success); }
+.zSignal-error     { --signal: var(--color-error);     --signal-light: var(--color-error-light);     color: var(--color-error); }
+.zSignal-warning   { --signal: var(--color-warning);   --signal-light: var(--color-warning-light);   color: var(--color-warning); }
+.zSignal-info      { --signal: var(--color-info);      --signal-light: var(--color-info-light);      color: var(--color-info); }
+/* Non-status brand emphasis signals (zPrimary / zSecondary). */
+.zSignal-primary   { --signal: var(--color-primary);   --signal-light: var(--color-primary-light);   color: var(--color-primary); }
+.zSignal-secondary { --signal: var(--color-secondary); --signal-light: var(--color-secondary-light); color: var(--color-secondary); }
+/* flush modifier (GUI-only, flush:true) — turns the inline signal into a
+   flushed block. Geometry only; border + tint derive from currentColor (the
+   .zSignal-* type color), so the colour stays single-sourced on the primitive. */
+.zAlert {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-2) 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: 8px;
+  /* Light flush: pastel fill from the --light token, colored border + text from
+     the base hue. All straight from the palette — no per-card mixing. */
+  border: 1px solid var(--signal);
+  background: var(--signal-light);
+  color: var(--signal);
+}
+/* Signal card internals — message takes the row, × dismisses. Colour inherits
+   from .zSignal-* (currentColor), so the close glyph matches the signal type. */
+.zSignal-text  { flex: 1 1 auto; }
+.zSignal-close {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  color: currentColor;
+  cursor: pointer;
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.65;
+}
+.zSignal-close:hover { opacity: 1; }
+.zSignal.zSignal-out { animation: zSignal-fade 0.2s ease-out forwards; }
+@keyframes zSignal-fade { from { opacity: 1; } to { opacity: 0; } }
+/* Toast presentation (flush:true) — the flushed signal renders OUT of flow as a
+   timed card in a fixed corner stack, not inline. Box geometry stays from
+   .zAlert; .zToast adds an opaque card surface, lift, and a slide entrance so it
+   reads over any page content. Colour still single-sourced from .zSignal-*.
+   Corner is overridable per-app via _zClass on the container — we are not a
+   utility framework, just a sane default. */
+.zToast-container {
+  position: fixed;
+  top: var(--space-4);
+  right: var(--space-4);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 360px;
+  pointer-events: none;
+}
+/* Toast = the same .zAlert card, just floated. No own background — the look is
+   single-sourced from .zAlert/.zSignal-* so flush and in-flow signals are
+   identical; .zToast only adds the lift + slide entrance. */
+.zToast {
+  box-shadow: 0 8px 22px var(--shadow);
+  pointer-events: auto;
+  animation: zToast-in 0.25s ease-out;
+}
+.zToast.zToast-out { animation: zToast-out 0.25s ease-out forwards; }
+@keyframes zToast-in {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes zToast-out {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(120%); opacity: 0; }
+}
 .zCard       { position: relative; }
 .zInputGroup { display: flex; align-items: stretch; }
 .zInputGroup > .zInputGroup-text { display: flex; align-items: center; }

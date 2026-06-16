@@ -118,6 +118,7 @@ export default class ButtonRenderer {
     //   • SINGLE ($Block) → routeless panel swap via the existing zDelta click path
     //     (used by menu options + Back affordances).
     let delegateInline = null;
+    let eventAction = null;
     if (action && typeof action === 'object') {
       if (action.zDelegate !== undefined) {
         const spec = action.zDelegate;
@@ -136,7 +137,12 @@ export default class ButtonRenderer {
           this.logger.log('[ButtonRenderer] zDelegate → routeless delta to:', action);
         }
       } else {
-        action = null; // unknown object action — ignore rather than crash
+        // Any other dict action is a single zEvent (signal, …) — captured here
+        // and dispatched on click. The one-event stop + shorthand normalization
+        // live in _fireEventAction, mirroring the zCLI selection_collector
+        // contract (action delegates to the event brain; button is a collector).
+        eventAction = action;
+        action = null;
       }
     }
     const rawColor = data.color || data.data?.color || 'primary';
@@ -173,6 +179,12 @@ export default class ButtonRenderer {
           this.logger.warn('[ButtonRenderer] zDelegateInline unavailable on client');
         }
       });
+    } else if (eventAction) {
+      // Longhand dict action → exactly one zEvent, dispatched client-side on
+      // click via the orchestrator. Event-agnostic: how that event renders
+      // (inline line, flushed toast, …) is the orchestrator's concern, not ours.
+      button.addEventListener('click', () => this._fireEventAction(eventAction, button));
+      this.logger.log('[ButtonRenderer] event-action button wired:', Object.keys(eventAction));
     } else {
       const renderInline = data._renderInline || data.data?._renderInline || false;
       // zProgress action-property (nested in the zBtn): a live bar that appears
@@ -461,6 +473,90 @@ export default class ButtonRenderer {
       // NOTE: never rewrite button.textContent on click. The `[ok]` confirmation
       // is a log signal only — rendering it injected text and wiped icon buttons.
     });
+  }
+
+  /**
+   * Fire a longhand dict action: one zEvent, dispatched via the orchestrator.
+   *
+   * Mirrors the zCLI contract (selection_collector): enforce the single-event
+   * stop — exactly one non-`_` key; sequences must be a single `zWizard` event —
+   * then normalize and hand the event to the client's event brain. The button
+   * stays a collector; this method owns no event-specific rendering logic.
+   *
+   * @private
+   * @param {Object} action - Single-event action dict ({zSuccess:{…}}, …).
+   * @param {HTMLElement} button - The clicked button (insertion anchor).
+   */
+  async _fireEventAction(action, button) {
+    const eventKeys = Object.keys(action).filter((k) => !String(k).startsWith('_'));
+    if (eventKeys.length !== 1) {
+      const msg = `zBtn action must declare exactly one event ` +
+        `(use a zWizard event for sequences); got: [${eventKeys.join(', ')}]`;
+      this.logger.error(`[ButtonRenderer] ${msg}`);
+      // Dev-visible rejection via the SSOT error signal (mirrors zCLI).
+      await this._dispatchEvent({ event: 'error', content: msg }, button);
+      return;
+    }
+
+    const eventData = this._normalizeEventAction(eventKeys[0], action[eventKeys[0]]);
+    if (!eventData || !eventData.event) {
+      this.logger.warn(`[ButtonRenderer] Unsupported action event: ${eventKeys[0]}`);
+      return;
+    }
+    await this._dispatchEvent(eventData, button);
+  }
+
+  /**
+   * Normalize a single action entry into orchestrator eventData ({event, …}).
+   *
+   * Tolerates both forms the action may arrive in: the already-expanded
+   * {zDisplay: {event, …}} and the raw shorthand ({zSuccess: {…}} / the
+   * {zSignal: {type, …}} longhand). Shorthand→event knowledge is scoped to the
+   * signal family for now (the only display actions in play).
+   *
+   * @private
+   * @returns {Object} eventData with an `event` key (or {event: null} if unknown).
+   */
+  _normalizeEventAction(key, value) {
+    const data = (value && typeof value === 'object') ? { ...value } : { content: value };
+
+    // Already-expanded: the value IS the eventData (carries .event).
+    if (key === 'zDisplay') {
+      return data;
+    }
+    // Signal shorthands.
+    const SIGNAL = {
+      zSuccess: 'success', zError: 'error', zWarning: 'warning', zInfo: 'info',
+      zPrimary: 'primary', zSecondary: 'secondary',
+    };
+    if (SIGNAL[key]) {
+      return { event: SIGNAL[key], ...data };
+    }
+    // zSignal longhand: `type` carries the event.
+    if (key === 'zSignal') {
+      const type = data.type;
+      delete data.type;
+      return { event: type, ...data };
+    }
+    return { event: null };
+  }
+
+  /**
+   * Render one event into the DOM via the orchestrator (the client event brain).
+   * @private
+   */
+  async _dispatchEvent(eventData, button) {
+    const client = this.client || window.bifrostClient;
+    const orch = client?.zDisplayOrchestrator;
+    if (!orch || typeof orch.renderZDisplayEvent !== 'function') {
+      this.logger.error('[ButtonRenderer] orchestrator unavailable for event action');
+      return;
+    }
+    const parent = (button && button.parentElement) || client?._zVaFElement || document.body;
+    const element = await orch.renderZDisplayEvent(eventData, parent);
+    if (element) {
+      parent.appendChild(element);
+    }
   }
 
   /**
