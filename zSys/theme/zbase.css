@@ -2014,16 +2014,32 @@ zNavBar .zNav-link.active {
    Legacy markup (menu_renderer.js): .zMenu-container > .zMenu-option > button.
    Both paths are styled below.
 
-   The block wrapper (.zCallout) supplies the card surface; this only owns the
-   list, rows, and number chip. Accents pull from the zCLI SSOT palette
-   (--color-primary lime, --color-secondary purple); dark-theme friendly. */
+   The block wrapper (.zCallout) supplies the card surface; this owns the inset
+   "island" group, the rows, and the number chip. Rows carry a faint resting
+   fill + a reserved left accent rail (filled on hover/active), the selected row
+   is a tinted fill (never a solid slab — text stays legible), the chip is a
+   secondary-tinted rounded square, and the auto Back row (data-key="zBack") is
+   muted. Everything is currentColor / --color-* driven, so light & dark pages
+   stay balanced. Accents pull from the zCLI SSOT palette (--color-primary lime,
+   --color-secondary purple). */
+
+/* Wrapper — group the options into a faint inset "island" so the menu reads as
+   one cohesive control, not loose rows. currentColor-driven → identical balance
+   on a light OR dark page (the .zCallout block wrapper still supplies the card). */
+.zMenu-nav,
+.zMenu-container {
+  background: color-mix(in srgb, currentColor 3%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 8%, transparent);
+  border-radius: 0.875rem;
+  padding: 0.4rem;
+}
 
 /* Options list — kill inherited bullets / list padding */
 .zMenu-nav .zNavbar-nav,
 .zMenu-options {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.2rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -2037,7 +2053,9 @@ zNavBar .zNav-link.active {
 .zMenu-nav .zNav-item::marker,
 .zMenu-option::marker { content: none; }
 
-/* Row — overrides the fallback zBtn pill into a full-width nav row */
+/* Row — overrides the fallback zBtn pill into a full-width nav row. A faint
+   resting fill + reserved left accent rail makes each row read as a real,
+   tappable surface before any interaction. */
 .zMenu-nav .zNav-link,
 .zMenu-container .zMenu-option button,
 .zMenu-container .zMenu-option .zBtn {
@@ -2046,40 +2064,39 @@ zNavBar .zNav-link.active {
   gap: 0.75rem;
   width: 100%;
   text-align: left;
-  padding: 0.6rem 0.85rem;
+  padding: 0.65rem 0.8rem;
   font-size: 1rem;
   font-weight: 500;
   font-family: inherit;
   color: inherit;
-  background: transparent;
+  background: color-mix(in srgb, currentColor 4%, transparent);
   border: 1px solid transparent;
-  border-radius: 0.625rem;
+  border-left: 3px solid transparent;   /* reserved accent rail (no reflow on state change) */
+  border-radius: 0.5rem;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  position: relative;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
 }
 
 .zMenu-nav .zNav-link:hover,
 .zMenu-nav .zNav-link:focus-visible,
 .zMenu-container .zMenu-option button:hover,
 .zMenu-container .zMenu-option button:focus-visible {
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  border-color: var(--color-primary, #A2D46E);
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 35%, transparent);
+  border-left-color: var(--color-primary, #A2D46E);
   transform: translateX(2px);
   outline: none;
 }
 
-.zMenu-nav .zNav-link:active,
+/* Selected — tinted fill + solid accent rail. Text stays inherited (legible on
+   light AND dark), no solid slab. */
 .zMenu-nav .zNav-link.active,
-.zMenu-container .zMenu-option button:active,
 .zMenu-container .zMenu-option button.active {
-  background: var(--color-primary, #A2D46E);
-  border-color: var(--color-primary, #A2D46E);
-  color: #1a1a1a;
-}
-
-.zMenu-nav .zNav-link.active .zBadge {
-  color: #fff;
-  background: rgba(0, 0, 0, 0.25);
+  background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  border-left-color: var(--color-primary, #A2D46E);
+  font-weight: 600;
 }
 
 .zMenu-nav .zNav-link:disabled,
@@ -2089,7 +2106,8 @@ zNavBar .zNav-link.active {
   transform: none;
 }
 
-/* Leading chip — the keyboard index (overrides the faded zBadge-secondary) */
+/* Leading chip — the keyboard index. Rounded-square + bordered reads sharper
+   than a circle and balances on both themes (secondary-tinted). */
 .zMenu-nav .zNav-link .zBadge,
 .zMenu-container .zMenu-option .zBadge,
 .zMenu-container .zMenu-index {
@@ -2101,11 +2119,12 @@ zNavBar .zNav-link.active {
   height: 1.5rem;
   padding: 0;
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--color-secondary, #9370DB);
-  background: color-mix(in srgb, var(--color-secondary) 16%, transparent);
-  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-secondary) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-secondary) 30%, transparent);
+  border-radius: 0.5rem;
 }
 
 .zMenu-nav .zNav-link:hover .zBadge,
@@ -2114,6 +2133,30 @@ zNavBar .zNav-link.active {
 .zMenu-container .zMenu-option button:focus-visible .zBadge {
   color: #fff;
   background: var(--color-secondary, #9370DB);
+  border-color: var(--color-secondary, #9370DB);
+}
+
+.zMenu-nav .zNav-link.active .zBadge,
+.zMenu-container .zMenu-option button.active .zBadge {
+  color: #1a1a1a;
+  background: var(--color-primary, #A2D46E);
+  border-color: var(--color-primary, #A2D46E);
+}
+
+/* Auto-injected Back row (data-key="zBack") — muted + set apart from the
+   numbered options; its chip stays neutral (currentColor), not brand-accented. */
+.zMenu-nav .zNav-link[data-key="zBack"] { opacity: 0.78; font-weight: 500; }
+.zMenu-nav .zNav-link[data-key="zBack"] .zBadge {
+  color: inherit;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  border-color: color-mix(in srgb, currentColor 16%, transparent);
+  font-weight: 600;
+}
+.zMenu-nav .zNav-link[data-key="zBack"]:hover .zBadge,
+.zMenu-nav .zNav-link[data-key="zBack"]:focus-visible .zBadge {
+  color: inherit;
+  background: color-mix(in srgb, currentColor 18%, transparent);
+  border-color: color-mix(in srgb, currentColor 24%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
