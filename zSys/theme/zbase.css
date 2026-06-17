@@ -119,8 +119,17 @@ img, svg, video { display: block; max-width: 100%; }
  * Navbar links and buttons opt out below (they manage their own color). */
 a { text-decoration: none; color: var(--color-link, #5CA9FF); }
 
+/* Deliberate hover affordance for a content link (a bare zURL <a>): underline
+ * on hover, color held. Bifrost owns the interactive state too, not just the
+ * resting one — so a link never feels static. Navbar links + buttons opt out
+ * (they own their own hover). */
+a:hover { text-decoration: underline; }
+
 zNavBar a,
 .zBtn { color: inherit; }
+
+zNavBar a:hover,
+.zBtn:hover { text-decoration: none; }
 
 /* ─── Custom elements — must be block for layout ───────────────────────────── */
 

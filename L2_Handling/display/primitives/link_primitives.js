@@ -354,20 +354,42 @@ function _convertZPathToURL(href) {
  * @param {Object} logger - Logger instance
  */
 function _setupInternalLink(link, href, target, windowFeatures, client, logger) {
-  // Convert zPath to URL path if needed
+  // Same-file delta hop ($Block) is NOT a route — it must dispatch zDelta over
+  // the wire, exactly like a zBtn action: zDelta($Block). Sending it through
+  // _navigateToRoute would 404 against /api/route-config (a block is not a URL).
+  // This is what makes a zURL with href:$Block perform the SAME hop the zDelta
+  // section's button does — the "one element, four destinations" promise, kept
+  // in Bifrost too (zLink/external/#anchor already route correctly above).
+  const isDelta = href.startsWith('$');
+
+  // Convert zPath to URL path if needed (delta passes through unchanged)
   const navigationPath = _convertZPathToURL(href);
-  
-  logger.debug('[LinkPrimitives] _setupInternalLink called:', { href, navigationPath, hasClient: !!client, hasNavigateMethod: !!(client && client._navigateToRoute) });
+
+  logger.debug('[LinkPrimitives] _setupInternalLink called:', { href, navigationPath, isDelta, hasClient: !!client, hasNavigateMethod: !!(client && client._navigateToRoute) });
 
   // CRITICAL: Set href to the actual path for proper browser behavior
-  // This allows middle-click, right-click "Open in new tab", and accessibility
-  link.href = navigationPath;
+  // (middle-click, "Open in new tab", a11y). A delta has no URL — keep it inert.
+  link.href = isDelta ? '#' : navigationPath;
 
   // Internal link setup (silent)
 
   link.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    // Delta hop — mirror ButtonRenderer's zDelta path (carry origin for zBack).
+    if (isDelta) {
+      const blockName = href.slice(1).trim();
+      logger.debug('[LinkPrimitives] zURL delta hop →', blockName);
+      if (client && typeof client.zDelta === 'function') {
+        const originKey = client.navOriginKey ? client.navOriginKey(link) : null;
+        client.zDelta(blockName, originKey);
+      } else {
+        logger.error('[LinkPrimitives] client.zDelta() not available for delta link:', href);
+      }
+      return;
+    }
+
     logger.debug('[LinkPrimitives] Link clicked:', navigationPath);
 
     if (target === TARGET_BLANK) {

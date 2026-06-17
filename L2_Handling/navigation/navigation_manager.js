@@ -94,6 +94,17 @@ export class NavigationManager {
       if (e.defaultPrevented) {
         return;
       }
+      // Restored navigation BUTTON (zLink/zDelta/zBack). A page replayed from the
+      // trail is raw HTML — buttons keep their data-wizard-action but lost the live
+      // click handler ButtonRenderer attached at render time, so they go dead until
+      // a reload. Fresh buttons stopPropagation in their own handler, so ONLY a
+      // handler-less restored button bubbles up here. Re-dispatch via the client.
+      const btn = e.target && e.target.closest
+        ? e.target.closest('button[data-wizard-action]')
+        : null;
+      if (btn && el.contains(btn) && this._dispatchRestoredNavButton(btn)) {
+        return;
+      }
       const a = e.target && e.target.closest ? e.target.closest('a') : null;
       if (!a || !el.contains(a)) {
         return;
@@ -112,6 +123,48 @@ export class NavigationManager {
     }, false);
     this.client._zVaFLinkDelegationWired = true;
     this.logger.debug('[ClientNav] Restored-link delegation wired');
+  }
+
+  /**
+   * Re-dispatch a navigation button restored from the trail (handler-less).
+   * Mirrors ButtonRenderer's nav-verb parsing (zLink / zDelta / zBack) using the
+   * action string frozen in data-wizard-action. Returns true when handled.
+   * @private
+   */
+  _dispatchRestoredNavButton(btn) {
+    const action = btn.dataset && btn.dataset.wizardAction;
+    if (!action) {
+      return false;
+    }
+    const client = this.client;
+    const originKey = client.navOriginKey ? client.navOriginKey(btn) : null;
+    // Persisted zPsi anchor (dict-form buttons) — forward it so a restored
+    // zLink/zDelta + zPsi button still lands on its section, not the top.
+    const zPsi = (btn.dataset && btn.dataset.navZpsi) ? btn.dataset.navZpsi : null;
+    if (action.startsWith('zLink(')) {
+      const path = action.slice(6, -1).trim();
+      this.logger.info('[ClientNav] Restored zLink button → %s (zPsi: %s)', path, zPsi);
+      if (client.zLink) {
+        client.zLink(path, originKey, zPsi);
+        return true;
+      }
+    } else if (action.startsWith('zDelta(') || action.startsWith('$')) {
+      const blockName = action.startsWith('zDelta(')
+        ? action.slice(7, -1).replace(/^\$/, '').trim()
+        : action.slice(1).trim();
+      this.logger.info('[ClientNav] Restored zDelta button → %s (zPsi: %s)', blockName, zPsi);
+      if (client.zDelta) {
+        client.zDelta(blockName, originKey, zPsi);
+        return true;
+      }
+    } else if (action === 'zBack') {
+      this.logger.info('[ClientNav] Restored zBack button');
+      if (client.zBack) {
+        client.zBack();
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

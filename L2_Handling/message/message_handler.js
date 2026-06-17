@@ -443,8 +443,23 @@ export class MessageHandler {
       // streamed chunks have painted. SSOT: the section comes from zCrumbs on the
       // server; the client only honours the anchor it is handed.
       if (message.event === 'walker_complete') {
-        if (message.zPsi) {
-          const anchor = String(message.zPsi);
+        // Anchor source: server zCrumbs (zBack landing) OR a client-held pending
+        // anchor set by a zLink/zDelta + zPsi button. Consume the client one once.
+        const pending = this.client && this.client._pendingScrollAnchor;
+        const wantTop = this.client && this.client._pendingScrollTop;
+        if (this.client) {
+          this.client._pendingScrollAnchor = null;
+          this.client._pendingScrollTop = false;
+        }
+        const psi = message.zPsi || pending;
+        // Plain zDelta (no anchor) re-runs from the block's top — reset scroll so
+        // it lands on Section_One, not wherever the prior page was scrolled to.
+        if (!psi && wantTop) {
+          window.scrollTo({ top: 0, behavior: 'auto' });
+          return;
+        }
+        if (psi) {
+          const anchor = String(psi);
           const root = (this.client && this.client._zVaFElement) || document;
           // Chunks render asynchronously (awaited renderItems, emoji/icon loads),
           // so the target section may not exist the instant walker_complete lands.

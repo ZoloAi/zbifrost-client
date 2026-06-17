@@ -119,8 +119,18 @@ export default class ButtonRenderer {
     //     (used by menu options + Back affordances).
     let delegateInline = null;
     let eventAction = null;
+    let navAction = null;
     if (action && typeof action === 'object') {
-      if (action.zDelegate !== undefined) {
+      if (action.zLink !== undefined || action.zDelta !== undefined) {
+        // Dict-form navigation verb — the longhand {zLink:{target,zPsi}} /
+        // {zDelta:{target,zPsi}} that carries a zPsi anchor. _fireEventAction only
+        // knows display events, so without this branch the dict falls through and
+        // logs "Unsupported action event: zLink/zDelta". Route it to the client
+        // nav verbs on click, forwarding zPsi as the section to land on.
+        navAction = action;
+        action = null;
+        this.logger.log('[ButtonRenderer] dict-form nav →', Object.keys(navAction).join(','));
+      } else if (action.zDelegate !== undefined) {
         const spec = action.zDelegate;
         const target = (spec && typeof spec === 'object')
           ? (spec.target || spec.to || spec.zDelta)
@@ -179,6 +189,22 @@ export default class ButtonRenderer {
           this.logger.warn('[ButtonRenderer] zDelegateInline unavailable on client');
         }
       });
+    } else if (navAction) {
+      // Dict-form zLink/zDelta (carries zPsi). Wire to the client nav verbs and
+      // stop the click bubbling to the restored-nav delegate (double-nav guard).
+      // Also stamp a string data-wizard-action so a REPLAYED button (handlers
+      // lost on trail restore) still navigates — zPsi degrades to top-of-target.
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this._fireNavAction(navAction, button);
+      });
+      const navStr = this._navActionToString(navAction);
+      if (navStr) button.dataset.wizardAction = navStr;
+      // Persist the zPsi anchor too — the string data-wizard-action can't carry
+      // it, so a button replayed from the trail would otherwise land at the top.
+      const navPsi = this._navActionZPsi(navAction);
+      if (navPsi) button.dataset.navZpsi = navPsi;
+      this.logger.log('[ButtonRenderer] dict-nav button wired:', navStr, '| zPsi:', navPsi);
     } else if (eventAction) {
       // Longhand dict action → exactly one zEvent, dispatched client-side on
       // click via the orchestrator. Event-agnostic: how that event renders
@@ -386,6 +412,10 @@ export default class ButtonRenderer {
       if (action && action.startsWith('zLink(')) {
         const path = action.slice(6, -1).trim();
         this.logger.log(`[ButtonRenderer] zLink action — navigating to: ${path}`);
+        // Fresh button owns this click — stop it bubbling to the zVaF restored-nav
+        // delegate (which re-dispatches handler-less REPLAYED buttons) so we don't
+        // double-navigate. See NavigationManager._wireRestoredLinkDelegation.
+        event.stopPropagation();
         const client = this.client || window.bifrostClient;
         if (client?.zLink) {
           const originKey = client.navOriginKey ? client.navOriginKey(button) : null;
@@ -397,6 +427,7 @@ export default class ButtonRenderer {
       // zBack action — navigate back one block, mirrors CLI semantics
       if (action === 'zBack') {
         this.logger.log('[ButtonRenderer] zBack action — navigating back');
+        event.stopPropagation();
         const client = this.client || window.bifrostClient;
         if (client?.zBack) {
           client.zBack();
@@ -410,6 +441,7 @@ export default class ButtonRenderer {
           ? action.slice(7, -1).replace(/^\$/, '').trim()
           : action.slice(1).trim();
         this.logger.log(`[ButtonRenderer] zDelta action — block hop to: ${blockName}`);
+        event.stopPropagation();
         const client = this.client || window.bifrostClient;
         if (client?.zDelta) {
           const originKey = client.navOriginKey ? client.navOriginKey(button) : null;
@@ -487,6 +519,74 @@ export default class ButtonRenderer {
    * @param {Object} action - Single-event action dict ({zSuccess:{…}}, …).
    * @param {HTMLElement} button - The clicked button (insertion anchor).
    */
+  /**
+   * Fire a dict-form navigation action ({zLink|zDelta: {target, zPsi}}).
+   *
+   * The string forms `zLink(path)` / `zDelta($Block)` are handled in
+   * _attachClickHandler; this is their longhand sibling, the only form that can
+   * carry a `zPsi` section to land on. Routes to the same client nav verbs,
+   * forwarding the anchor so the client scrolls to it once chunks have painted.
+   *
+   * @private
+   * @param {Object} action - {zLink:{target,zPsi}} or {zDelta:{target,zPsi}}.
+   * @param {HTMLElement} button - The clicked button (origin-key source).
+   */
+  _fireNavAction(action, button) {
+    const client = this.client || window.bifrostClient;
+    if (!client) {
+      this.logger.warn('[ButtonRenderer] No client — cannot fire nav action');
+      return;
+    }
+    const originKey = client.navOriginKey ? client.navOriginKey(button) : null;
+    if (action.zLink !== undefined) {
+      const spec = action.zLink;
+      const target = (spec && typeof spec === 'object') ? (spec.target || spec.to) : spec;
+      const zPsi = (spec && typeof spec === 'object') ? (spec.zPsi || null) : null;
+      this.logger.log(`[ButtonRenderer] zLink (dict) → ${target} (zPsi: ${zPsi})`);
+      if (client.zLink) client.zLink(target, originKey, zPsi);
+    } else if (action.zDelta !== undefined) {
+      const spec = action.zDelta;
+      let target = (spec && typeof spec === 'object') ? (spec.target || spec.to || spec.zDelta) : spec;
+      const zPsi = (spec && typeof spec === 'object') ? (spec.zPsi || null) : null;
+      const blockName = String(target).replace(/^\$/, '').trim();
+      this.logger.log(`[ButtonRenderer] zDelta (dict) → ${blockName} (zPsi: ${zPsi})`);
+      if (client.zDelta) client.zDelta(blockName, originKey, zPsi);
+    }
+  }
+
+  /**
+   * Collapse a dict-form nav action to its string equivalent for
+   * data-wizard-action (restored-button re-dispatch). zPsi is dropped — a
+   * replayed button still navigates; the anchor is a render-time nicety.
+   * @private
+   * @returns {string|null}
+   */
+  _navActionToString(action) {
+    if (action.zLink !== undefined) {
+      const spec = action.zLink;
+      const target = (spec && typeof spec === 'object') ? (spec.target || spec.to) : spec;
+      return target ? `zLink(${target})` : null;
+    }
+    if (action.zDelta !== undefined) {
+      const spec = action.zDelta;
+      let target = (spec && typeof spec === 'object') ? (spec.target || spec.to || spec.zDelta) : spec;
+      if (!target) return null;
+      target = String(target).startsWith('$') ? target : `$${target}`;
+      return `zDelta(${target})`;
+    }
+    return null;
+  }
+
+  /**
+   * Extract the zPsi anchor from a dict-form nav action, if any.
+   * @private
+   * @returns {string|null}
+   */
+  _navActionZPsi(action) {
+    const spec = action.zLink !== undefined ? action.zLink : action.zDelta;
+    return (spec && typeof spec === 'object' && spec.zPsi) ? String(spec.zPsi) : null;
+  }
+
   async _fireEventAction(action, button) {
     const eventKeys = Object.keys(action).filter((k) => !String(k).startsWith('_'));
     if (eventKeys.length !== 1) {

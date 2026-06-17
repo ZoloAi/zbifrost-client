@@ -1408,10 +1408,18 @@ class BifrostCore {
      * @param {string|null} originKey - SSOT click-origin section key (from navOriginKey)
      * @returns {Promise<any>}
      */
-    async zLink(path, originKey = null) {
-      const url = this._zLinkPathToUrl(path);
+    async zLink(path, originKey = null, zPsi = null) {
+      // Dict-form buttons hand us a server-resolved route ('/zStack/…'); the
+      // string form hands an '@.UI.…' zPath. Honour both. A zPsi rides along as
+      // a pending anchor the walker_complete handler scrolls to after paint.
+      const url = (typeof path === 'string' && path.startsWith('/'))
+        ? path
+        : this._zLinkPathToUrl(path);
       if (url) {
-        this.logger.log(`[zLink] Navigating to: ${url} (from: ${path})`);
+        // Always (re)set — clear a stale anchor when this hop has no zPsi, else a
+        // prior zPsi click leaks into a plain link and mis-scrolls it.
+        this._pendingScrollAnchor = zPsi ? String(zPsi) : null;
+        this.logger.log(`[zLink] Navigating to: ${url} (from: ${path}, zPsi: ${zPsi})`);
         return this._navigateToRoute(url, { zOrigin: originKey });
       }
       // Fallback: unknown path format — pass to backend
@@ -1429,7 +1437,7 @@ class BifrostCore {
      * @param {string} blockName - target block name ($ prefix already stripped)
      * @param {string|null} originKey - SSOT click-origin section key (from navOriginKey)
      */
-    async zDelta(blockName, originKey = null) {
+    async zDelta(blockName, originKey = null, zPsi = null) {
       const zVaFile = this.zuiConfig?.zVaFile;
       const zVaFolder = this.zuiConfig?.zVaFolder;
       if (!zVaFile || !zVaFolder) {
@@ -1439,7 +1447,13 @@ class BifrostCore {
       // Track current block for zBack before hopping
       this._prevBlock = this._currentBlock || this.options.zBlock || null;
       this._currentBlock = blockName;
-      this.logger.log(`[zDelta] Block hop: ${zVaFile} → ${blockName} (prev: ${this._prevBlock}, origin: ${originKey})`);
+      // zPsi rides along as a pending anchor — scrolled to after the hop paints.
+      // Always (re)set so a plain hop clears a stale anchor from a prior zPsi
+      // click. A plain hop (no anchor) resets to the top of the new block — a
+      // zDelta is a "re-run from this block", so it starts at its top like CLI.
+      this._pendingScrollAnchor = zPsi ? String(zPsi) : null;
+      this._pendingScrollTop = !zPsi;
+      this.logger.log(`[zDelta] Block hop: ${zVaFile} → ${blockName} (prev: ${this._prevBlock}, origin: ${originKey}, zPsi: ${zPsi})`);
       // execute_walker is fire-and-forget: the server streams chunks, it never
       // sends a single _requestId-correlated response. Using send() here would
       // leak a never-resolving callback into messageHandler.callbacks, which then
