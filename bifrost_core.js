@@ -1437,7 +1437,7 @@ class BifrostCore {
      * @param {string} blockName - target block name ($ prefix already stripped)
      * @param {string|null} originKey - SSOT click-origin section key (from navOriginKey)
      */
-    async zDelta(blockName, originKey = null, zPsi = null) {
+    async zDelta(blockName, originKey = null, zPsi = null, fromHistory = false) {
       const zVaFile = this.zuiConfig?.zVaFile;
       const zVaFolder = this.zuiConfig?.zVaFolder;
       if (!zVaFile || !zVaFolder) {
@@ -1463,6 +1463,22 @@ class BifrostCore {
       const payload = { event: 'execute_walker', zBlock: blockName, zVaFile, zVaFolder };
       if (originKey) payload.zOrigin = originKey;
       this._sendWalker(payload);
+
+      // Same-URL history entry so the browser Back/Forward buttons can unwind delta
+      // hops too. A delta keeps the path unchanged, so we pushState the SAME url with
+      // a fresh monotonic idx + the target block: Back then fires popstate WITHOUT a
+      // document navigation (the browser never jumps to a pre-delta URL — it just
+      // moves the history cursor), and the popstate handler routes it to a bare zBack
+      // (server pops its trail, SSOT). The block lets a Forward popstate re-issue this
+      // exact hop. Skipped when this hop is itself replaying a Forward popstate, and
+      // when there is no DOM/history (non-browser host). SSOT: zOS owns the trail; the
+      // entry is just a tick so the browser buttons can signal direction.
+      if (!fromHistory && typeof window !== 'undefined' && window.history) {
+        const idx = (typeof this._histIdx === 'number' ? this._histIdx : 0) + 1;
+        const path = window.location.pathname;
+        window.history.pushState({ route: path, idx, block: blockName }, '', path);
+        this._histIdx = idx;
+      }
     }
 
     /**
@@ -1518,40 +1534,47 @@ class BifrostCore {
     }
 
     /**
-     * Navigate back to the previous block (intra-file).
-     * Mirrors CLI zBack semantics — pops one level from the block navigation history.
-     * Falls back to browser history.back() if no block history is available.
+     * In-app Back button (zBtn action: zBack). SSOT/lockstep: an in-app Back is just
+     * another Back — it drives the SAME browser-history mechanism as the browser Back
+     * button so the history cursor and the server trail never drift apart. We call
+     * window.history.back(); the popstate handler then sends the bare zBack intent and
+     * the server (SSOT) pops its trail. This unifies the two Back paths into one and
+     * keeps depth in lockstep: every forward hop pushed one history entry + one server
+     * frame, so one history.back() unwinds exactly one frame.
+     *
+     * Fallback: if there is no app history entry to pop (e.g. a direct deep-land that
+     * never pushed one), signal the server directly so it can still pop its trail.
      */
     async zBack() {
-      const prevBlock = this._prevBlock;
-      if (!prevBlock) {
-        // Cross-file back (e.g. arrived via zLink): there is no same-file sibling
-        // to hop to, so step out through the browser. Flag back-intent so the
-        // popstate handler re-navigates with zBack:true — the server then consumes
-        // the origin section recorded on the parent scope (Step 1) and returns it
-        // as a zPsi anchor, mirroring zCLI's start_key resume. SSOT: the section
-        // lives in zCrumbs; the browser only supplies the destination URL.
-        this.logger.log('[zBack] No same-file prev block — crumb-driven step-out via history');
-        this._pendingZBack = true;
+      const hasAppHistory =
+        typeof window !== 'undefined' && window.history && (this._histIdx || 0) > 0;
+      if (hasAppHistory) {
+        this.logger.log('[zBack] in-app Back → history.back() (→ popstate → bare zBack intent)');
         window.history.back();
         return;
       }
+      this.logger.log('[zBack] no app history — sending bare zBack intent directly');
+      this._sendZBackIntent();
+    }
+
+    /**
+     * Send the bare zBack intent to the server (SSOT). The client never names the
+     * target block; the server pops its crumb trail, resolves the previous scope
+     * frame, and streams it back (zPsi origin rides along on walker_complete). This
+     * is the single low-level Back primitive, invoked by the popstate handler for
+     * BOTH the browser Back button and the in-app Back button (which routes through
+     * history.back() → popstate). Mirrors zCLI handle_zBack to arbitrary depth.
+     */
+    _sendZBackIntent() {
       const zVaFile = this.zuiConfig?.zVaFile;
       const zVaFolder = this.zuiConfig?.zVaFolder;
       if (!zVaFile || !zVaFolder) {
-        this.logger.warn('[zBack] No zVaFile/zVaFolder — falling back to browser history');
-        window.history.back();
+        this.logger.warn('[zBack] No zVaFile/zVaFolder — cannot send zBack intent');
         return;
       }
-      this.logger.log(`[zBack] Returning to block: ${prevBlock}`);
-      this._currentBlock = prevBlock;
-      this._prevBlock = null;
+      this.logger.log('[zBack] bare intent → server resolves target from crumb trail');
       // Fire-and-forget (chunks stream back); see zDelta note on the _requestId guard.
-      // zBack:true flags back-intent so the server can read the crumb's origin
-      // section off the (now-active) parent scope and return it as a zPsi anchor on
-      // walker_complete — letting us land on the section the user came FROM, not the
-      // page top. SSOT: the section lives in zCrumbs, the client never derives it.
-      this._sendWalker({ event: 'execute_walker', zBlock: prevBlock, zVaFile, zVaFolder, zBack: true });
+      this._sendWalker({ event: 'execute_walker', zVaFile, zVaFolder, zBack: true });
     }
 
     /**

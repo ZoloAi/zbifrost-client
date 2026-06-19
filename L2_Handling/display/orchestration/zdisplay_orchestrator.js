@@ -1303,7 +1303,9 @@ export class ZDisplayOrchestrator {
         if (navEl) {
           try {
             const { NavBarBuilder } = await import('../../../L3_Abstraction/orchestrator/navbar_builder.js');
-            NavBarBuilder.wireNavBarEvents(navEl, this.client, this.logger);
+            // scoped=true → an INLINE bar pick keeps the host page (SCOPED reset),
+            // unlike the chrome bar which FULL-resets. SSOT with zCLI inline navbar.
+            NavBarBuilder.wireNavBarEvents(navEl, this.client, this.logger, true);
           } catch (err) {
             this.logger.warn('[renderZDisplayEvent] navbar_inline wiring skipped:', err);
           }

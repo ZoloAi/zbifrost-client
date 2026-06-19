@@ -50,27 +50,73 @@ export class NavigationManager {
 
     this.logger.info('[ClientNav] Client-side navigation enabled');
 
+    // SPA never-unload baseline: stamp the current history entry with a monotonic
+    // index so popstate can tell Back from Forward (the History API does not).
+    // Every pushState below carries an incrementing idx; comparing the entry we
+    // land on against the one we left gives the direction. Without this baseline a
+    // Back from the first SPA nav has no idx to compare against.
+    if (typeof window !== 'undefined' && window.history) {
+      const st = window.history.state;
+      if (!st || typeof st.idx !== 'number') {
+        window.history.replaceState(
+          { route: window.location.pathname, idx: 0 }, '', window.location.href,
+        );
+        this.client._histIdx = 0;
+      } else {
+        this.client._histIdx = st.idx;
+      }
+    }
+
     // Handle browser back/forward buttons
     if (!this.client._popstateHandler) {
-      this.client._popstateHandler = async (_e) => {
-        this.logger.debug('[ClientNav] Browser back/forward detected');
+      this.client._popstateHandler = async (e) => {
         const path = window.location.pathname;
 
-        // An in-page zBack button routes a cross-file step-out through
-        // history.back() and flags intent — carry it so the server consumes the
-        // crumb's origin section (zPsi), mirroring zCLI's start_key resume. A
-        // plain browser Back/Fwd leaves the flag unset and renders from the top.
-        const zBack = !!this.client._pendingZBack;
-        this.client._pendingZBack = false;
+        // Direction from the monotonic idx: the entry we land on vs. the one we
+        // left. Lower → Back, higher (or equal/unknown) → Forward.
+        const newIdx = (e.state && typeof e.state.idx === 'number') ? e.state.idx : 0;
+        const prevIdx = (typeof this.client._histIdx === 'number') ? this.client._histIdx : 0;
+        const isBack = newIdx < prevIdx;
+        this.client._histIdx = newIdx;
+        this.logger.debug(
+          `[ClientNav] popstate ${isBack ? 'BACK' : 'FORWARD'} (idx ${prevIdx}→${newIdx}) path=${path}`,
+        );
 
-        // Freeze the page we're leaving, then try to replay the target's frozen
-        // paint (bfcache parity — Back is instant and works offline). Only fall
-        // through to a server nav if we never cached this page.
+        // Freeze the page we're leaving (cache is a separate perf layer — used
+        // only when the socket is down, never as navigation authority).
         await this.snapshotCurrentPage();
-        if (await this._replayFromTrail(path, { zBack })) {
+
+        if (isBack) {
+          // SSOT: browser Back is a bare zBack intent. The server pops its
+          // authoritative crumb trail and returns the previous block — we never
+          // pick the target from the URL or a cached paint (zCLI parity). Only when
+          // the socket is down do we replay the frozen paint as a courtesy.
+          // Call the low-level intent (NOT client.zBack(), which itself triggers
+          // history.back() — that would recurse through this very handler).
+          if (this._isSocketConnected()) {
+            this.client._sendZBackIntent();
+            return;
+          }
+          if (await this._replayFromTrail(path, { zBack: true })) {
+            return;
+          }
+          this._showOfflineNotice(path);
           return;
         }
-        await this.navigateToRoute(path, { skipHistory: true, zBack });
+
+        // Forward (or unknown direction) is NOT a crumb pop: re-issue the nav that
+        // created this entry as a FRESH navigation (server pushes a new trail frame;
+        // there is no client-side redo stack). A delta entry carries its block — the
+        // path is unchanged, so re-run the SAME hop via zDelta. A route entry has no
+        // block — re-request the destination URL. URL is already correct in both
+        // cases (fromHistory / skipHistory), so we never double-push.
+        const fwdBlock = (e.state && e.state.block) ? e.state.block : null;
+        if (fwdBlock && typeof this.client.zDelta === 'function') {
+          this.logger.debug(`[ClientNav] forward → re-issue delta hop ${fwdBlock}`);
+          this.client.zDelta(fwdBlock, null, null, /* fromHistory */ true);
+          return;
+        }
+        await this.navigateToRoute(path, { skipHistory: true });
       };
 
       window.addEventListener('popstate', this.client._popstateHandler);
@@ -174,6 +220,18 @@ export class NavigationManager {
    * @private
    */
   _applyRouteNavBar(routeConfig) {
+    // Keep the browser tab in sync on SPA nav. SSOT: server zMeta.zTitle + brand,
+    // mirroring route_dispatcher's page_title ("brand - zTitle"). The server stamps
+    // <title> on full loads; SPA nav has no reload, so we set document.title here —
+    // before any early-return, so chrome-less destinations get a correct tab too.
+    const zMeta = routeConfig && routeConfig.zMeta;
+    if (zMeta && this.client.zuiConfig && typeof document !== 'undefined') {
+      const brand = this.client.zuiConfig.brand || null;
+      const zt = zMeta.zTitle || null;
+      const pageTitle = (zt && brand) ? `${brand} - ${zt}` : (zt || brand);
+      if (pageTitle) document.title = pageTitle;
+    }
+
     const el = this.client._zNavBarElement;
     if (!el) return;
 
@@ -345,14 +403,17 @@ export class NavigationManager {
       await this.snapshotCurrentPage();
 
       // 2B: Python owns route resolution — ask the server for walker params.
-      // If the server is unreachable, fall back to the trail (offline-browse).
+      // Two failure modes, kept distinct on purpose:
+      //   • fetch REJECTS  → the server is unreachable (truly offline). Replay the
+      //     trail, else show the offline notice.
+      //   • fetch RESOLVES but !res.ok → the server answered with 404/403. That is
+      //     NOT offline — it is a real "page not found / no access". Hand off to a
+      //     full navigation so the server renders its styled error page
+      //     (UI/error/zUI.<code>), instead of the misleading offline banner.
       let routeConfig;
+      let res;
       try {
-        const res = await fetch(`/api/route-config?path=${encodeURIComponent(routePath)}`);
-        if (!res.ok) {
-          throw new Error(`Route not found: ${routePath} (${res.status})`);
-        }
-        routeConfig = await res.json();
+        res = await fetch(`/api/route-config?path=${encodeURIComponent(routePath)}`);
       } catch (netErr) {
         this.logger.warn('[ClientNav] route-config unreachable (%s) — trying trail', netErr && netErr.message);
         if (await this._replayFromTrail(routePath, { zBack })) {
@@ -361,6 +422,12 @@ export class NavigationManager {
         this._showOfflineNotice(routePath);
         return;
       }
+      if (!res.ok) {
+        this.logger.warn('[ClientNav] route-config %s → HTTP %s — full-nav to server error page', routePath, res.status);
+        window.location.href = routePath;
+        return;
+      }
+      routeConfig = await res.json();
 
       const { zBlock, zVaFile, zVaFolder, zMeta } = routeConfig;
       this.logger.debug('[ClientNav] Route config', { zVaFile, zVaFolder, zBlock });
@@ -406,8 +473,12 @@ export class NavigationManager {
       }
 
       // Send walker execution request via WebSocket.
+      // navbar carries the RESET DEPTH (SSOT with zCLI): true → GLOBAL/page bar
+      // (server FULL-resets the trail, target becomes the new root); 'scoped' →
+      // INLINE/block bar (server keeps the host page + ancestors so a pick does
+      // not wipe the page the bar lives on). Pass the value through verbatim.
       const walkerRequest = { event: 'execute_walker', zBlock, zVaFile, zVaFolder };
-      if (navbar) walkerRequest.navbar = true;
+      if (navbar) walkerRequest.navbar = navbar;
       if (zOrigin) walkerRequest.zOrigin = zOrigin;
       if (zBack) walkerRequest.zBack = true;
       this.logger.debug('[ClientNav] Sending walker request', walkerRequest);
@@ -426,10 +497,14 @@ export class NavigationManager {
       // Don't yank to the top on a crumb-driven back.
       if (!zBack) window.scrollTo({ top: 0, behavior: 'smooth' });
 
-      // Update browser URL (skip for popstate — URL already correct)
+      // Update browser URL (skip for popstate — URL already correct).
+      // Carry a monotonic idx so the popstate handler can read direction
+      // (Back vs Forward) off the History API, which exposes no direction itself.
       if (!skipHistory) {
         const newUrl = routePath.startsWith('/') ? routePath : `/${routePath}`;
-        history.pushState({ route: routePath }, '', newUrl);
+        const idx = (typeof this.client._histIdx === 'number' ? this.client._histIdx : 0) + 1;
+        history.pushState({ route: routePath, idx }, '', newUrl);
+        this.client._histIdx = idx;
       }
 
       this.logger.debug('[ClientNav] Navigation complete');

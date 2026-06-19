@@ -30,9 +30,16 @@ export class NavBarBuilder {
    * @param {HTMLElement} navEl - The <nav> element injected from nav_html
    * @param {Object} client    - BifrostClient (for navigationManager access)
    * @param {Object} logger    - Logger instance
+   * @param {boolean} scoped   - false (default) → GLOBAL/page-chrome bar: a pick
+   *   FULL-resets the trail (new root). true → INLINE/block bar: a pick does a
+   *   SCOPED reset (keep the host page + ancestors) so it doesn't wipe the page
+   *   the bar lives on. SSOT mirror of zCLI's full-vs-scoped navbar reset.
    */
-  static wireNavBarEvents(navEl, client, logger) {
+  static wireNavBarEvents(navEl, client, logger, scoped = false) {
     if (!navEl) return;
+
+    // Reset depth sent to the server with every pick from THIS bar.
+    const navResetDepth = scoped ? 'scoped' : true;
 
     // ── Hamburger (mobile toggle) ────────────────────────────────────
     const toggler = navEl.querySelector('[data-nav-action="hamburger"]');
@@ -62,10 +69,11 @@ export class NavBarBuilder {
             menu.classList.remove('zShow');
             toggle.setAttribute('aria-expanded', 'false');
             if (client?.navigationManager) {
-              // navbar:true → server RESETs the crumb trail (SSOT with zCLI:
-              // a navbar pick becomes the new root). Browser Back/popstate does
-              // NOT pass this, so it still pops the stack normally.
-              client.navigationManager.navigateToRoute(href, { navbar: true });
+              // navbar → server RESETs the crumb trail (SSOT with zCLI: a navbar
+              // pick is a fresh start). Depth = navResetDepth (true=FULL/global,
+              // 'scoped'=inline). Browser Back/popstate does NOT pass this, so it
+              // still pops the stack normally.
+              client.navigationManager.navigateToRoute(href, { navbar: navResetDepth });
             } else {
               window.location.href = href;
             }
@@ -97,8 +105,9 @@ export class NavBarBuilder {
           menu.previousElementSibling?.setAttribute('aria-expanded', 'false');
         }
         if (client?.navigationManager) {
-          // navbar:true → server RESETs the crumb trail (SSOT with zCLI navbar).
-          client.navigationManager.navigateToRoute(href, { navbar: true });
+          // navbar → server RESETs the crumb trail (SSOT with zCLI navbar).
+          // Depth = navResetDepth (true=FULL/global, 'scoped'=inline).
+          client.navigationManager.navigateToRoute(href, { navbar: navResetDepth });
         } else {
           window.location.href = href;
         }

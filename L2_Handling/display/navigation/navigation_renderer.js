@@ -530,16 +530,17 @@ export class NavigationRenderer {
       this.logger.debug('[NavigationRenderer] structure mode, zMenu=%s, trail:', zMenu, displayLabels);
 
     } else if (show === 'session') {
-      // Session crumbs come via a separate try_gui_event payload (crumbs key)
-      // if the Python backend sent them; otherwise return null (no history yet)
+      // Session crumbs: the server slims the live trail into a visit-ordered
+      // page-chain (crumbs.trail = [{label, path}, ...]) and attaches it to the
+      // chunk. Empty/absent → no history yet → render nothing (honest).
       const crumbsData = eventData.crumbs || {};
-      const trails = crumbsData.trails || {};
-      const visibleTrails = Object.entries(trails).filter(([k]) => !k.startsWith('_'));
-      if (!visibleTrails.length) {
+      const trail = Array.isArray(crumbsData.trail) ? crumbsData.trail : [];
+      if (!trail.length) {
         this.logger.debug('[NavigationRenderer] session mode: no crumbs data, skipping');
         return null;
       }
-      displayLabels = visibleTrails[0][1];
+      displayLabels = trail.map(t => (t && t.label != null) ? String(t.label) : '');
+      navPaths = trail.map(t => (t && t.path != null) ? String(t.path) : '');
       this.logger.debug('[NavigationRenderer] session mode, labels:', displayLabels);
 
     } else if (show === 'static') {
@@ -565,10 +566,11 @@ export class NavigationRenderer {
       if (isLast) {
         li.setAttribute('aria-current', 'page');
         li.textContent = this._formatLabel(label);
-      } else if (show === 'manual' && navPaths && navPaths[index]) {
-        // manual ancestors: zMenu: true → clickable zLink; zMenu: false → disabled link
+      } else if ((show === 'manual' || show === 'session') && navPaths && navPaths[index]) {
+        // manual/session ancestors: clickable zLink. manual honors zMenu; session
+        // ancestors are always navigable (they ARE the live navigation chain).
         const zPath = navPaths[index];
-        if (zMenu) {
+        if (zMenu || show === 'session') {
           const a = createLink('#', {});
           a.textContent = this._formatLabel(label);
           a.onclick = async (e) => {
