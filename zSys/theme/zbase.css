@@ -50,6 +50,13 @@
    * redefining --text once. SSOT for "the default text colour". */
   --text:          #1d2230;
 
+  /* Opaque page background — SSOT for "what colour is the page behind the
+   * chrome". A FLOATING bar (sticky global navbar, dropdowns) mixes its own
+   * frosted surface from THIS, never from currentColor — currentColor is the
+   * page ink, so a transparent bar would let dark cards / dark sections bleed
+   * straight through and the links vanish. Dark theme / apps re-skin once. */
+  --page-bg:       #ffffff;
+
   /* Neutral foundation — surfaces, ink & lines on the dark zOS canvas.
    * SSOT for every NON-accent value so no component carries raw rgba/hex.
    * Apps re-skin the whole chrome by redefining these once. */
@@ -741,9 +748,16 @@ zBifrostBadge {
 .bifrost-error-container--bottom-right { bottom: 1rem; right: 1rem; }
 .bifrost-error-container--bottom-left  { bottom: 1rem; left: 1rem; }
 
-/* ─── zNavBar — Bifrost-owned default chrome (token-driven) ─────────────────── */
-/* Structure + a sensible dark visual default. Apps re-skin via --znav-* vars or
- * a higher-specificity rule — no need to re-declare the whole navbar per app. */
+/* ─── zNavBar — Bifrost-owned default chrome (token-driven, theme-adaptive) ──── */
+/* The global bar is STICKY and FLOATS over scrolling content, so it owns a
+ * SELF-CONTAINED frosted surface mixed from the opaque --page-bg (NOT
+ * currentColor): the surface + ink stay stable no matter what light/dark
+ * content scrolls underneath. Light/dark balance comes from the theme flipping
+ * --page-bg/--text once — not from content bleed. (The in-block variant below
+ * is the SAME look but keeps currentColor on purpose — it sits inside a known
+ * host surface and must adapt to it; see the note there.) Brand at full ink,
+ * links muted → full on hover, active = secondary-tinted pill. Apps re-skin via
+ * --znav-* vars or a higher-specificity rule — no need to re-declare the bar. */
 
 zNavBar {
   position: sticky;
@@ -754,21 +768,25 @@ zNavBar {
 
 zNavBar .zNavbar {
   display: flex;
-  align-items: center;
+  align-items: baseline;   /* brand + links share ONE text baseline — keeps all-caps
+                              items (FAQ) and the larger brand from floating off-line */
   flex-wrap: wrap;
   padding: 0.75rem 1.5rem;
-  background: var(--znav-bg, rgba(10, 14, 39, 0.92));
-  border-bottom: 1px solid var(--znav-border, color-mix(in srgb, var(--color-secondary) 15%, transparent));
-  backdrop-filter: blur(12px);
+  color: var(--text);
+  background: var(--znav-bg, color-mix(in srgb, var(--page-bg) 78%, transparent));
+  border-bottom: 1px solid var(--znav-border, color-mix(in srgb, var(--text) 10%, transparent));
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
   font-family: var(--znav-font, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
 }
 
 zNavBar .zNavbar-brand {
   font-size: 1.15rem;
   font-weight: 800;
+  line-height: 1.1;
   letter-spacing: -0.02em;
   margin-right: 2rem;
-  color: var(--znav-brand-color, var(--ink));
+  color: var(--znav-brand-color, inherit);
 }
 
 zNavBar .zNavbar-toggler {
@@ -778,21 +796,21 @@ zNavBar .zNavbar-toggler {
   font-size: 1.1rem;
   line-height: 1;
   cursor: pointer;
-  color: var(--znav-brand-color, var(--ink));
-  background: var(--znav-link-hover-bg, color-mix(in srgb, var(--color-secondary) 15%, transparent));
-  border: 1px solid var(--znav-border, color-mix(in srgb, var(--color-secondary) 30%, transparent));
+  color: var(--znav-brand-color, inherit);
+  background: var(--znav-link-hover-bg, color-mix(in srgb, var(--text) 8%, transparent));
+  border: 1px solid var(--znav-border, color-mix(in srgb, var(--text) 14%, transparent));
   border-radius: 6px;
 }
 
 zNavBar .zNavbar-collapse {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   flex: 1;
 }
 
 zNavBar .zNavbar-nav {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.25rem;
   list-style: none;
   margin: 0;
@@ -806,15 +824,20 @@ zNavBar .zNav-link {
   padding: 0.45rem 0.85rem;
   font-size: 0.9rem;
   font-weight: 500;
+  line-height: 1.1;
   border-radius: 8px;
-  color: var(--znav-link-color, var(--ink-muted));
+  color: var(--znav-link-color, color-mix(in srgb, var(--text) 66%, transparent));
   transition: color 0.2s, background 0.2s;
 }
 
-zNavBar .zNav-link:hover,
+/* hover = neutral --text wash; active = secondary-tinted pill (the pick) */
+zNavBar .zNav-link:hover {
+  color: var(--znav-link-hover-color, var(--text));
+  background: var(--znav-link-hover-bg, color-mix(in srgb, var(--text) 8%, transparent));
+}
 zNavBar .zNav-link.active {
-  color: var(--znav-link-hover-color, var(--ink));
-  background: var(--znav-link-hover-bg, color-mix(in srgb, var(--color-secondary) 15%, transparent));
+  color: var(--znav-link-hover-color, inherit);
+  background: var(--znav-link-active-bg, color-mix(in srgb, var(--color-secondary) 24%, transparent));
 }
 
 /* ─── zDropdown (navbar menus) — JS toggles .zShow ─────────────────────────── */
@@ -826,44 +849,51 @@ zNavBar .zNav-link.active {
   left: 0;
   z-index: 100;
   min-width: 11rem;
-  padding: 0.4rem 0;
-  background: var(--zdropdown-bg, rgba(20, 25, 45, 0.97));
-  border: 1px solid var(--znav-border, color-mix(in srgb, var(--color-secondary) 25%, transparent));
+  padding: 0.35rem;
+  background: var(--zdropdown-bg, color-mix(in srgb, var(--page-bg) 92%, transparent));
+  border: 1px solid var(--znav-border, color-mix(in srgb, var(--text) 14%, transparent));
   border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
 }
 .zDropdown-menu.zShow { display: block; }
 
 .zDropdown-item {
   display: block;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.85rem;
   font-size: 0.875rem;
-  color: var(--znav-link-color, var(--ink-muted));
+  border-radius: 7px;
+  color: var(--znav-link-color, color-mix(in srgb, var(--text) 78%, transparent));
   transition: color 0.15s, background 0.15s;
 }
 .zDropdown-item:hover {
-  color: var(--znav-link-hover-color, var(--ink));
-  background: var(--znav-link-hover-bg, color-mix(in srgb, var(--color-secondary) 15%, transparent));
+  color: var(--znav-link-hover-color, var(--text));
+  background: var(--znav-link-active-bg, color-mix(in srgb, var(--color-secondary) 18%, transparent));
 }
 
-/* ─── zNavbar-inblock — light, in-content navbar variant ────────────────────────
+/* ─── zNavbar-inblock — in-content navbar variant (same look, diff strategy) ───
    The chrome navbar above is scoped to the <zNavBar> element. A BLOCK-LEVEL
    navbar (rendered inline via the navbar_inline event — e.g. an in-page zPsi
    table-of-contents) lives in normal page content, NOT inside <zNavBar>, so it
-   inherits none of those rules. This variant re-states the same structure with a
-   LIGHT surface (the chrome is dark). Token-driven (--znavl-*) so a future
-   `color:` property can flip the palette without touching markup. */
+   inherits none of those rules. Geometry differs (rounded card + full border vs
+   the global bar's full-bleed + bottom-border + sticky), AND the surface strategy
+   differs on purpose: this bar sits IN-FLOW inside a KNOWN host surface (a doc, a
+   .zCallout, a dark card), so it stays on the theme-adaptive currentColor frost —
+   it inherits the host ink and paints dark-on-light or light-on-dark to match its
+   container. (The global bar can't do that: it floats over scrolling content, so
+   it mixes its own surface from --page-bg instead — see the note up top.) Pulls
+   the same --znav-* tokens, so any re-skin is still single-sourced. */
 
 .zNavbar-inblock {
   display: flex;
-  align-items: center;
+  align-items: baseline;              /* shared baseline — SSOT with the global bar */
   flex-wrap: wrap;
   padding: 0.75rem 1.5rem;            /* mirror the global bar's proportions */
   border-radius: 10px;                /* embedded in a card → rounded, not full-bleed */
-  background: var(--znavl-bg, #ffffff);
-  border: 1px solid var(--znavl-border, rgba(15, 20, 48, 0.12));
-  box-shadow: 0 1px 2px rgba(15, 20, 48, 0.04);
+  background: var(--znav-bg, color-mix(in srgb, currentColor 5%, transparent));
+  border: 1px solid var(--znav-border, color-mix(in srgb, currentColor 10%, transparent));
+  backdrop-filter: blur(12px);
   font-family: var(--znav-font, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
 }
 
@@ -872,13 +902,13 @@ zNavBar .zNav-link.active {
 
 .zNavbar-inblock .zNavbar-collapse {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   flex: 1;
 }
 
 .zNavbar-inblock .zNavbar-nav {
   display: flex;
-  align-items: center;       /* one row, baseline-aligned — mirror global bar */
+  align-items: baseline;     /* one row, shared text baseline — mirror global bar */
   gap: 0.25rem;
   margin: 0;
   padding: 0;
@@ -895,28 +925,23 @@ zNavBar .zNav-link.active {
   padding: 0.45rem 0.85rem;           /* mirror global .zNav-link */
   font-size: 0.9rem;
   font-weight: 500;
+  line-height: 1.1;
   border-radius: 8px;
-  color: var(--znavl-link, #2a2f45);
+  color: var(--znav-link-color, color-mix(in srgb, currentColor 58%, transparent));
   transition: color 0.2s, background 0.2s;
 }
 
-.zNavbar-inblock .zNav-link:hover,
+.zNavbar-inblock .zNav-link:hover {
+  color: var(--znav-link-hover-color, inherit);
+  background: var(--znav-link-hover-bg, color-mix(in srgb, currentColor 8%, transparent));
+}
 .zNavbar-inblock .zNav-link.active {
-  color: var(--znavl-link-hover, #0b1020);
-  background: var(--znavl-link-hover-bg, rgba(15, 20, 48, 0.07));
+  color: var(--znav-link-hover-color, inherit);
+  background: var(--znav-link-active-bg, color-mix(in srgb, var(--color-secondary) 24%, transparent));
 }
 
-/* Light dropdown (if a block-level bar uses zSub) — overrides the dark default. */
-.zNavbar-inblock .zDropdown-menu {
-  background: var(--znavl-dropdown-bg, #ffffff);
-  border: 1px solid var(--znavl-border, rgba(15, 20, 48, 0.12));
-  box-shadow: 0 8px 24px rgba(15, 20, 48, 0.12);
-}
-.zNavbar-inblock .zDropdown-item { color: var(--znavl-link, #2a2f45); }
-.zNavbar-inblock .zDropdown-item:hover {
-  color: var(--znavl-link-hover, #0b1020);
-  background: var(--znavl-link-hover-bg, rgba(15, 20, 48, 0.07));
-}
+/* The in-block bar's zSub dropdown inherits the unified .zDropdown-menu rules
+   above (theme-adaptive currentColor) — no light-specific override needed. */
 
 /* ─── Mobile hamburger ─────────────────────────────────────────────────────── */
 
@@ -937,8 +962,89 @@ zNavBar .zNav-link.active {
     border: none;
     border-radius: 0;
     padding-left: 0.75rem;
-    background: var(--znav-link-hover-bg, color-mix(in srgb, var(--color-secondary) 8%, transparent));
+    background: var(--znav-link-hover-bg, color-mix(in srgb, currentColor 6%, transparent));
   }
+}
+
+/* ─── zCrumbs — breadcrumb trails (session / manual / structure) ───────────────
+   ONE style for ALL zCrumbs modes — there is deliberately NO per-type rule. The
+   visual variation (clickable ancestor vs quiet/disabled ancestor vs current page)
+   is driven entirely by the HTML the renderer emits — <a>, <a aria-disabled>, or
+   the .zActive leaf — never by which crumb mode produced it.
+
+   Look: arrow / chevron segments — every crumb is a right-pointing chevron with a
+   notched left edge, separated by a thin chevron gap. Theme-adaptive: ancestor fill
+   + ink derive from currentColor, the current-page leaf from --color-secondary over
+   --page-bg, so this single rule set reads on light doc pages AND a dark surface
+   with no light/dark branch. Re-skin geometry/color via --zcrumb-*. */
+.zBreadcrumb {
+  --zcrumb-notch: 10px;          /* depth of the pointer / left indent */
+  --zcrumb-gap: 3px;            /* sliver between chevrons */
+  --zcrumb-radius: 6px;          /* rounding on the bar's two outer corners */
+  display: inline-flex;
+  align-items: stretch;          /* equal segment height so points align */
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+}
+/* margin:0 is load-bearing — the global `li { margin-bottom }` otherwise inflates
+   the flex line's cross-size, stretching the current-page leaf taller than ancestors */
+.zBreadcrumb-item { display: inline-flex; margin: 0; }
+/* every crumb is a chevron: pointer on the right, incoming notch on the left */
+.zBreadcrumb-item > a,
+.zBreadcrumb-item > span,
+.zBreadcrumb-item.zActive {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.8rem 0.3rem calc(0.8rem + var(--zcrumb-notch));
+  margin-left: calc(var(--zcrumb-gap) - var(--zcrumb-notch));
+  line-height: 1.25;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+  background: var(--zcrumb-fill, color-mix(in srgb, currentColor 9%, transparent));
+  color: var(--zcrumb-ink, color-mix(in srgb, currentColor 70%, transparent));
+  clip-path: polygon(0 0, calc(100% - var(--zcrumb-notch)) 0, 100% 50%,
+                     calc(100% - var(--zcrumb-notch)) 100%, 0 100%, var(--zcrumb-notch) 50%);
+}
+/* first crumb: flat left edge (nothing points into it) — round the outer-left corners */
+.zBreadcrumb-item:first-child > a,
+.zBreadcrumb-item:first-child > span,
+.zBreadcrumb-item:first-child.zActive {
+  margin-left: 0;
+  padding-left: 0.85rem;
+  border-radius: var(--zcrumb-radius) 0 0 var(--zcrumb-radius);
+  clip-path: polygon(0 0, calc(100% - var(--zcrumb-notch)) 0, 100% 50%,
+                     calc(100% - var(--zcrumb-notch)) 100%, 0 100%);
+}
+/* clickable ancestor (manual zMenu / session hop) */
+.zBreadcrumb-item > a:hover {
+  background: var(--zcrumb-hover-bg, color-mix(in srgb, currentColor 16%, transparent));
+  color: var(--text);
+}
+/* quiet, non-interactive ancestor (structure / manual zMenu:false) */
+.zBreadcrumb-item > a[aria-disabled="true"] {
+  color: var(--zcrumb-muted, color-mix(in srgb, currentColor 50%, transparent));
+  pointer-events: none;
+  cursor: default;
+}
+/* current page (always last): incoming notch, flat trailing edge, solid accent —
+   round the outer-right corners */
+.zBreadcrumb-item.zActive {
+  padding-right: 1rem;
+  font-weight: 600;
+  background: var(--zcrumb-active-bg, color-mix(in srgb, var(--color-secondary, #9370DB) 88%, var(--page-bg)));
+  color: var(--zcrumb-active-ink, var(--page-bg));
+  border-radius: 0 var(--zcrumb-radius) var(--zcrumb-radius) 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, var(--zcrumb-notch) 50%);
+}
+/* lone crumb (single-block session / fresh page): no points — a plain solid tag */
+.zBreadcrumb-item:only-child.zActive {
+  margin-left: 0;
+  padding-left: 0.85rem;
+  clip-path: none;
+  border-radius: var(--zcrumb-radius);
 }
 
 /* ─── 2. Grid ──────────────────────────────────────────────────────────────── */
