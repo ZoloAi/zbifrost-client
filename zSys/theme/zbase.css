@@ -764,6 +764,18 @@ zNavBar {
   top: 0;
   z-index: 1000;
   display: block;
+
+  /* Full-bleed self-defense — the navbar is page CHROME and must span the full
+     viewport even when its <zVaF> root is clamped to a centered, max-width
+     content column (apps routinely cap <zVaF> for a readable measure — e.g. a
+     zCanvas `zVaF { max-width }`). Breaking out HERE, canonically, makes
+     "navbar = full width" a framework guarantee instead of a per-app override
+     fight. The math self-cancels when <zVaF> is already full width
+     (50% == 50vw → margin 0), so it's inert on uncapped pages. (100vw counts the
+     scrollbar gutter: exact on overlay scrollbars, ~15px over on classic ones —
+     fine for chrome; revisit only if it ever yields a sliver of h-scroll.) */
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
 }
 
 zNavBar .zNavbar {
@@ -1572,16 +1584,25 @@ zNavBar .zNav-link.active {
 
 /* ─── 10. zDash layout formats ─────────────────────────────────────────────── */
 
-/* sidebar: fixed left-nav + scrollable content area */
+/* sidebar: fixed left-nav + scrollable content area.
+   Framed as a self-contained card — border + radius + clipped corners give the
+   dashboard defined edges and a bottom (border colour lives in §11). The row
+   STRETCHES so the sidebar rail runs full height to the bottom edge; min-height
+   is a content floor, not a viewport lock, so the frame hugs its content. */
 .zDash-format-sidebar.zDash-container {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 60px);
+  min-height: 400px;
+  border-radius: 12px;
+  overflow: hidden;
+  /* zContainer-fluid adds inline padding; zero it here so the sidebar rail and
+     panel sit flush to the frame border (no inset white strip on the edges). */
+  padding: 0;
 }
 .zDash-format-sidebar > .zRow {
   display: flex !important;
   flex-wrap: nowrap !important;
-  align-items: flex-start !important;
+  align-items: stretch !important;
   flex: 1;
   margin: 0;
 }
@@ -1602,7 +1623,7 @@ zNavBar .zNav-link.active {
   }
   .zDash-format-sidebar > .zRow > .zCol-auto {
     border-right: none !important;
-    border-bottom: 1px solid color-mix(in srgb, var(--color-secondary) 15%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
   }
   .zDash-format-sidebar .zDash-sidebar {
     flex-direction: row !important;
@@ -1616,7 +1637,6 @@ zNavBar .zNav-link.active {
     border-bottom: 2px solid var(--color-secondary);
   }
   .zDash-panel { padding: 1.25rem 1rem; }
-  .zDash-container .zDialog-form { grid-template-columns: 1fr 1fr; }
 }
 
 /* Mobile sidebar toggle button — hidden by default (desktop/tablet) */
@@ -1637,9 +1657,12 @@ zNavBar .zNav-link.active {
     left: 0;
     right: 0;
     z-index: 50;
-    background: rgba(10, 14, 39, 0.98);
-    border-bottom: 1px solid color-mix(in srgb, var(--color-secondary) 20%, transparent);
-    backdrop-filter: blur(12px);
+    /* Frosted overlay — a currentColor tint + blur obscures the content behind
+       without needing the host's opaque bg (which we don't have as a token). */
+    background: color-mix(in srgb, currentColor 8%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(1.6);
+    backdrop-filter: blur(14px) saturate(1.6);
   }
 
   /* Open state: sidebar slides in as a full-width dropdown */
@@ -1667,7 +1690,7 @@ zNavBar .zNav-link.active {
     background: color-mix(in srgb, var(--color-secondary) 15%, transparent);
     border: 1px solid color-mix(in srgb, var(--color-secondary) 30%, transparent);
     border-radius: 8px;
-    color: var(--ink);
+    color: currentColor;
     font-size: 0.875rem;
     font-weight: 500;
     cursor: pointer;
@@ -1675,12 +1698,10 @@ zNavBar .zNav-link.active {
   }
   .zDash-sidebar-toggle:hover {
     background: color-mix(in srgb, var(--color-secondary) 25%, transparent);
-    color: var(--ink);
+    color: currentColor;
   }
 
   .zDash-panel { padding: 1rem 0.75rem; }
-  .zDash-container .zDialog-form { grid-template-columns: 1fr !important; }
-  .zDash-container .zInput { font-size: 1rem; }
 }
 
 /* tabs format (future) */
@@ -1696,14 +1717,29 @@ zNavBar .zNav-link.active {
 
 /* ─── 11. zDash default visual theme ───────────────────────────────────────── */
 /*
- * Default dark theme for all zDash apps.
- * Override via _zClass or your app's own stylesheet.
+ * Canonical zDash chrome — styles ONLY the sidebar rail + the container frame.
+ * It deliberately targets NOTHING inside the panel: each panel is its own zUI
+ * with its own zBrush, and the dashboard never reaches into it.
+ *
+ * Built entirely from currentColor (the host app's own ink) + transparent mixes —
+ * NOT from --text/--page-bg (a host like zCloud sets its theme via real
+ * color/background, not those tokens). So the one class self-balances on a light
+ * OR dark app with zero token plumbing — no data-theme, no media query. The only
+ * non-currentColor value is the brand accent (--color-secondary) on the active
+ * item, which reads on both and never affects the light/dark balance.
  */
 
-/* Sidebar column chrome */
+/* Outer frame — the dashboard's defining outline, a faint wash of the host ink
+   over the host's own background. Pairs with radius+overflow in §10. */
+.zDash-format-sidebar.zDash-container {
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+}
+
+/* Sidebar column chrome — surface + divider mixed from currentColor, so the SAME
+   rule reads as a faint raised rail on a light app AND a dark one. */
 .zDash-format-sidebar > .zRow > .zCol-auto {
-  background: rgba(10, 14, 39, 0.6);
-  border-right: 1px solid color-mix(in srgb, var(--color-secondary) 15%, transparent);
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  border-right: 1px solid color-mix(in srgb, currentColor 12%, transparent);
   padding: 0;
 }
 
@@ -1720,7 +1756,7 @@ zNavBar .zNav-link.active {
   align-items: center;
   padding: 0.55rem 0.85rem;
   border-radius: 8px;
-  color: var(--ink-muted);
+  color: color-mix(in srgb, currentColor 60%, transparent);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -1729,153 +1765,24 @@ zNavBar .zNav-link.active {
   text-decoration: none;
 }
 .zDash-sidebar .zNav-link:hover {
-  color: var(--ink);
-  background: color-mix(in srgb, var(--color-secondary) 12%, transparent);
+  color: currentColor;
+  background: color-mix(in srgb, currentColor 7%, transparent);
 }
 .zDash-sidebar .zNav-link.zActive {
-  color: var(--ink);
-  background: color-mix(in srgb, var(--color-secondary) 22%, transparent);
+  color: currentColor;
+  background: color-mix(in srgb, var(--color-secondary) 20%, transparent);
   box-shadow: inset 3px 0 0 var(--color-secondary);
 }
 
-/* Panel area */
+/* Content slot — ONLY the frame inset (padding) + tab-pane show/hide. The
+   dashboard styles none of the content itself: each panel is its own zUI with
+   its own zBrush, rendered untouched. A panel fill / card look is CUSTOM per app
+   (see the Dashboards leaf's customization section). */
 .zDash-panel { padding: 1.75rem 2rem; }
 .zDash-panel > .zTab-pane         { display: none; }
 .zDash-panel > .zTab-pane.zActive { display: block; }
 
-/* Cards */
-.zDash-container .zCard {
-  width: 100%;
-  box-sizing: border-box;
-  margin-bottom: 1.25rem;
-  background: rgba(15, 20, 48, 0.6);
-  border: 1px solid color-mix(in srgb, var(--color-secondary) 15%, transparent);
-  border-radius: 10px;
-}
-
-/* Dialog / form section header */
-.zDash-container .zDialog-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--ink);
-  margin-bottom: 1rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-secondary) 15%, transparent);
-}
-
-/* Multi-column form grid */
-.zDash-container .zDialog-form {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.75rem;
-}
-.zDash-container .zDialog-form > [class*="zmt-"],
-.zDash-container .zDialog-errors {
-  grid-column: 1 / -1;
-}
-
-/* Labels */
-.zDash-container .zLabel {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--ink-muted);
-  font-weight: 600;
-  display: block;
-  margin-bottom: 0.3rem;
-}
-
-/* Inputs & selects */
-.zDash-container .zInput {
-  appearance: none;
-  background: var(--surface-1);
-  border: 1px solid color-mix(in srgb, var(--color-secondary) 20%, transparent);
-  border-radius: 7px;
-  color: var(--ink);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  width: 100%;
-  box-sizing: border-box;
-  font-family: inherit;
-  transition: border-color 0.15s, background 0.15s;
-}
-.zDash-container .zInput:focus {
-  outline: none;
-  border-color: color-mix(in srgb, var(--color-secondary) 60%, transparent);
-  background: color-mix(in srgb, var(--ink) 7%, transparent);
-}
-
-/* Primary action button */
-.zDash-container .zBtn-primary {
-  background: var(--color-secondary);
-  border: none;
-  color: #fff;
-  padding: 0.55rem 1.25rem;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.15s, transform 0.1s;
-}
-.zDash-container .zBtn-primary:hover {
-  background: color-mix(in srgb, var(--color-secondary) 82%, black);
-  transform: translateY(-1px);
-}
-
-/* Panel / menu action buttons */
-.zDash-container button[data-key] {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 1rem;
-  margin: 0 0.4rem 0.4rem 0;
-  background: color-mix(in srgb, var(--color-secondary) 15%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-secondary) 30%, transparent);
-  border-radius: 8px;
-  color: var(--ink);
-  font-size: 0.875rem;
-  font-weight: 500;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-.zDash-container button[data-key]:hover {
-  background: color-mix(in srgb, var(--color-secondary) 30%, transparent);
-  border-color: color-mix(in srgb, var(--color-secondary) 50%, transparent);
-  color: var(--ink);
-}
-
-/* Tables */
-.zDash-container table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-  color: var(--ink);
-}
-.zDash-container th {
-  padding: 0.6rem 0.9rem;
-  background: color-mix(in srgb, var(--color-secondary) 12%, transparent);
-  color: var(--color-secondary);
-  font-weight: 600;
-  text-align: left;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-secondary) 20%, transparent);
-}
-.zDash-container td {
-  padding: 0.55rem 0.9rem;
-  border-bottom: 1px solid color-mix(in srgb, var(--ink) 5%, transparent);
-}
-.zDash-container tr:hover td { background: color-mix(in srgb, var(--color-secondary) 7%, transparent); }
-
-/* Section headings */
-.zDash-container h2 {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--ink);
-  margin: 0 0 1rem;
-}
-
-/* Spinner */
+/* Spinner — the dashboard's own panel-loading indicator (not panel content). */
 .zSpinner-border { color: var(--color-primary); }
 
 /* ============================================================================
