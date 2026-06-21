@@ -392,7 +392,7 @@ export class NavigationManager {
    * @param {Object} options - Navigation options
    */
   async navigateToRoute(routePath, options = {}) {
-    const { skipHistory = false, navbar = false, zOrigin = null, zBack = false, replace = false } = options;
+    const { skipHistory = false, navbar = false, zOrigin = null, zBack = false } = options;
 
     this.client._isClientSideNav = true;
 
@@ -428,16 +428,6 @@ export class NavigationManager {
         return;
       }
       routeConfig = await res.json();
-
-      // type: zDispatch — a render-free predicate router resolved server-side.
-      // The route-config API hands back {redirect: <url>} instead of walker
-      // params; re-navigate to the real surface (SPA parity with the HTTP 302).
-      // replace:true so the dispatcher URL never lands in history as its own
-      // back-stop entry (Back skips straight past it).
-      if (routeConfig && routeConfig.redirect) {
-        this.logger.info('[ClientNav] zDispatch → redirect %s', routeConfig.redirect);
-        return this.navigateToRoute(routeConfig.redirect, { ...options, replace: true });
-      }
 
       const { zBlock, zVaFile, zVaFolder, zMeta } = routeConfig;
       this.logger.debug('[ClientNav] Route config', { zVaFile, zVaFolder, zBlock });
@@ -512,16 +502,9 @@ export class NavigationManager {
       // (Back vs Forward) off the History API, which exposes no direction itself.
       if (!skipHistory) {
         const newUrl = routePath.startsWith('/') ? routePath : `/${routePath}`;
-        // replace:true (zDispatch hand-off) overwrites the dispatcher entry in
-        // place so it never becomes its own history stop; a normal nav pushes.
-        if (replace) {
-          const idx = (typeof this.client._histIdx === 'number' ? this.client._histIdx : 0);
-          history.replaceState({ route: routePath, idx }, '', newUrl);
-        } else {
-          const idx = (typeof this.client._histIdx === 'number' ? this.client._histIdx : 0) + 1;
-          history.pushState({ route: routePath, idx }, '', newUrl);
-          this.client._histIdx = idx;
-        }
+        const idx = (typeof this.client._histIdx === 'number' ? this.client._histIdx : 0) + 1;
+        history.pushState({ route: routePath, idx }, '', newUrl);
+        this.client._histIdx = idx;
       }
 
       this.logger.debug('[ClientNav] Navigation complete');
