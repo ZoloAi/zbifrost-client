@@ -816,12 +816,15 @@ export class FormRenderer {
       this.logger.log('[FormRenderer] Server requested navigation to:', routePath);
       setTimeout(() => {
         if (this.client && typeof this.client._navigateToRoute === 'function') {
-          // Navigate, THEN refresh the navbar — login changed the session, so the
-          // RBAC-filtered nav (zAccount/logout) must rebuild for the new role.
+          // Login changed the session. The server built the authed, RBAC-filtered
+          // navbar on the SAME (authed) ws that handled this submit and shipped it
+          // as response.nav_html. Apply it directly (3A path) after navigating.
+          // We do NOT re-request connection_info from the client: that can land on
+          // a different (guest) ws and rebuild the guest chrome (no ^logout).
           this.client._navigateToRoute(routePath).then(() => {
-            if (typeof this.client._fetchAndPopulateNavBar === 'function') {
-              this.client._fetchAndPopulateNavBar().catch(err => {
-                this.logger.error('[FormRenderer] Failed to refresh navbar:', err);
+            if (response.nav_html && typeof this.client._fetchAndPopulateNavBar === 'function') {
+              this.client._fetchAndPopulateNavBar(response.nav_html).catch(err => {
+                this.logger.error('[FormRenderer] Failed to apply navbar:', err);
               });
             }
           }).catch(err => {
