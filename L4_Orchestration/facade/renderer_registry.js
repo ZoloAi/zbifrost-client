@@ -114,6 +114,12 @@ export const RENDERER_REGISTRY = {
     isDefault: true,
     passClient: false
   },
+  embed: {
+    path: 'L2_Handling/display/outputs/embed_renderer.js',
+    className: 'EmbedRenderer',
+    isDefault: true,
+    passClient: false
+  },
   icon: {
     path: 'L2_Handling/display/outputs/icon_renderer.js',
     className: 'IconRenderer',
