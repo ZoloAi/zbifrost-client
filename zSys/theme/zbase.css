@@ -286,8 +286,10 @@ ul:last-child, ol:last-child { margin-bottom: 0; }
 li { margin-bottom: 0.4rem; }
 li:last-child { margin-bottom: 0; }
 
-/* Markers follow the base text colour (SSOT) — same ink as the item text. */
-li::marker { color: var(--text); }
+/* Markers track the item's own ink via the theme-adaptive frost play (same mix
+ * used by the floating nav / breadcrumb) — a muted currentColor that reads on a
+ * light OR dark page, where a fixed --text would vanish on the opposite theme. */
+li::marker { color: color-mix(in srgb, currentColor 70%, transparent); }
 
 /* Nested lists tuck under their parent item with a single tight gap. */
 li > ul, li > ol { margin: 0.4rem 0 0; }
@@ -1324,6 +1326,16 @@ zNavBar .zNav-link.active {
 
 @media (prefers-reduced-motion: reduce) {
   .zSpinner-border, .zSpinner-grow { animation-duration: 1.5s; }
+}
+
+/* ─── 9b. zIcon baseline fix ───────────────────────────────────────────────────
+   Bootstrap font icons (<i class="bi bi-*">) sit slightly low on the text baseline.
+   This is an ALIGNMENT correction only — invisible, universally wanted. Size and
+   colour are deliberately left to inherit (1em / currentColor) so a zIcon scales and
+   tints with whatever text it sits in. No font-size, no margins — never fight the user. */
+.bi {
+  vertical-align: -0.125em;
+  line-height: 1;
 }
 
 /* ─── 10. Misc runtime helpers ─────────────────────────────────────────────── */

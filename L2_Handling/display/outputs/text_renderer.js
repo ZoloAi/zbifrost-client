@@ -196,6 +196,19 @@ export class TextRenderer {
     html = html.replace(/~~([^~]+)~~/g, `<${ZMD_INLINE_TAGS.del}>$1</${ZMD_INLINE_TAGS.del}>`);
     html = html.replace(/==([^=]+)==/g, `<${ZMD_INLINE_TAGS.mark}>$1</${ZMD_INLINE_TAGS.mark}>`);
 
+    // Inline icons: <bi-name> → Bootstrap <i>. The Bifrost twin of zCLI
+    // InlineTransformer._convert_icons. Angle brackets (not ":" which collides
+    // with zolo dict shape, not backticks which would hijack literal bi-* code
+    // refs). The pattern bakes in the name shape (lowercase alphanumerics,
+    // dash-joined), so the markup is built from a self-validated name only —
+    // XSS-safe like the IconRenderer event. aria-label humanizes the name
+    // (bi-heart-fill → "heart fill"), matching IconRenderer. Runs after the inline
+    // code pass, so a literal `<bi-tools>` inside backticks is already shielded.
+    html = html.replace(/<(bi-[a-z0-9]+(?:-[a-z0-9]+)*)>/g, (match, name) => {
+      const ariaLabel = name.replace(/^bi-/, '').replace(/-/g, ' ');
+      return `<i class="bi ${name}" role="img" aria-label="${ariaLabel}"></i>`;
+    });
+
     // Restore inline code last (all inline syntax above was shielded).
     html = html.replace(/___INLINE_CODE_(\d+)___/g, (match, index) => inlineCodeBlocks[parseInt(index)]);
 

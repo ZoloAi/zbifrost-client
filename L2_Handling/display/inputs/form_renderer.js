@@ -589,13 +589,16 @@ export class FormRenderer {
       if (prefix || suffix) {
         const group = createElement('div', ['zInputGroup']);
         if (prefix) {
-          const pre = createElement('span', ['zInputGroup-text']);
+          // Position-specific class (zInputGroup-prefix) lets users restyle the
+          // prefix alone — SSOT with the standalone path (input_event_handler.js).
+          const pre = createElement('span', ['zInputGroup-text', 'zInputGroup-prefix']);
           pre.textContent = prefix;
           group.appendChild(pre);
         }
         group.appendChild(input);
         if (suffix) {
-          const suf = createElement('span', ['zInputGroup-text']);
+          // Position-specific class (zInputGroup-suffix) — SSOT with the standalone path.
+          const suf = createElement('span', ['zInputGroup-text', 'zInputGroup-suffix']);
           suf.textContent = suffix;
           group.appendChild(suf);
         }
