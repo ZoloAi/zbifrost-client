@@ -41,6 +41,8 @@ export class AssetLoader {
   /**
    * Load _zScripts from YAML metadata (plugin scripts)
    * Resolves plugin references: &.plugin_name → /plugins/plugin_name.js
+   * Nested folders are supported by dot-segmentation, mirroring zBrush styles
+   * (_build_styles_links): &.demos.confetti → /plugins/demos/confetti.js
    */
   loadZScripts() {
     if (typeof document === 'undefined') {
@@ -58,11 +60,13 @@ export class AssetLoader {
     this.logger.debug('[AssetLoader] Loading %s _zScripts from YAML', zScripts.length);
 
     zScripts.forEach(scriptRef => {
-      // Resolve plugin reference: &.plugin_name → /plugins/plugin_name.js
+      // Resolve plugin reference: &.plugin_name → /plugins/plugin_name.js.
+      // Dot segments map to nested folders inside the canonical plugins/ root,
+      // exactly like zBrush styles (&.demos.confetti → /plugins/demos/confetti.js).
       let scriptUrl = scriptRef;
       if (scriptRef.startsWith('&.')) {
-        const pluginName = scriptRef.substring(2);
-        scriptUrl = `/plugins/${pluginName}.js`;
+        const pluginPath = scriptRef.substring(2).replace(/\./g, '/');
+        scriptUrl = `/plugins/${pluginPath}.js`;
         this.logger.debug('[AssetLoader] Resolving plugin: %s → %s', scriptRef, scriptUrl);
       }
 
