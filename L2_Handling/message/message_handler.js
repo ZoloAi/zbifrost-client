@@ -9,6 +9,7 @@
 
 // Constants
 import { TIMEOUTS, PROTOCOL_EVENTS, PROTOCOL_REASONS } from '../../L1_Foundation/constants/bifrost_constants.js';
+import { zfuncSignalFrom } from '../display/feedback/zfunc_signal.js';
 
 // zRender op-code decoder — reverse map of render_opcodes.py EVENT_TO_OP
 // (op → display handler key). This table contains no business logic, wizard
@@ -570,10 +571,13 @@ export class MessageHandler {
         return;
       }
 
-      // zFunc execution signal — backend console confirmation, not a UI event
+      // zFunc execution signal — dev-console confirmation PLUS a visible toast.
+      // One handler serves both surfaces: a zUI/walker zFunc and a button/action
+      // click both arrive here as zfunc_exec (the server ships the SSOT envelope).
       if (message.event === PROTOCOL_EVENTS.ZFUNC_EXEC) {
         if (message.stdout) console.log('[zFunc stdout]', message.stdout);
         console.log('[zFunc]', message.spec, '→', message.result, message.success ? '✓' : '✗');
+        this._emitZFuncSignal(message);
         return;
       }
 
@@ -696,6 +700,33 @@ export class MessageHandler {
     } catch (error) {
       this.logger.error('[MessageHandler] Error handling broadcast:', error);
       this.hooks.call('onError', { type: 'broadcast_error', error, message });
+    }
+  }
+
+  /**
+   * Turn a zfunc_exec envelope into a visible zSignal toast (smart policy).
+   *
+   * The server ships the SSOT ZResult fields (success / message / error) plus the
+   * data payload under `result`. We decide WHAT shows here so both surfaces
+   * (walker zFunc + button/action click) stay identical:
+   *   - error            → zError toast (the error text)
+   *   - message          → zSuccess toast (the human note)
+   *   - string/structured data → zSuccess toast (the value)
+   *   - void / None / bare bool → silent (no content worth surfacing)
+   * flush:true makes it an out-of-flow timed toast, so it appears on a click with
+   * no active walker render. Rendering reuses the existing signal renderer (SSOT).
+   * @private
+   */
+  _emitZFuncSignal(message) {
+    const sig = zfuncSignalFrom(message); // SSOT smart policy (shared w/ button path)
+    if (!sig) return; // nothing meaningful to surface
+
+    const orch = this.client && this.client.zDisplayOrchestrator;
+    if (orch && typeof orch.renderZDisplayEvent === 'function') {
+      // flush:true → toast portal (#zToast-container), returns null, no parent needed.
+      // result:true → roomy code-like card (zFunc return); format from the policy.
+      Promise.resolve(orch.renderZDisplayEvent({ event: sig.level, content: sig.text, flush: true, result: true, format: sig.format }))
+        .catch((err) => this.logger.debug('[MessageHandler] zfunc signal toast skipped:', err));
     }
   }
 

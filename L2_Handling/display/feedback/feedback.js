@@ -9,3 +9,4 @@
 
 export * from './progressbar_renderer.js';
 export * from './spinner_renderer.js';
+export * from './zfunc_signal.js';

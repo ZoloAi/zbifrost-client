@@ -1526,7 +1526,9 @@ zNavBar .zNav-link.active {
 }
 /* Signal card internals — message takes the row, × dismisses. Colour inherits
    from .zSignal-* (currentColor), so the close glyph matches the signal type. */
-.zSignal-text  { flex: 1 1 auto; }
+/* min-width:0 lets the flex child shrink below content size so long, unbroken
+   values (JSON, urls, tokens) wrap instead of overflowing the card. */
+.zSignal-text  { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .zSignal-close {
   flex: 0 0 auto;
   background: none;
@@ -1575,6 +1577,59 @@ zNavBar .zNav-link.active {
   from { transform: translateX(0);    opacity: 1; }
   to   { transform: translateX(120%); opacity: 0; }
 }
+/* ─── zFunc result flush — roomy, code-like card (flush:true + result) ───────── */
+/* A zFunc return surfaces as a toast: structured data reads as a code block,
+   a scalar/message reads as prose. Geometry overrides the bare .zToast card;
+   colour is still single-sourced from .zSignal-* (--signal / --signal-light). */
+.zAlert-result {
+  display: block;
+  padding: 0;
+  margin: var(--space-2) 0;
+  border: 1px solid var(--signal);
+  background: var(--signal-light);
+  border-radius: 11px;
+  overflow: hidden;
+}
+/* header strip — status glyph + level label, then dismiss, in the signal hue */
+.zResult-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  color: var(--signal);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid color-mix(in srgb, var(--signal) 35%, transparent);
+}
+.zResult-head .zResult-glyph { font-size: 1rem; line-height: 1; }
+.zResult-head .zSignal-close { margin-left: auto; }
+/* prose body — a scalar / human message stays readable sans, a touch bigger */
+.zResult-msg {
+  padding: var(--space-3) var(--space-4);
+  color: var(--signal);
+  font-size: 1.05rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+/* code body — structured data (dict / list) reads as a code block */
+.zResult-code {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-base);
+  color: var(--ink);
+  font-family: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  white-space: pre;
+  overflow-x: auto;
+}
+/* JSON token tints — keys/strings/numbers read as code, not a mono wall */
+.zResult-code .tok-key { color: var(--color-info); }
+.zResult-code .tok-str { color: var(--color-primary); }
+.zResult-code .tok-num { color: var(--color-warning); }
+.zResult-code .tok-pun { color: var(--ink-muted); }
 .zCard       { position: relative; }
 .zInputGroup { display: flex; align-items: stretch; }
 .zInputGroup > .zInputGroup-text { display: flex; align-items: center; }

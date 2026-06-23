@@ -464,19 +464,46 @@ export default class ButtonRenderer {
         if (progressSpec && orch && typeof orch._executeZFunc === 'function') {
           this.logger.log('[ButtonRenderer] zProgress button — routing via _executeZFunc');
           button.disabled = true;
+          button.setAttribute('aria-busy', 'true');
           const host = button.parentElement || button;
-          orch._executeZFunc(action, host, progressSpec);
+          // Pass the button so the lifecycle frees it on the correlated response.
+          orch._executeZFunc(action, host, progressSpec, { button });
           return;
         }
 
-        // Collect wizard input values (look for sibling inputs in same wizard container)
-        const collectedValues = this._collectWizardValues(button);
-        this.logger.log(`[ButtonRenderer]  Collected wizard values:`, collectedValues);
+        // Client-side JS plugin: if the &. ref resolves to a browser module
+        // (served under /plugins/…), run it HERE with `this` = the button — no
+        // server round-trip. This is the `this`-bound action twin of zScripts:
+        // the same &. grammar, but invoked on click instead of self-wiring a
+        // global listener. Resolves async (dynamic import, browser-cached after
+        // first hit); falls through to the server transport for Python /
+        // server-side plugins (404/no-export → not a client plugin).
+        this._tryClientPluginAction(action, button, event).then((handled) => {
+          if (handled) return; // client-side JS plugin ran (this-bound) — stays enabled
 
-        // Send button action event with collected values
-        this._sendButtonAction(requestId, action, collectedValues);
-        button.disabled = true; // prevent double-fire
-      } else if (requestId) {
+          // Server-side &. plugin → run through the CORRELATED transport
+          // (execute_zfunc), so the button frees up on the response (success OR
+          // fail) instead of staying stuck. zHat[N] is substituted client-side
+          // here because execute_zfunc carries only the resolved string.
+          const collectedValues = this._collectWizardValues(button);
+          this.logger.log(`[ButtonRenderer]  Collected wizard values:`, collectedValues);
+          const resolved = this._substituteZHat(action, collectedValues);
+
+          if (orch && typeof orch._executeZFunc === 'function') {
+            button.disabled = true;            // prevent double-fire while in flight
+            button.setAttribute('aria-busy', 'true');
+            const host = button.parentElement || button;
+            orch._executeZFunc(resolved, host, null, { button, quiet: true });
+          } else {
+            // Legacy fallback: fire-and-forget (no correlated re-enable possible).
+            this._sendButtonAction(requestId, resolved, collectedValues);
+            button.disabled = true;
+          }
+        });
+        return;
+      }
+
+      if (requestId) {
         // Interactive button awaiting a backend response (zDialog / zWizard).
         // A parked wizard gate carries _renderInline: collect the pre-gate
         // field values, pin the reveal to this button's own container (append),
@@ -505,6 +532,56 @@ export default class ButtonRenderer {
       // NOTE: never rewrite button.textContent on click. The `[ok]` confirmation
       // is a log signal only — rendering it injected text and wiped icon buttons.
     });
+  }
+
+  /**
+   * Try to run a `&.` action as a CLIENT-side JS plugin, with `this` = button.
+   *
+   * The `this`-bound twin of zScripts: same folder-aware `&.` grammar
+   * (mirrors asset_loader's `&.demos.x` → `/plugins/demos/x.js`), but the LAST
+   * segment is the exported function and it's invoked on click — no global
+   * listener, no hardcoded id. The element that declared the action IS `this`.
+   *
+   * Resolution is lazy: dynamic import (browser-cached after first hit). Any miss
+   * — malformed ref, 404 (Python/server plugin), or no matching export — returns
+   * false so the caller falls through to the server transport. Pure browser:
+   * skipped entirely when `document`/`import` are unavailable.
+   *
+   * @private
+   * @param {string} action - e.g. "&.demos.confetti_click.burst()".
+   * @param {HTMLElement} button - the clicked button (becomes `this`).
+   * @param {Event} event - the originating click event (passed as arg).
+   * @returns {Promise<boolean>} true if a client function ran, else false.
+   */
+  async _tryClientPluginAction(action, button, event) {
+    if (typeof document === 'undefined') return false;
+    // Peel "&.<path>(<args>)" — args ignored here (this-bound effect). The
+    // leading dot is REQUIRED (hard canon: the sigil is "&.", like @./~.); a
+    // bare "&plugin.fn()" is not a client plugin and falls through to server.
+    const m = /^&\.([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+)\s*\([^)]*\)\s*$/.exec(action);
+    if (!m) return false;
+    const segs = m[1].split('.');
+    const fnName = segs.pop();
+    if (!segs.length) return false;                 // need folder/file + function
+    const url = `/plugins/${segs.join('/')}.js`;
+    try {
+      const mod = await import(url);
+      const fn = (mod && typeof mod[fnName] === 'function')
+        ? mod[fnName]
+        : (mod && mod.default && typeof mod.default[fnName] === 'function'
+            ? mod.default[fnName]
+            : null);
+      if (!fn) {
+        this.logger.debug('[ButtonRenderer] %s loaded but no export "%s" — server path', url, fnName);
+        return false;
+      }
+      this.logger.log('[ButtonRenderer] client plugin → %s.%s (this = button)', url, fnName);
+      fn.call(button, event);
+      return true;
+    } catch (err) {
+      this.logger.debug('[ButtonRenderer] no client plugin for %s (%s) — server path', action, err?.message);
+      return false;
+    }
   }
 
   /**
@@ -790,6 +867,29 @@ export default class ButtonRenderer {
     });
     
     return values;
+  }
+
+  /**
+   * Substitute zHat[N] placeholders in an action string with collected values.
+   *
+   * Client-side twin of handle_button_action's substitution — needed because the
+   * correlated execute_zfunc transport carries only the resolved string (no
+   * collected_values channel). Values are single-quoted for safe arg parsing;
+   * an out-of-range index is left untouched. No zHat → returns the action as-is.
+   *
+   * @private
+   * @param {string} action - e.g. "&.plugin.fn(zHat[0])".
+   * @param {Array} values - collected wizard input values, in order.
+   * @returns {string} the action with zHat[N] resolved.
+   */
+  _substituteZHat(action, values) {
+    if (typeof action !== 'string' || !Array.isArray(values) || values.length === 0) {
+      return action;
+    }
+    return action.replace(/zHat\[(\d+)\]/g, (m, i) => {
+      const idx = Number(i);
+      return (idx >= 0 && idx < values.length) ? `'${values[idx]}'` : m;
+    });
   }
 
   /**

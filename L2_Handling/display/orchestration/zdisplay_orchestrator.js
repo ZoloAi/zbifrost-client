@@ -25,6 +25,7 @@ import { ContainerUnwrapper } from '../../../L3_Abstraction/orchestrator/contain
 import { InputEventHandler } from '../../../L3_Abstraction/orchestrator/input_event_handler.js';
 import { createSemanticElement } from '../primitives/semantic_element_primitive.js';
 import { getAlertColorClass } from '../../../zSys/theme/ztheme_utils.js';
+import { zfuncSignalFrom } from '../feedback/zfunc_signal.js';
 
 export class ZDisplayOrchestrator {
   constructor(client) {
@@ -1391,6 +1392,15 @@ export class ZDisplayOrchestrator {
         break;
       }
 
+      case 'embed': {
+        // Modular EmbedRenderer builds a sandboxed <iframe> from the server's
+        // vetted payload (src/sandbox/allow already trust-gated server-side).
+        const embedRenderer = await this.client._ensureEmbedRenderer();
+        element = embedRenderer.render(eventData);
+        this.logger.debug(`[renderZDisplayEvent] Rendered embed: ${eventData.src}`);
+        break;
+      }
+
       case 'icon': {
         // Use modular IconRenderer for Bootstrap Icons
         const iconRenderer = await this.client._ensureIconRenderer();
@@ -1476,25 +1486,31 @@ export class ZDisplayOrchestrator {
         // TOAST (.zToast) in the top-right stack. Colour single-sourced from
         // .zSignal-*; the terminal still prints a plain colored line.
         const colorClass = getAlertColorClass(event);
-        element = document.createElement('div');
-        element.className = `zSignal ${colorClass} zAlert`;
-        element.setAttribute('role', 'alert');
+        // zFunc result flushes get the roomy, code-like card (header + code/prose
+        // body); every other signal stays the compact inline .zAlert row.
+        if (eventData.result) {
+          element = this._buildZFuncResultCard(event, colorClass, eventData);
+        } else {
+          element = document.createElement('div');
+          element.className = `zSignal ${colorClass} zAlert`;
+          element.setAttribute('role', 'alert');
 
-        const msgEl = document.createElement('span');
-        msgEl.className = 'zSignal-text';
-        msgEl.textContent = eventData.content || '';
-        element.appendChild(msgEl);
+          const msgEl = document.createElement('span');
+          msgEl.className = 'zSignal-text';
+          msgEl.textContent = eventData.content || '';
+          element.appendChild(msgEl);
 
-        const closeEl = document.createElement('button');
-        closeEl.type = 'button';
-        closeEl.className = 'zSignal-close';
-        closeEl.setAttribute('aria-label', 'Dismiss');
-        closeEl.textContent = '×';
-        closeEl.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this._dismissSignal(element);
-        });
-        element.appendChild(closeEl);
+          const closeEl = document.createElement('button');
+          closeEl.type = 'button';
+          closeEl.className = 'zSignal-close';
+          closeEl.setAttribute('aria-label', 'Dismiss');
+          closeEl.textContent = '×';
+          closeEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._dismissSignal(element);
+          });
+          element.appendChild(closeEl);
+        }
 
         if (eventData.indent > 0) {
           element.style.marginLeft = `${eventData.indent}rem`;
@@ -1546,6 +1562,78 @@ export class ZDisplayOrchestrator {
     }
 
     return element;
+  }
+
+  /**
+   * Build the roomy, code-like zFunc result card (header strip + body). Used for
+   * zFunc return signals only (eventData.result); structured data renders as a
+   * syntax-tinted code block, a scalar/message as prose. Styling is SSOT in
+   * zbase.css (.zAlert-result / .zResult-*). Colour from .zSignal-*.
+   * @private
+   */
+  _buildZFuncResultCard(event, colorClass, eventData) {
+    const GLYPHS = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ', primary: '•', secondary: '•' };
+    const card = document.createElement('div');
+    card.className = `zSignal ${colorClass} zAlert-result`;
+    card.setAttribute('role', 'alert');
+
+    const head = document.createElement('div');
+    head.className = 'zResult-head';
+    const glyph = document.createElement('span');
+    glyph.className = 'zResult-glyph';
+    glyph.textContent = GLYPHS[event] || '•';
+    const label = document.createElement('span');
+    label.textContent = event;
+    head.appendChild(glyph);
+    head.appendChild(label);
+
+    const closeEl = document.createElement('button');
+    closeEl.type = 'button';
+    closeEl.className = 'zSignal-close';
+    closeEl.setAttribute('aria-label', 'Dismiss');
+    closeEl.textContent = '×';
+    closeEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._dismissSignal(card);
+    });
+    head.appendChild(closeEl);
+    card.appendChild(head);
+
+    const content = eventData.content || '';
+    if (eventData.format === 'code') {
+      const pre = document.createElement('pre');
+      pre.className = 'zResult-code';
+      pre.innerHTML = this._highlightJSON(content); // content is escaped inside
+      card.appendChild(pre);
+    } else {
+      const msg = document.createElement('div');
+      msg.className = 'zResult-msg';
+      msg.textContent = content;
+      card.appendChild(msg);
+    }
+    return card;
+  }
+
+  /**
+   * Minimal, XSS-safe JSON syntax highlighter: escape first, then wrap tokens in
+   * tinted spans (.tok-key / .tok-str / .tok-num / .tok-pun). Input is already a
+   * pretty-printed JSON string (from zfuncSignalFrom). Returns innerHTML-ready.
+   * @private
+   */
+  _highlightJSON(str) {
+    const esc = String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return esc.replace(
+      /("(\\.|[^"\\])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g,
+      (m) => {
+        let cls = 'tok-num';
+        if (/^"/.test(m)) cls = /:\s*$/.test(m) ? 'tok-key' : 'tok-str';
+        else if (/true|false|null/.test(m)) cls = 'tok-pun';
+        return `<span class="${cls}">${m}</span>`;
+      }
+    );
   }
 
   /**
@@ -1636,15 +1724,26 @@ export class ZDisplayOrchestrator {
     return { bar: row };
   }
 
-  async _executeZFunc(funcStr, parentElement, progressSpec = null) {
+  async _executeZFunc(funcStr, parentElement, progressSpec = null, opts = {}) {
+    // opts.button: the originating zBtn to free up (disable→run→re-enable). It is
+    // the SSOT for the busy lifecycle of a server &. action button, so the button
+    // can't stay stuck after success OR fail. opts.quiet: plain action buttons
+    // surface the result as a toast (smart policy) instead of an inline wrapper.
+    const { button = null, quiet = false } = opts;
+    const reenable = () => {
+      if (button) { button.disabled = false; button.removeAttribute('aria-busy'); }
+    };
+
     if (!funcStr.startsWith('&')) {
       this.logger.warn('[ZFunc] Skipping non-plugin zFunc value:', funcStr);
+      reenable();
       return;
     }
 
     const requestId = `zfunc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-    // Spinner placeholder — replaced when response arrives
+    // Spinner placeholder — replaced when response arrives (kept empty when quiet;
+    // it still anchors any inline input() prompt during execution).
     const wrapper = document.createElement('div');
     wrapper.className = 'zfunc-wrapper zmy-2';
     wrapper.dataset.zfuncRequestId = requestId;
@@ -1684,7 +1783,7 @@ export class ZDisplayOrchestrator {
       }
     }
 
-    if (!wrapper.firstChild) {
+    if (!quiet && !wrapper.firstChild) {
       const spinner = document.createElement('span');
       spinner.className = 'zText-muted zSmall';
       spinner.textContent = '⏳ Running…';
@@ -1710,8 +1809,11 @@ export class ZDisplayOrchestrator {
     } catch (err) {
       this.logger.error('[ZFunc] Failed to send execute_zfunc:', err);
       if (progressTicker) clearInterval(progressTicker);
-      wrapper.innerHTML = `<span class="zText-danger zSmall">⚠ Failed to start: ${err.message}</span>`;
+      if (quiet) { wrapper.remove(); } else {
+        wrapper.innerHTML = `<span class="zText-danger zSmall">⚠ Failed to start: ${err.message}</span>`;
+      }
       this._zfuncResolvers.delete(requestId);
+      reenable();
       return;
     }
 
@@ -1723,6 +1825,19 @@ export class ZDisplayOrchestrator {
 
     // Stop the elapsed-time ticker before the bar is removed with the wrapper
     if (progressTicker) clearInterval(progressTicker);
+
+    // Quiet (plain action button): no inline output — surface the result as a
+    // toast via the shared smart policy, free the button, and we're done.
+    if (quiet) {
+      wrapper.remove();
+      const sig = zfuncSignalFrom(response);
+      if (sig) {
+        Promise.resolve(this.renderZDisplayEvent({ event: sig.level, content: sig.text, flush: true, result: true, format: sig.format }))
+          .catch((e) => this.logger.debug('[ZFunc] result toast skipped:', e));
+      }
+      reenable();
+      return response.success ? (response.result ?? null) : null;
+    }
 
     // Clear spinner / progress bar / input widget
     wrapper.innerHTML = '';
@@ -1740,6 +1855,9 @@ export class ZDisplayOrchestrator {
       err.textContent = `⚠ ${response.error || 'Unknown error'}`;
       wrapper.appendChild(err);
     }
+
+    // Free the originating button (zProgress action buttons) on success OR fail.
+    reenable();
 
     // Return the plugin result so callers (e.g. _renderZMenuBlock) can decide
     // whether to show a zBack button or hide the content (bounce vs exit semantics)
