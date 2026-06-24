@@ -16,6 +16,7 @@
 
 import { TYPOGRAPHY } from '../../L1_Foundation/constants/bifrost_constants.js';
 import { convertStyleToString } from '../../zSys/dom/style_utils.js';
+import { createChoiceGroup } from '../../L2_Handling/display/inputs/choice_group.js';
 
 /**
  * Append a red required marker (*) to a label/legend when the field is required.
@@ -558,8 +559,9 @@ export class InputEventHandler {
     const isInsideInputGroup = parentElement && parentElement.classList && parentElement.classList.contains('zInputGroup-text');
     
     let element;
-    // Render based on type
-    if (type === 'radio' || (type === 'checkbox' && multi)) {
+    // Render based on type. `multi` ALWAYS renders as a checkbox group (never a
+    // native <select multiple> listbox) — SSOT with zDialog fields via choice_group.
+    if (type === 'radio' || multi) {
       // Radio button group or checkbox group
       const inputType = type === 'radio' ? 'radio' : 'checkbox';
       const groupName = baseId; // Use baseId as group name for radio buttons
@@ -588,87 +590,27 @@ export class InputEventHandler {
         element = input;
         this.logger.log(`[InputEventHandler] Rendered ${event} ${inputType} (input-group mode, no wrapper): (id=${baseId}, value=${optionVal})`);
       } else {
-        // NORMAL MODE: Standard radio/checkbox group with labels
-        // Create container
-        const container = document.createElement('div');
-        container.className = elementClasses ? `${elementClasses} zForm-check-group` : 'zForm-check-group';
+        // NORMAL MODE — canonical option group (SSOT: choice_group.createChoiceGroup),
+        // shared verbatim with zDialog form fields. Option strings still carry
+        // [default]/[disabled] flags; defaults may be a scalar or a list (multi).
+        const container = createChoiceGroup({
+          name: groupName,
+          options,
+          inputType,
+          defaultValue,
+          required,
+          disabled,
+          prompt: prompt || null,
+          groupClass: elementClasses
+        });
         if (eventData._zStyle) {
           const cssString = convertStyleToString(eventData._zStyle, this.logger);
           if (cssString) {
             container.setAttribute('style', cssString);
           }
         }
-        
-        // Create prompt label if exists (fieldset legend style)
-        if (prompt) {
-          const promptLabel = document.createElement('div');
-          promptLabel.textContent = prompt;
-          promptLabel.className = 'zLabel';
-          appendRequiredMark(promptLabel, required);
-          container.appendChild(promptLabel);
-        }
-        
-        // Create radio/checkbox inputs for each option
-        options.forEach((optionValue, index) => {
-          const optionId = `${baseId}_${index}`;
-          
-          // Parse option string for modifiers or extract from object
-          let optionLabel, optionVal, optionDisabled, optionIsDefault;
-          if (typeof optionValue === 'string') {
-            const parsed = this._parseOptionString(optionValue);
-            optionLabel = parsed.cleanLabel;
-            optionVal = parsed.cleanLabel;
-            optionDisabled = parsed.isDisabled;
-            optionIsDefault = parsed.isDefault;
-          } else {
-            optionLabel = optionValue.label || optionValue.value || '';
-            optionVal = optionValue.value || optionValue.label || '';
-            optionDisabled = optionValue.disabled || false;
-            optionIsDefault = false;
-          }
-          
-          // Create wrapper div for input + label (canonical .zForm-check row)
-          const rowDisabled = disabled || optionDisabled;
-          const optionWrapper = document.createElement('div');
-          optionWrapper.className = rowDisabled ? 'zForm-check zForm-check-disabled zmb-2' : 'zForm-check zmb-2';
-          
-          // Create input with per-option disabled state
-          const input = createInput(inputType, {
-            id: optionId,
-            name: groupName,
-            value: optionVal,
-            disabled: rowDisabled, // Component-level OR per-option disabled
-            required: required && index === 0, // Only first input has required
-            class: 'zForm-check-input'
-          });
-          
-          // Set checked state based on default value
-          if (defaultValue !== null) {
-            if (multi && Array.isArray(defaultValue)) {
-              // Multi-select (checkbox): check if option is in default array
-              if (defaultValue.includes(optionVal) || defaultValue.includes(optionLabel)) {
-                input.checked = true;
-              }
-            } else {
-              // Single-select (radio): check if option matches default
-              if (optionVal === defaultValue || optionLabel === defaultValue) {
-                input.checked = true;
-              }
-            }
-          }
-          
-          // Create label
-          const label = createLabel(optionId, { class: 'zForm-check-label' });
-          label.textContent = optionLabel;
-          
-          // Assemble option
-          optionWrapper.appendChild(input);
-          optionWrapper.appendChild(label);
-          container.appendChild(optionWrapper);
-        });
-        
         element = container;
-        this.logger.log(`[InputEventHandler] Rendered ${event} ${inputType} group (id=${baseId}, options=${options.length})`);
+        this.logger.log(`[InputEventHandler] Rendered ${event} ${inputType} group (id=${baseId}, options=${options.length}) [choice_group SSOT]`);
       }
     } else {
       // Dropdown select (default behavior)
@@ -705,11 +647,11 @@ export class InputEventHandler {
       if (required) {
         selectElement.required = true;
       }
-      
-      if (multi) {
-        selectElement.multiple = true;
-      }
-      
+
+      // NOTE: `multi` never reaches this dropdown branch — it is routed to the
+      // canonical checkbox group above (choice_group SSOT), so no <select multiple>
+      // listbox is ever produced.
+
       // Support size attribute (number of visible options)
       const size = eventData.size || null;
       if (size !== null) {

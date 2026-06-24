@@ -32,8 +32,10 @@
 
 // Layer 2: Utilities
 import { createElement, clearElement } from '../../../zSys/dom/dom_utils.js';
+import { createChoiceGroup } from './choice_group.js';
 import { withErrorBoundary } from '../../../zSys/validation/error_boundary.js';
 import { convertZPathToURL } from '../primitives/link_primitives.js';
+import { resultSignalFrom } from '../feedback/zfunc_signal.js';
 
 // Layer 0: Primitives
 import {
@@ -307,12 +309,14 @@ export class FormRenderer {
           table: formContext.table
         });
 
+        // Same result-envelope SSOT as the main submit + zFunc paths; button
+        // state still keyed off response.success.
+        const sig = resultSignalFrom(response, { ackOnVoid: true, ackText: 'Action completed.' });
+        await this._emitSignal(container, sig.level, sig.text);
         if (response.success) {
-          await this._emitSignal(container, 'success', response.message || 'Action completed.');
           btn.textContent = 'Done';
           this.formContexts.delete(dialogId);
         } else {
-          await this._emitSignal(container, 'error', response.message || 'Action failed.');
           btn.disabled = false;
           btn.textContent = btnLabel;
         }
@@ -372,6 +376,13 @@ export class FormRenderer {
       return this._createCheckGroup(fieldName, fieldType, fieldLabel, required, fieldDef);
     }
 
+    // select + multi → a checkbox group (browser multi-select parity with zSelect;
+    // the zCLI side multi-picks the same options). Submitted as a list.
+    if (fieldType === 'select' && fieldDef && typeof fieldDef === 'object'
+        && (fieldDef.multi === true || fieldDef.multi === 'true')) {
+      return this._createCheckGroup(fieldName, 'checkbox', fieldLabel, required, fieldDef);
+    }
+
     // Field group container
     const fieldGroup = createElement('div', ['zmb-3']);
 
@@ -398,15 +409,14 @@ export class FormRenderer {
   _createCheckGroup(fieldName, fieldType, fieldLabel, required, fieldDef) {
     const isRadio = fieldType === 'radio';
     const authorOptions = (fieldDef && typeof fieldDef === 'object' && Array.isArray(fieldDef.options));
-    const defaultOpts = isRadio ? ['true', 'false'] : ['true'];
-    const options = authorOptions ? fieldDef.options : defaultOpts;
     const defaultVal = (fieldDef && typeof fieldDef === 'object' && fieldDef.default != null)
       ? String(fieldDef.default) : null;
 
     // Single boolean checkbox (no author options) → one box whose inline label IS
     // the field label, like a consent toggle. Checked submits 'true'; unchecked
     // submits nothing, so _handleSubmit injects 'false' for zCLI parity (the zCLI
-    // picker always returns 'true'/'false').
+    // picker always returns 'true'/'false'). This shape is unique to a dialog
+    // field, so it stays local; everything else delegates to the choice_group SSOT.
     if (!isRadio && !authorOptions) {
       const row = createElement('div', ['zForm-check', 'zmb-3']);
       const optId = `${fieldName}_0`;
@@ -422,31 +432,23 @@ export class FormRenderer {
       return row;
     }
 
-    const group = createElement('div', ['zForm-check-group', 'zmb-3']);
+    // Radio set OR multi/checkbox group → canonical SSOT (shared with the
+    // standalone zSelect control via choice_group.createChoiceGroup). A bare
+    // yes/no radio (no author options) keeps capitalised True/False labels.
+    const options = authorOptions
+      ? fieldDef.options
+      : [{ label: 'True', value: 'true' }, { label: 'False', value: 'false' }];
 
-    const heading = createElement('div', ['zLabel']);
-    heading.textContent = this._formatLabel(fieldLabel);
-    appendRequiredMark(heading, required);
-    group.appendChild(heading);
-
-    options.forEach((opt, i) => {
-      const optId = `${fieldName}_${i}`;
-      const row = createElement('div', ['zForm-check', 'zmb-2']);
-      const control = createInput(isRadio ? 'radio' : 'checkbox', {
-        id: optId,
-        name: fieldName,
-        value: opt,
-        class: 'zForm-check-input'
-      });
-      if (String(opt) === defaultVal) control.checked = true;
-      const optLabel = createLabel(optId, { class: 'zForm-check-label' });
-      optLabel.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
-      row.appendChild(control);
-      row.appendChild(optLabel);
-      group.appendChild(row);
+    return createChoiceGroup({
+      name: fieldName,
+      options,
+      inputType: isRadio ? 'radio' : 'checkbox',
+      defaultValue: (fieldDef && typeof fieldDef === 'object') ? fieldDef.default : null,
+      required,
+      disabled: !!(fieldDef && typeof fieldDef === 'object' && fieldDef.disabled === true),
+      prompt: this._formatLabel(fieldLabel),
+      groupClass: ''
     });
-
-    return group;
   }
 
   /**
@@ -716,6 +718,17 @@ export class FormRenderer {
       data[key] = value;
     }
 
+    // Multi-select (select + multi → checkbox group) submits repeated keys, which
+    // the entries loop above collapses to the last one. Re-collect them as a LIST
+    // (possibly empty when nothing is checked) so the plugin gets the same list
+    // the zCLI multi-picker returns.
+    (formContext.fields || []).forEach(f => {
+      if (!f || typeof f !== 'object') return;
+      if (f.type !== 'select' || !(f.multi === true || f.multi === 'true')) return;
+      const key = f.zConv || f.name || f.field;
+      data[key] = formData.getAll(key);
+    });
+
     // Affix parity (SSOT): zCLI bakes prefix/suffix into the value (prefix +
     // input + suffix). The browser shows them as cosmetic .zInputGroup chips, so
     // re-join them here so the plugin receives the same zConv string on both
@@ -776,7 +789,9 @@ export class FormRenderer {
       if (response.success) {
         this._handleSuccess(formElement, response);
       } else {
-        this._handleError(formElement, response);
+        // Business failure (ZResult.failure / success:false) — an EXPECTED outcome,
+        // not a system error. Surface it inline; log at info, never error.
+        this._handleFailure(formElement, response);
       }
 
       // Integration seam: announce the outcome on the DOM so client plugins
@@ -810,7 +825,8 @@ export class FormRenderer {
     // Terminal states first — navigate/reload leave this view, so the form and
     // its context are done. Fire the signal, drop context, then hand off.
     if (response.navigate) {
-      this._emitSignal(formElement, 'success', response.message || 'Done.');
+      const navSig = resultSignalFrom(response, { ackOnVoid: true, ackText: 'Done.' });
+      this._emitSignal(formElement, navSig.level, navSig.text);
       this._dropFormContext(formElement);
       const routePath = convertZPathToURL(response.navigate);
       this.logger.log('[FormRenderer] Server requested navigation to:', routePath);
@@ -838,7 +854,8 @@ export class FormRenderer {
     }
 
     if (response.reload === true) {
-      this._emitSignal(formElement, 'success', response.message || 'Done.');
+      const reloadSig = resultSignalFrom(response, { ackOnVoid: true, ackText: 'Done.' });
+      this._emitSignal(formElement, reloadSig.level, reloadSig.text);
       this._dropFormContext(formElement);
       this.logger.log('[FormRenderer] Server requested page reload for RBAC sidebar refresh');
       setTimeout(() => { window.location.reload(); }, 800);
@@ -848,7 +865,10 @@ export class FormRenderer {
     // Plain success — the form STAYS (like a real website): emit a success
     // signal below the actions and reset fields to their defaults so the user
     // can submit again. The form context is kept for the next submit.
-    this._emitSignal(formElement, 'success', response.message || 'Form submitted successfully.');
+    // Text comes from the result-envelope SSOT (the same decision a zFunc uses);
+    // a void return still acknowledges, since a submit is an explicit transaction.
+    const sig = resultSignalFrom(response, { ackOnVoid: true, ackText: 'Form submitted successfully.' });
+    this._emitSignal(formElement, sig.level, sig.text);
     formElement.reset();
 
     // Refresh navbar (e.g. RBAC change) without leaving the form.
@@ -860,18 +880,33 @@ export class FormRenderer {
   }
 
   /**
-   * Handle form submission error — surface it as an inline error signal,
-   * keeping the form (and the user's input) in place.
+   * Handle a BUSINESS failure — the action returned ZResult.failure / success:false.
+   * This is an expected, designed outcome (a rule said no, a name is taken), NOT a
+   * system error: log at info and surface it inline, keeping the form + input in place.
    * @private
    * @param {HTMLFormElement} formElement - Form element
-   * @param {Object} response - Server error response
+   * @param {Object} response - Server failure response (success:false)
+   */
+  _handleFailure(formElement, response) {
+    this.logger.log('[FormRenderer] Form returned a failure result:', response);
+    // Decision via the result-envelope SSOT (success:false → error level; error/
+    // errors[]/message resolved in one place, shared with zFunc). Inline, no flush.
+    const sig = resultSignalFrom(response, { ackOnVoid: true, ackText: 'Validation failed. Please check your input.' });
+    this._emitSignal(formElement, sig.level, sig.text);
+  }
+
+  /**
+   * Handle a TRANSPORT/exception error — the submit itself threw (WS dropped, the
+   * plugin crashed). This is a genuine system error: log at error level, then surface
+   * it inline, keeping the form (and the user's input) in place.
+   * @private
+   * @param {HTMLFormElement} formElement - Form element
+   * @param {Object} response - Synthesized error response
    */
   _handleError(formElement, response) {
     this.logger.error('[FormRenderer] Form submission failed:', response);
-    const messages = (Array.isArray(response.errors) && response.errors.length)
-      ? response.errors
-      : [response.message || 'Validation failed. Please check your input.'];
-    this._emitSignal(formElement, 'error', messages.join(' · '));
+    const sig = resultSignalFrom(response, { ackOnVoid: true, ackText: 'Validation failed. Please check your input.' });
+    this._emitSignal(formElement, sig.level, sig.text);
   }
 
   /**
