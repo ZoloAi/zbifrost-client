@@ -493,6 +493,155 @@ export class NavigationRenderer {
   }
 
   /**
+   * Crumb navigator factory — a crumb click is a BULK-BACK: zLink re-enters the
+   * scope and, because that scope is already on the session trail, the server's
+   * execute_walker reconciliation POPS every scope opened after it (the lone
+   * POP_TO — mirrors zCLI handle_zCrumb_back). The OMEGA (an in-scope section
+   * anchor) rides as zPsi so a section crumb lands ON its section after the page
+   * repaints; a bare scope crumb (omega=null) lands at the top. zCLI ignores the
+   * omega (no viewport) — same intent, mode-aware skin.
+   * @param {string} zPath  scope zPath to bulk-back to
+   * @param {string|null} omega  in-scope section key to scroll to (Bifrost only)
+   * @returns {(e:Event)=>Promise<void>}
+   */
+  _zLinkNav(zPath, omega = null) {
+    return async (e) => {
+      e.preventDefault();
+      if (!zPath || !this.client) return;
+      this.logger.log(`[Breadcrumbs] zCrumb bulk-back → ${zPath}${omega ? ` (omega: ${omega})` : ''}`);
+      try {
+        if (typeof this.client.zLink === 'function') {
+          await this.client.zLink(zPath, null, omega);
+        } else if (this.client.navigationManager) {
+          const url = this.client._zLinkPathToUrl?.(zPath) || zPath;
+          await this.client.navigationManager.navigateToRoute(url);
+        }
+      } catch (err) {
+        this.logger.error('[Breadcrumbs] zCrumb bulk-back failed:', err);
+      }
+    };
+  }
+
+  /**
+   * Route navigator factory — structure crumbs use real URL routes.
+   * @param {string} href
+   * @returns {(e:Event)=>void}
+   */
+  _routeNav(href) {
+    return (e) => {
+      e.preventDefault();
+      if (this.client?.navigationManager) {
+        this.client.navigationManager.navigateToRoute(href);
+      } else {
+        window.location.href = href;
+      }
+    };
+  }
+
+  /**
+   * THE one breadcrumb renderer — every crumb type (session, manual, structure,
+   * static) funnels through here so they share ONE style, verbatim. Produces the
+   * canonical ribbon: a single continuous rail (no container box) that flows and
+   * WRAPS PER ITEM like text and ends exactly after the last crumb. Crumbs
+   * flex-grow to justify each wrapped row to a common right edge; an invisible
+   * .zCrumb-fill soaks the LAST row's slack so the final line stays natural. The
+   * current crumb is the accent fill; first crumb rounds the left end, last the
+   * right. Roles: lead (bold), om (link), ev (plain). Optional .zT1 scope tint.
+   *
+   * @param {Array<{text:string, role:('lead'|'om'|'ev'), tint?:boolean,
+   *                active?:boolean, nav?:(e:Event)=>any}>} crumbs
+   * @param {string} [aria='breadcrumb']
+   * @returns {HTMLElement}
+   */
+  _buildRibbon(crumbs, aria = 'breadcrumb') {
+    const nav  = createNav({ 'aria-label': aria, class: 'zmb-3' });
+    const rail = createDiv({ class: 'zBreadcrumb zBreadcrumb-echo' });
+    let last = null;
+
+    crumbs.forEach((c) => {
+      const role = c.role === 'lead' ? 'zCrumb-lead'
+                 : c.role === 'ev'   ? 'zCrumb-ev'
+                 :                     'zCrumb-om';
+      const cls = `zCrumb ${role}${c.tint ? ' zT1' : ''}${c.active ? ' zCrumb-on' : ''}`;
+      let el;
+      if (c.nav) {
+        el = createLink('#', { class: cls });
+        el.onclick = c.nav;
+      } else {
+        el = createSpan({ class: cls });
+      }
+      el.textContent = this._formatLabel(c.text);
+      if (c.active) el.setAttribute('aria-current', 'page');
+      rail.appendChild(el);
+      last = el;
+    });
+
+    if (last) last.classList.add('zCrumb-end');   // round the ribbon's right end
+    rail.appendChild(createSpan({ class: 'zCrumb-fill' }));  // slack-eater
+    nav.appendChild(rail);
+    return nav;
+  }
+
+  /**
+   * Render the SESSION echo — a faithful, unfiltered mirror of zSession's crumb
+   * trail (the voodoo X-ray, NOT the curated page-chain). Each canonical hop
+   * ({label, path, keys}) lays down, in order: a bold scope LEAD (the $arrival
+   * marker if present, else the derived block label — a zLink back into the
+   * scope), then its chain of SECTION crumbs (zOmega anchors), then the terminal
+   * EVENT crumb (plain, the clicked verb). The fill TINT flips per scope to mark
+   * boundaries; the current scope (last hop) is the accent. Funnels through the
+   * shared _buildRibbon so it is byte-for-byte the same style as every other
+   * crumb type — zCLI↔Bifrost differ only in recorder density, never display.
+   *
+   * @param {Array<{label:string, path:string, keys:string[]}>} trail
+   * @returns {HTMLElement}
+   */
+  _renderSessionEcho(trail) {
+    const crumbs = [];
+
+    trail.forEach((hop, index) => {
+      const isLast = index === trail.length - 1;
+      const tint   = (index % 2 === 1);                    // alternate scope tint
+      const keys   = Array.isArray(hop.keys) ? hop.keys : [];
+
+      // lead: ALWAYS the clean block label. The α<block> arrival sentinel is an
+      // engine firewall, not a navigational crumb — the projector flags it via
+      // hop.arrival so the GUI drops it WITHOUT knowing the glyph (zCLI keeps the
+      // raw sentinel in its X-ray). Fall back to a glyph check only if an older
+      // server omits the flag.
+      const hasArrival = hop.arrival === true ||
+        (keys.length > 0 && /^[$\u03b1]/.test(String(keys[0])));
+      const leadText   = hop.label;
+      const chain      = hasArrival ? keys.slice(1) : keys;
+
+      crumbs.push({
+        text: leadText, role: 'lead', tint, active: isLast,
+        nav: (!isLast && hop.path) ? this._zLinkNav(hop.path) : null
+      });
+
+      // chain: sections (zOmega anchors) then the terminal event (plain). The
+      // clicked leaf is always the chain tail, so last = event, rest = sections.
+      // A section crumb carries ITS OWN key as the omega so the bulk-back lands
+      // on that section: zLink(hop.path, omega=k) → server pops to the scope and
+      // walker_complete scrolls to [data-zkey="k"]. Top-level sections resolve;
+      // deeper ancestry (Inner/Grid/Card) gracefully no-ops (no data-zkey) but
+      // still bulk-backs to the scope top — an honest, non-fatal landing.
+      chain.forEach((k, ki) => {
+        const isEvent = ki === chain.length - 1;
+        crumbs.push({
+          text: k,
+          role: isEvent ? 'ev' : 'om',
+          tint, active: isLast,
+          nav: (!isEvent && !isLast && hop.path) ? this._zLinkNav(hop.path, k) : null
+        });
+      });
+    });
+
+    this.logger.debug('[NavigationRenderer] Rendered session echo (%s scopes)', trail.length);
+    return this._buildRibbon(crumbs, 'session breadcrumb');
+  }
+
+  /**
    * Render breadcrumbs from a zCrumbs display event.
    *
    * Bifrost receives the raw expander display_data: {event, show, header, trail?, parent?}
@@ -533,18 +682,21 @@ export class NavigationRenderer {
       this.logger.debug('[NavigationRenderer] structure mode, zMenu=%s, trail:', zMenu, displayLabels);
 
     } else if (show === 'session') {
-      // Session crumbs: the server slims the live trail into a visit-ordered
-      // page-chain (crumbs.trail = [{label, path}, ...]) and attaches it to the
-      // chunk. Empty/absent → no history yet → render nothing (honest).
+      // Session crumbs are a FAITHFUL, UNFILTERED echo of zSession's trail (the
+      // raw zWizard state — innate engine output, mostly CLI + debugging). The
+      // server hands over canonical hops verbatim (crumbs.trail = [{label, path,
+      // keys}, ...]) — no slimming. The display never filters; density is the
+      // recorder's job. We render every scope as a stripe carrying its keys on a
+      // single wrapping rail (its own renderer, NOT the curated manual/structure
+      // page-chain). Empty/absent → no history yet → render nothing (honest).
       const crumbsData = eventData.crumbs || {};
       const trail = Array.isArray(crumbsData.trail) ? crumbsData.trail : [];
       if (!trail.length) {
         this.logger.debug('[NavigationRenderer] session mode: no crumbs data, skipping');
         return null;
       }
-      displayLabels = trail.map(t => (t && t.label != null) ? String(t.label) : '');
-      navPaths = trail.map(t => (t && t.path != null) ? String(t.path) : '');
-      this.logger.debug('[NavigationRenderer] session mode, labels:', displayLabels);
+      this.logger.debug('[NavigationRenderer] session echo, hops:', trail.map(t => t.label));
+      return this._renderSessionEcho(trail);
 
     } else if (show === 'static') {
       // Legacy: parent dot-path → display-only label trail
@@ -556,94 +708,34 @@ export class NavigationRenderer {
 
     if (!displayLabels || !displayLabels.length) return null;
 
-    // Build nav > ol.zBreadcrumb
-    const nav = createNav({ 'aria-label': `${show} breadcrumb`, class: 'zmb-3' });
-    const ol  = createList(true, { class: 'zBreadcrumb' });
-
-    displayLabels.forEach((label, index) => {
+    // Build the crumb descriptors, then funnel through the ONE shared ribbon
+    // renderer so manual / structure / static share the exact same style as the
+    // session echo. Only the per-crumb nav (zLink vs route vs inert) differs.
+    const crumbs = displayLabels.map((label, index) => {
       const isLast = index === displayLabels.length - 1;
-      const li = createListItem({
-        class: isLast ? 'zBreadcrumb-item zActive' : 'zBreadcrumb-item'
-      });
-
       if (isLast) {
-        li.setAttribute('aria-current', 'page');
-        li.textContent = this._formatLabel(label);
-      } else if ((show === 'manual' || show === 'session') && navPaths && navPaths[index]) {
-        // manual/session ancestors: clickable zLink. manual honors zMenu; session
-        // ancestors are always navigable (they ARE the live navigation chain).
-        const zPath = navPaths[index];
-        if (zMenu || show === 'session') {
-          const a = createLink('#', {});
-          a.textContent = this._formatLabel(label);
-          a.onclick = async (e) => {
-            e.preventDefault();
-            this.logger.log(`[Breadcrumbs] zLink → ${zPath}`);
-            if (this.client) {
-              try {
-                if (typeof this.client.zLink === 'function') {
-                  await this.client.zLink(zPath);
-                } else if (this.client.navigationManager) {
-                  const url = this.client._zLinkPathToUrl?.(zPath) || zPath;
-                  await this.client.navigationManager.navigateToRoute(url);
-                }
-              } catch (err) {
-                this.logger.error('[Breadcrumbs] zLink failed:', err);
-              }
-            }
-          };
-          li.appendChild(a);
-        } else {
-          // disabled link — same visual as zMenu:true but non-clickable
-          const a = createLink('#', {
-            'aria-disabled': 'true',
-            tabindex: '-1'
-          });
-          a.style.pointerEvents = 'none';
-          a.style.cursor = 'default';
-          a.textContent = this._formatLabel(label);
-          li.appendChild(a);
-        }
-      } else if (show === 'structure' && structureSegs) {
-        // structure ancestors: cumulative URL path from folder segments
-        const href = '/' + structureSegs.slice(0, index + 1).join('/');
-        if (zMenu) {
-          // zMenu: true → real navigable link
-          const a = createLink(href, {});
-          a.textContent = this._formatLabel(label);
-          a.onclick = (e) => {
-            e.preventDefault();
-            if (this.client?.navigationManager) {
-              this.client.navigationManager.navigateToRoute(href);
-            } else {
-              window.location.href = href;
-            }
-          };
-          li.appendChild(a);
-        } else {
-          // zMenu: false (default) → disabled link (same visual, non-clickable)
-          const a = createLink(href, {
-            'aria-disabled': 'true',
-            tabindex: '-1'
-          });
-          a.style.pointerEvents = 'none';
-          a.style.cursor = 'default';
-          a.textContent = this._formatLabel(label);
-          li.appendChild(a);
-        }
-      } else {
-        // session / static ancestors: display-only span
-        const span = createSpan({ class: 'zText-muted' });
-        span.textContent = this._formatLabel(label);
-        li.appendChild(span);
+        // current page — the accent end, never navigable
+        return { text: label, role: 'lead', active: true, nav: null };
       }
-
-      ol.appendChild(li);
+      if (show === 'manual' && navPaths && navPaths[index]) {
+        // manual ancestors: clickable zLink only when zMenu opts in
+        return zMenu
+          ? { text: label, role: 'om', nav: this._zLinkNav(navPaths[index]) }
+          : { text: label, role: 'ev', nav: null };
+      }
+      if (show === 'structure' && structureSegs) {
+        // structure ancestors: cumulative URL route, clickable only with zMenu
+        const href = '/' + structureSegs.slice(0, index + 1).join('/');
+        return zMenu
+          ? { text: label, role: 'om', nav: this._routeNav(href) }
+          : { text: label, role: 'ev', nav: null };
+      }
+      // static (legacy) ancestors: display-only
+      return { text: label, role: 'ev', nav: null };
     });
 
-    nav.appendChild(ol);
     this.logger.debug('[NavigationRenderer] Rendered breadcrumbs (%s mode, %s items)', show, displayLabels.length);
-    return nav;
+    return this._buildRibbon(crumbs, `${show} breadcrumb`);
   }
 
   /**

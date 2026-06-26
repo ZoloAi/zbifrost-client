@@ -400,10 +400,15 @@ function _setupInternalLink(link, href, target, windowFeatures, client, logger) 
       // Plain new tab (no sizing)
       _openInNewWindow(navigationPath, {}, client, logger, false);
     } else {
-      // Navigate in current tab via client-side routing
+      // Navigate in current tab via client-side routing. Carry the click-origin
+      // ancestry chain (SSOT, verb-agnostic) so the server records WHERE this
+      // zURL was clicked onto the departing scope — same field zLink/zDelta use.
+      // This was the gap: plain zURL nav recorded nothing, so the whole crumb
+      // trail came back as empty scopes.
       if (client && typeof client._navigateToRoute === 'function') {
-        logger.debug('[LinkPrimitives] Calling client._navigateToRoute:', navigationPath);
-        client._navigateToRoute(navigationPath);
+        const origin = client.navOriginKey ? client.navOriginKey(link) : null;
+        logger.debug('[LinkPrimitives] Calling client._navigateToRoute:', navigationPath, 'origin:', origin);
+        client._navigateToRoute(navigationPath, { zOrigin: origin });
       } else {
         logger.error('[LinkPrimitives] [ERROR] BifrostClient._navigateToRoute() not available:', {
           hasClient: !!client,

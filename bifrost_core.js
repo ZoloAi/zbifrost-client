@@ -1384,27 +1384,35 @@ class BifrostCore {
     }
 
     /**
-     * SSOT: resolve the top-level section key a click originated FROM.
-     * Walks up the DOM from the clicked element collecting [data-zkey] ancestors
-     * and returns the OUTERMOST one within the zVaF root — i.e. the departing
-     * block's top-level key (e.g. "ZDelta_Section"). Every nav verb (zLink,
-     * zDelta, …) feeds this single origin into its walker request so the server
-     * records the click-crumb verb-agnostically (mirrors zCLI on_continue, timed
-     * to the click). Returns null when there is no section ancestor (navbar/root).
+     * SSOT: resolve the ORDERED ancestry chain a click originated FROM.
+     * Walks up the DOM from the clicked element collecting EVERY [data-zkey]
+     * ancestor within the zVaF root, then returns them OUTER→INNER — i.e. the
+     * departing block's path down to the clicked leaf, e.g.
+     * ["Events_Section", "Inner", "Grid", "Navigation_Card", "zURL"].
+     *
+     * This is Bifrost's spatial analog of zCLI's temporal traversal: zCLI walks
+     * keys in TIME and records each; chunk-rendered Bifrost can't walk, so the
+     * faithful record is the SPACE-path of what was clicked. Every nav verb
+     * (zLink, zDelta, zURL, …) feeds this chain into its walker request so the
+     * server stamps the full click-crumb onto the departing scope verbatim
+     * (airtight session echo). Returns null when there is no [data-zkey] ancestor
+     * (navbar / root) so falsy-guards at call sites still hold.
      * @param {HTMLElement} el - the clicked element
-     * @returns {string|null}
+     * @returns {string[]|null}
      */
     navOriginKey(el) {
       const root = this._zVaFElement || null;
-      let top = null;
+      const chain = [];
       let node = el;
       while (node && node !== root) {
         if (node.getAttribute && typeof node.hasAttribute === 'function' && node.hasAttribute('data-zkey')) {
-          top = node.getAttribute('data-zkey');
+          chain.push(node.getAttribute('data-zkey'));
         }
         node = node.parentElement;
       }
-      return top;
+      // chain is inner→outer (leaf first); reverse to outer→inner so the trail
+      // reads block-top → clicked-leaf, matching append order and zCLI density.
+      return chain.length ? chain.reverse() : null;
     }
 
     /**
@@ -1415,24 +1423,37 @@ class BifrostCore {
      * @returns {Promise<any>}
      */
     async zLink(path, originKey = null, zPsi = null) {
+      // A zPsi (the crumb OMEGA — an in-scope section anchor) rides along as a
+      // pending anchor the walker_complete handler scrolls to after paint. Set it
+      // FIRST, before the route resolves, so it survives BOTH paths: the
+      // client-resolved hop AND the '@.zViews.*' server fallback (a session-crumb
+      // bulk-back lands via navigate_back → _navigateToRoute, which never touches
+      // this field, so the anchor persists until walker_complete consumes it).
+      // Always (re)set — clear a stale anchor when this hop has no zPsi, else a
+      // prior zPsi click leaks into a plain link and mis-scrolls it.
+      this._pendingScrollAnchor = zPsi ? String(zPsi) : null;
       // Dict-form buttons hand us a server-resolved route ('/zStack/…'); the
-      // string form hands an '@.UI.…' zPath. Honour both. A zPsi rides along as
-      // a pending anchor the walker_complete handler scrolls to after paint.
+      // string form hands an '@.UI.…' zPath. Honour both.
       const url = (typeof path === 'string' && path.startsWith('/'))
         ? path
         : this._zLinkPathToUrl(path);
       if (url) {
-        // Always (re)set — clear a stale anchor when this hop has no zPsi, else a
-        // prior zPsi click leaks into a plain link and mis-scrolls it.
-        this._pendingScrollAnchor = zPsi ? String(zPsi) : null;
         this.logger.log(`[zLink] Navigating to: ${url} (from: ${path}, zPsi: ${zPsi})`);
         return this._navigateToRoute(url, { zOrigin: originKey });
       }
-      // Fallback: unknown path format — pass to backend
-      return this.send({
+      // Fallback: a path format we can't resolve client-side (e.g. an
+      // '@.zViews.*' crumb zPath that is not an '@.UI.*' route) — let the SERVER
+      // resolve and navigate. FIRE-AND-FORGET: the server dispatches the zLink,
+      // resolves it to a route, and streams back a `navigate_back` instruction
+      // that MessageHandler acts on directly (it never resolves a reply). Using
+      // send() here would register a _requestId callback the server never
+      // answers for a deferred navigate — it leaks and rejects with
+      // "Request timeout after 30000ms". Same reasoning as zDelta/zBack; see
+      // _sendWalker. (This is the path a manual/structure crumb click takes.)
+      this._sendWalker({
         event: 'dispatch',
         zKey: 'zLink',
-        zHorizontal: `zLink(${path})`
+        zHorizontal: `zLink(${path})`,
       });
     }
 
@@ -1584,11 +1605,14 @@ class BifrostCore {
     }
 
     /**
-     * Fire-and-forget walker send. execute_walker responses are streamed as chunks
-     * (handled in MessageHandler before response correlation), never a single
-     * _requestId-correlated reply — so we must NOT register a send() callback or it
-     * leaks forever and trips the "response without _requestId" guard. Mirrors the
-     * raw-send pattern already used by autoRequest and ClientNavigationManager.
+     * Fire-and-forget raw send — the SSOT for any intent the server answers with
+     * STREAMED instructions rather than a single _requestId-correlated reply:
+     * execute_walker (chunks) and the deferred-navigate dispatch fallback (a
+     * `navigate_back` event). Both are handled in MessageHandler before response
+     * correlation, so we must NOT register a send() callback or it leaks forever,
+     * rejects with "Request timeout after 30000ms", and trips the "response
+     * without _requestId" guard. Mirrors the raw-send pattern already used by
+     * autoRequest and ClientNavigationManager.
      * Attaches the session id (matching MessageHandler.send) so server-side session
      * sync still works for routeless hops.
      * @param {Object} payload - execute_walker payload
