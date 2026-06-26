@@ -1039,6 +1039,75 @@ zNavBar .zNavbar {
   border-radius: var(--zcrumb-radius);
 }
 
+/* ─── Session echo ──────────────────────────────────────────────────────────
+   `show: session` is the raw, UNFILTERED mirror of zSession's crumb trail — the
+   voodoo X-ray, NOT the curated page-chain. It is ONE continuous ribbon (no
+   container box) that flows and WRAPS PER ITEM like text and ends exactly after
+   the current scope — nothing trails past it. Every crumb carries the rail fill
+   so the ribbon is seamless; the fill TINT flips per scope (.zT1) to mark the
+   boundary. Crumbs flex-grow so each wrapped row justifies to a common right
+   edge; a single invisible .zCrumb-fill soaks the LAST row's slack so the final
+   line stays natural (left, no stretch). The current scope is the accent fill
+   (canonical active); the first crumb rounds the left end, the last the right.
+   Theme-agnostic: every colour is a currentColor mix (works light + dark). */
+.zBreadcrumb-echo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  width: auto;
+  margin: 0;
+  padding: 0;                              /* no rail box — crumbs ARE the ribbon */
+  border: 0;
+  border-radius: 0;
+  background: none;
+  row-gap: 0.28rem;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+.zBreadcrumb-echo .zCrumb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;                          /* grow to justify each wrapped row */
+  padding: 0.34rem 0.5rem;
+  white-space: nowrap;
+  text-decoration: none;
+  color: color-mix(in srgb, currentColor 54%, transparent);
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+/* alternating scope tint — the boundary marker, washed over the base fill */
+.zBreadcrumb-echo .zCrumb.zT1 {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+/* slack-eater: only ever lands on the last row, absorbs its free space */
+.zBreadcrumb-echo .zCrumb-fill { flex: 1000 1 0; background: none; }
+/* rounded ribbon ends */
+.zBreadcrumb-echo .zCrumb:first-child { border-radius: 999px 0 0 999px; padding-left: 0.8rem; }
+.zBreadcrumb-echo .zCrumb-end         { border-radius: 0 999px 999px 0; padding-right: 0.8rem; }
+/* scope lead — the block / $arrival sentinel, zLink back into the scope */
+.zBreadcrumb-echo .zCrumb-lead {
+  font-weight: 680;
+  color: color-mix(in srgb, currentColor 80%, transparent);
+}
+.zBreadcrumb-echo .zCrumb-lead:hover { color: currentColor; }
+/* SECTION crumb — zOmega anchor: jump to that section within the scope */
+.zBreadcrumb-echo .zCrumb-om { cursor: pointer; }
+.zBreadcrumb-echo .zCrumb-om:hover { color: var(--color-info, #5CA9FF); }
+/* EVENT crumb — terminal action, plain + quiet, NOT clickable */
+.zBreadcrumb-echo .zCrumb-ev {
+  color: color-mix(in srgb, currentColor 34%, transparent);
+}
+/* CURRENT scope — accent fill (canonical active). NOTE: selector carries BOTH
+   .zCrumb and .zCrumb-on so it ties the scope-tint rule (.zCrumb.zT1) on
+   specificity and, coming later, WINS — otherwise an odd-indexed current scope
+   keeps its tint and the blue accent never paints. */
+.zBreadcrumb-echo .zCrumb.zCrumb-on {
+  background: var(--zcrumb-active-bg, var(--color-info, #5CA9FF));
+  color: var(--zcrumb-active-ink, #fff);
+}
+.zBreadcrumb-echo .zCrumb.zCrumb-on.zCrumb-lead,
+.zBreadcrumb-echo .zCrumb.zCrumb-on.zCrumb-ev { color: var(--zcrumb-active-ink, #fff); }
+
 /* ─── 2. Grid ──────────────────────────────────────────────────────────────── */
 
 .zRow {
