@@ -132,10 +132,13 @@ a { text-decoration: none; color: var(--color-link, #5CA9FF); }
  * (they own their own hover). */
 a:hover { text-decoration: underline; }
 
-zNavBar a,
+/* Class-based (.zNavbar, not the <zNavBar> element) so BOTH the global chrome bar
+   and the inline block bar opt their links out of the generic content-link color +
+   hover-underline identically — SSOT with the navbar rules below. */
+.zNavbar a,
 .zBtn { color: inherit; }
 
-zNavBar a:hover,
+.zNavbar a:hover,
 .zBtn:hover { text-decoration: none; }
 
 /* ─── Custom elements — must be block for layout ───────────────────────────── */
@@ -780,21 +783,44 @@ zNavBar {
   margin-inline: calc(50% - 50vw);
 }
 
-zNavBar .zNavbar {
+/* ─── zNavbar — SSOT base: BOTH the global chrome bar AND inline block bars ────
+   build_nav_html emits class="zNavbar zNavbar-<theme> <variant>" for BOTH bars,
+   so ALL shared look (surface, spacing, links) lives on .zNavbar exactly ONCE.
+   The two variants below add ONLY their framing delta — they must NEVER
+   re-declare color/spacing/link rules:
+     • <zNavBar> .zNavbar  → global chrome: bottom-border, no radius (full-bleed +
+                             sticky live on the <zNavBar> element above)
+     • .zNavbar-inblock    → in-content bar: inherits the whole base look; only
+                             neutralises host <li> spacing
+   Re-skin by overriding a --znav-* token, never by re-writing these rules. */
+
+.zNavbar {
+  /* tokens — the single source of truth. Both bars resolve from --page-bg/--text
+     (NOT currentColor) so an inline bar is pixel-identical to the chrome bar.
+     Override one of these (not the rules below) to re-skin every navbar at once. */
+  --znav-bg: color-mix(in srgb, var(--page-bg) 78%, transparent);
+  --znav-border: color-mix(in srgb, var(--text) 10%, transparent);
+  --znav-link-color: color-mix(in srgb, var(--text) 66%, transparent);
+  --znav-link-hover-color: var(--text);
+  --znav-link-hover-bg: color-mix(in srgb, var(--text) 8%, transparent);
+  --znav-link-active-bg: color-mix(in srgb, var(--color-secondary) 24%, transparent);
+  --znav-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
   display: flex;
   align-items: baseline;   /* brand + links share ONE text baseline — keeps all-caps
                               items (FAQ) and the larger brand from floating off-line */
   flex-wrap: wrap;
   padding: 0.75rem 1.5rem;
   color: var(--text);
-  background: var(--znav-bg, color-mix(in srgb, var(--page-bg) 78%, transparent));
-  border-bottom: 1px solid var(--znav-border, color-mix(in srgb, var(--text) 10%, transparent));
+  background: var(--znav-bg);
+  border: 1px solid var(--znav-border);
+  border-radius: 10px;
   -webkit-backdrop-filter: blur(16px) saturate(1.4);
   backdrop-filter: blur(16px) saturate(1.4);
-  font-family: var(--znav-font, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  font-family: var(--znav-font);
 }
 
-zNavBar .zNavbar-brand {
+.zNavbar .zNavbar-brand {
   font-size: 1.15rem;
   font-weight: 800;
   line-height: 1.1;
@@ -803,7 +829,7 @@ zNavBar .zNavbar-brand {
   color: var(--znav-brand-color, inherit);
 }
 
-zNavBar .zNavbar-toggler {
+.zNavbar .zNavbar-toggler {
   display: none;
   margin-left: auto;
   padding: 0.4rem 0.6rem;
@@ -811,18 +837,18 @@ zNavBar .zNavbar-toggler {
   line-height: 1;
   cursor: pointer;
   color: var(--znav-brand-color, inherit);
-  background: var(--znav-link-hover-bg, color-mix(in srgb, var(--text) 8%, transparent));
-  border: 1px solid var(--znav-border, color-mix(in srgb, var(--text) 14%, transparent));
+  background: var(--znav-link-hover-bg);
+  border: 1px solid var(--znav-border);
   border-radius: 6px;
 }
 
-zNavBar .zNavbar-collapse {
+.zNavbar .zNavbar-collapse {
   display: flex;
   align-items: baseline;
   flex: 1;
 }
 
-zNavBar .zNavbar-nav {
+.zNavbar .zNavbar-nav {
   display: flex;
   align-items: baseline;
   gap: 0.25rem;
@@ -831,27 +857,36 @@ zNavBar .zNavbar-nav {
   padding: 0;
 }
 
-zNavBar .zNav-item { position: relative; }
+.zNavbar .zNav-item { position: relative; }
 
-zNavBar .zNav-link {
+.zNavbar .zNav-link {
   display: block;
   padding: 0.45rem 0.85rem;
   font-size: 0.9rem;
   font-weight: 500;
   line-height: 1.1;
   border-radius: 8px;
-  color: var(--znav-link-color, color-mix(in srgb, var(--text) 66%, transparent));
+  color: var(--znav-link-color);
   transition: color 0.2s, background 0.2s;
 }
 
 /* hover = neutral --text wash; active = secondary-tinted pill (the pick) */
-zNavBar .zNav-link:hover {
-  color: var(--znav-link-hover-color, var(--text));
-  background: var(--znav-link-hover-bg, color-mix(in srgb, var(--text) 8%, transparent));
+.zNavbar .zNav-link:hover {
+  color: var(--znav-link-hover-color);
+  background: var(--znav-link-hover-bg);
 }
-zNavBar .zNav-link.active {
-  color: var(--znav-link-hover-color, inherit);
-  background: var(--znav-link-active-bg, color-mix(in srgb, var(--color-secondary) 24%, transparent));
+.zNavbar .zNav-link.active {
+  color: var(--znav-link-hover-color);
+  background: var(--znav-link-active-bg);
+}
+
+/* ─── Variant: global chrome (inside the sticky, full-bleed <zNavBar>) ─────────
+   Drop the card framing → the chrome bar is a full-width strip with one hairline
+   underneath. Width/sticky come from the <zNavBar> element rule above. */
+zNavBar .zNavbar {
+  border: 0;
+  border-bottom: 1px solid var(--znav-border);
+  border-radius: 0;
 }
 
 /* ─── zDropdown (navbar menus) — JS toggles .zShow ─────────────────────────── */
@@ -886,90 +921,32 @@ zNavBar .zNav-link.active {
   background: var(--znav-link-active-bg, color-mix(in srgb, var(--color-secondary) 18%, transparent));
 }
 
-/* ─── zNavbar-inblock — in-content navbar variant (same look, diff strategy) ───
-   The chrome navbar above is scoped to the <zNavBar> element. A BLOCK-LEVEL
-   navbar (rendered inline via the navbar_inline event — e.g. an in-page zPsi
-   table-of-contents) lives in normal page content, NOT inside <zNavBar>, so it
-   inherits none of those rules. Geometry differs (rounded card + full border vs
-   the global bar's full-bleed + bottom-border + sticky), AND the surface strategy
-   differs on purpose: this bar sits IN-FLOW inside a KNOWN host surface (a doc, a
-   .zCallout, a dark card), so it stays on the theme-adaptive currentColor frost —
-   it inherits the host ink and paints dark-on-light or light-on-dark to match its
-   container. (The global bar can't do that: it floats over scrolling content, so
-   it mixes its own surface from --page-bg instead — see the note up top.) Pulls
-   the same --znav-* tokens, so any re-skin is still single-sourced. */
-
-.zNavbar-inblock {
-  display: flex;
-  align-items: baseline;              /* shared baseline — SSOT with the global bar */
-  flex-wrap: wrap;
-  padding: 0.75rem 1.5rem;            /* mirror the global bar's proportions */
-  border-radius: 10px;                /* embedded in a card → rounded, not full-bleed */
-  background: var(--znav-bg, color-mix(in srgb, currentColor 5%, transparent));
-  border: 1px solid var(--znav-border, color-mix(in srgb, currentColor 10%, transparent));
-  backdrop-filter: blur(12px);
-  font-family: var(--znav-font, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
-}
-
-/* In-content TOC: always expanded, no hamburger. */
-.zNavbar-inblock .zNavbar-toggler { display: none; }
-
-.zNavbar-inblock .zNavbar-collapse {
-  display: flex;
-  align-items: baseline;
-  flex: 1;
-}
-
-.zNavbar-inblock .zNavbar-nav {
-  display: flex;
-  align-items: baseline;     /* one row, shared text baseline — mirror global bar */
-  gap: 0.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* Immune to host prose list styling: an inblock bar can be embedded inside
-   arbitrary content (e.g. a .zCallout whose `li { margin: 0 0 .5rem }` +
-   `li:last-child { margin-bottom: 0 }` would drop the last item off-baseline). */
-.zNavbar-inblock .zNav-item { position: relative; margin: 0; line-height: 1; }
-
-.zNavbar-inblock .zNav-link {
-  display: block;
-  padding: 0.45rem 0.85rem;           /* mirror global .zNav-link */
-  font-size: 0.9rem;
-  font-weight: 500;
-  line-height: 1.1;
-  border-radius: 8px;
-  color: var(--znav-link-color, color-mix(in srgb, currentColor 58%, transparent));
-  transition: color 0.2s, background 0.2s;
-}
-
-.zNavbar-inblock .zNav-link:hover {
-  color: var(--znav-link-hover-color, inherit);
-  background: var(--znav-link-hover-bg, color-mix(in srgb, currentColor 8%, transparent));
-}
-.zNavbar-inblock .zNav-link.active {
-  color: var(--znav-link-hover-color, inherit);
-  background: var(--znav-link-active-bg, color-mix(in srgb, var(--color-secondary) 24%, transparent));
-}
-
-/* The in-block bar's zSub dropdown inherits the unified .zDropdown-menu rules
-   above (theme-adaptive currentColor) — no light-specific override needed. */
+/* ─── Variant: in-content block bar (rendered inline, OUTSIDE <zNavBar>) ───────
+   A block-level navbar (navbar_inline event — e.g. an in-page table-of-contents)
+   lives in normal page content. It already carries .zNavbar, so it inherits the
+   ENTIRE base look above (rounded card, same --page-bg surface + link ink as the
+   chrome bar — that's the SSOT). Its ONLY delta is content-defence: neutralise
+   host prose <li> spacing so embedding inside a .zCallout (whose
+   `li { margin: 0 0 .5rem }` + `li:last-child { margin-bottom: 0 }`) can't drop
+   the last item off-baseline. Dropdowns reuse the shared .zDropdown-menu rules. */
+.zNavbar-inblock .zNav-item { margin: 0; line-height: 1; }
 
 /* ─── Mobile hamburger ─────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
-  zNavBar .zNavbar-toggler { display: block; }
-  zNavBar .zNavbar-collapse {
+  /* Scoped `zNavBar .zNavbar …` (specificity 0,2,1) so it outranks the SSOT base
+     `.zNavbar …` (0,2,0) — the hamburger only ever applies to the global chrome
+     bar; the inline bar stays one expanded row. */
+  zNavBar .zNavbar .zNavbar-toggler { display: block; }
+  zNavBar .zNavbar .zNavbar-collapse {
     flex-basis: 100%;
     flex-direction: column;
     align-items: flex-start;
   }
-  zNavBar .zNavbar-collapse:not(.zShow) { display: none; }
-  zNavBar .zNavbar-collapse.zShow { display: flex; padding: 0.5rem 0 0.75rem; }
-  zNavBar .zNavbar-nav { flex-direction: column; width: 100%; gap: 0; }
-  zNavBar .zNav-link { width: 100%; }
+  zNavBar .zNavbar .zNavbar-collapse:not(.zShow) { display: none; }
+  zNavBar .zNavbar .zNavbar-collapse.zShow { display: flex; padding: 0.5rem 0 0.75rem; }
+  zNavBar .zNavbar .zNavbar-nav { flex-direction: column; width: 100%; gap: 0; }
+  zNavBar .zNavbar .zNav-link { width: 100%; }
   .zDropdown-menu {
     position: static;
     box-shadow: none;

@@ -25,10 +25,10 @@
  *
  * Target Behavior:
  * - _self: Navigate in current tab (default)
- * - _blank: Open in new tab/window (auto-add security)
+ * - _blank: Open in a new tab (auto-add security)
+ * - window: Open a sized pop-up via window.open() — size from `window:` or defaults
  * - _parent: Navigate parent frame
  * - _top: Navigate top-level frame
- * - Custom window: Use window.open() with features
  *
  * Security:
  * - External _blank links: Auto-add rel="noopener noreferrer"
@@ -83,6 +83,7 @@ export { LINK_TYPE_INTERNAL_DELTA, LINK_TYPE_INTERNAL_ZPATH, LINK_TYPE_EXTERNAL,
 // Target constants
 const TARGET_BLANK = '_blank';
 const TARGET_SELF = '_self';
+const TARGET_WINDOW = 'window';  // sized pop-up via window.open (size from `window:` or defaults)
 
 // 
 // Helper: Fallback Link Type Detection (Frontend Safety)
@@ -392,12 +393,12 @@ function _setupInternalLink(link, href, target, windowFeatures, client, logger) 
 
     logger.debug('[LinkPrimitives] Link clicked:', navigationPath);
 
-    if (target === TARGET_BLANK) {
-      // Open in new tab/window using window.open()
-      const newWindow = _openInNewWindow(navigationPath, windowFeatures, client, logger);
-      if (newWindow) {
-        logger.debug(`[LinkPrimitives] Opened ${navigationPath} in new tab`);
-      }
+    if (target === TARGET_WINDOW) {
+      // Sized pop-up window — size from `window:` features (or defaults)
+      _openInNewWindow(navigationPath, windowFeatures, client, logger, true);
+    } else if (target === TARGET_BLANK) {
+      // Plain new tab (no sizing)
+      _openInNewWindow(navigationPath, {}, client, logger, false);
     } else {
       // Navigate in current tab via client-side routing
       if (client && typeof client._navigateToRoute === 'function') {
@@ -434,31 +435,30 @@ function _setupInternalLink(link, href, target, windowFeatures, client, logger) 
  */
 function _setupExternalLink(link, href, target, rel, windowFeatures, logger) {
   link.href = href;
-  link.target = target;
 
-  // External link setup (silent)
-
-  // Security: Auto-add rel="noopener noreferrer" for _blank
-  if (target === TARGET_BLANK && !rel) {
+  // Security: Auto-add rel="noopener noreferrer" when opening a new tab/window
+  if ((target === TARGET_BLANK || target === TARGET_WINDOW) && !rel) {
     link.rel = 'noopener noreferrer';
   } else if (rel) {
     link.rel = rel;
   }
 
-  // Custom window features (if specified)
-  if (target === TARGET_BLANK && Object.keys(windowFeatures).length > 0) {
+  // target: window → sized pop-up via window.open (size from `window:` or defaults)
+  if (target === TARGET_WINDOW) {
     link.addEventListener('click', (e) => {
       e.preventDefault();
-      logger.debug('[LinkPrimitives] External link clicked (custom window):', href);
-      _openInNewWindow(href, windowFeatures, null, logger);
+      logger.debug('[LinkPrimitives] External link clicked (window pop-up):', href);
+      _openInNewWindow(href, windowFeatures, null, logger, true);
     });
-  } else {
-    // Add click log for standard external links too
-    link.addEventListener('click', (_e) => {
-      logger.debug('[LinkPrimitives] External link clicked (native):', href);
-      // No preventDefault - let browser handle normally
-    });
+    return;
   }
+
+  // _self / _blank / _parent / _top → native <a> behavior (browser handles it)
+  link.target = target;
+  link.addEventListener('click', (_e) => {
+    logger.debug('[LinkPrimitives] External link clicked (native):', href);
+    // No preventDefault - let browser handle normally
+  });
 }
 
 // 
@@ -533,16 +533,17 @@ function _setupPlaceholderLink(link) {
  * @param {Object} logger - Logger instance
  * @returns {Window|null} New window reference or null if blocked
  */
-function _openInNewWindow(url, features = {}, client = null, logger = console) {
-  const { width = 800, height = 600, features: customFeatures = '' } = features;
-
-  // Calculate center position
-  const left = (screen.width - width) / 2;
-  const top = (screen.height - height) / 2;
-
-  // Build features string
-  const featuresStr = customFeatures ||
-    `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`;
+function _openInNewWindow(url, features = {}, client = null, logger = console, asPopup = false) {
+  // asPopup=false → a plain new tab (no features). asPopup=true → a sized
+  // pop-up window, using `window:` overrides when present, else our defaults.
+  let featuresStr = '';
+  if (asPopup) {
+    const { width = 800, height = 600, features: customFeatures = '' } = features;
+    const left = (screen.width - width) / 2;
+    const top = (screen.height - height) / 2;
+    featuresStr = customFeatures ||
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`;
+  }
 
   // For internal URLs with client, construct full URL
   let fullUrl = url;
