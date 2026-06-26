@@ -342,7 +342,7 @@ export class TextRenderer {
     // seam (the JS twin of zCLI parse_inline), then restore the stashed blocks.
     html = this._parseInline(html);
     blockPlaceholders.forEach((block, index) => {
-      html = html.replace(`___BLOCK_${index}___`, block);
+      html = html.replace(`___BLOCK_${index}___`, () => block);
     });
 
     // Line breaks: backslash + newline -> <br> (won't be stripped by YAML)
@@ -366,12 +366,12 @@ export class TextRenderer {
     
     // Restore preserved blocks
     preservedBlocks.forEach((block, index) => {
-      html = html.replace(`___PRESERVED_BLOCK_${index}___`, block);
+      html = html.replace(`___PRESERVED_BLOCK_${index}___`, () => block);
     });
     
     // Restore code block placeholders (from earlier protection against heading regex)
     codeBlockPlaceholders.forEach((block, index) => {
-      html = html.replace(`___CODE_BLOCK_${index}___`, block);
+      html = html.replace(`___CODE_BLOCK_${index}___`, () => block);
     });
 
     // Remove leading and trailing <br> tags (caused by newlines around lists/blocks)
@@ -440,8 +440,10 @@ export class TextRenderer {
       paragraphs = paragraphs.map(para => {
         let restored = para;
         inlineCodeBlocks.forEach((code, i) => {
-          // Restore with backticks - markdown parser will handle escaping
-          restored = restored.replace(`___INLINE_CODE_${i}___`, `\`${code}\``);
+          // Restore with backticks - markdown parser will handle escaping.
+          // Function replacer: the return is inserted verbatim, so a literal "$"
+          // in code (e.g. `$`, "$&", "$1") is never read as a replacement token.
+          restored = restored.replace(`___INLINE_CODE_${i}___`, () => `\`${code}\``);
         });
         return restored;
       });
@@ -504,8 +506,10 @@ export class TextRenderer {
       // Restore inline code before parsing markdown (keep literal, no decoding)
       let restoredContent = decodedContent;
       inlineCodeBlocks.forEach((code, i) => {
-        // Restore with backticks - markdown parser will handle escaping
-        restoredContent = restoredContent.replace(`___INLINE_CODE_${i}___`, `\`${code}\``);
+        // Restore with backticks - markdown parser will handle escaping.
+        // Function replacer: the return is inserted verbatim, so a literal "$"
+        // in code (e.g. `$`, "$&", "$1") is never read as a replacement token.
+        restoredContent = restoredContent.replace(`___INLINE_CODE_${i}___`, () => `\`${code}\``);
       });
       
       const parsedMarkdown = this._parseMarkdown(restoredContent);
