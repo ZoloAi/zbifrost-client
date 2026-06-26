@@ -960,81 +960,82 @@ zNavBar .zNavbar {
 /* ─── zCrumbs — breadcrumb trails (session / manual / structure) ───────────────
    ONE style for ALL zCrumbs modes — there is deliberately NO per-type rule. The
    visual variation (clickable ancestor vs quiet/disabled ancestor vs current page)
-   is driven entirely by the HTML the renderer emits — <a>, <a aria-disabled>, or
-   the .zActive leaf — never by which crumb mode produced it.
+   is driven entirely by the HTML the renderer emits — <a>, <a aria-disabled>,
+   <span>, or the .zActive leaf — never by which crumb mode produced it.
 
-   Look: arrow / chevron segments — every crumb is a right-pointing chevron with a
-   notched left edge, separated by a thin chevron gap. Theme-adaptive: ancestor fill
-   + ink derive from currentColor, the current-page leaf from --color-secondary over
-   --page-bg, so this single rule set reads on light doc pages AND a dark surface
-   with no light/dark branch. Re-skin geometry/color via --zcrumb-*. */
+   Look: a rounded "rail" track holds the trail; ancestors are quiet text that warm
+   on hover; the current page is the rail's own end SEGMENT — filled with the accent
+   and flush to the rail (full height, hugging the rounded end), a background-fill
+   feel rather than a pill floating on top. No separators. Theme-adaptive: rail
+   surface, ink and hover all derive from currentColor, so this single rule set reads
+   on light doc pages AND a dark surface with no light/dark branch. Every crumb kind
+   shares ONE box geometry, so the rhythm is perfectly even — only fill + weight
+   change for the active. Re-skin geometry/color via --zcrumb-*. */
 .zBreadcrumb {
-  --zcrumb-notch: 10px;          /* depth of the pointer / left indent */
-  --zcrumb-gap: 3px;            /* sliver between chevrons */
-  --zcrumb-radius: 6px;          /* rounding on the bar's two outer corners */
+  --zcrumb-radius: 999px;                 /* rail + crumb rounding */
+  --zcrumb-pad-y: 0.26rem;                /* crumb box vertical pad */
+  --zcrumb-pad-x: 0.6rem;                 /* crumb box horizontal pad */
+  --zcrumb-rail-pad-y: 0.22rem;           /* rail inner vertical pad */
+  --zcrumb-rail-pad-x: 0.26rem;           /* rail inner horizontal pad */
   display: inline-flex;
-  align-items: stretch;          /* equal segment height so points align */
+  align-items: stretch;                   /* let the active segment fill rail height */
   flex-wrap: wrap;
   margin: 0;
-  padding: 0;
+  padding: var(--zcrumb-rail-pad-y) var(--zcrumb-rail-pad-x);
   list-style: none;
   font-size: 0.8rem;
+  border-radius: var(--zcrumb-radius);
+  background: var(--zcrumb-rail-bg, color-mix(in srgb, currentColor 5%, transparent));
+  border: 1px solid var(--zcrumb-rail-border, color-mix(in srgb, currentColor 12%, transparent));
 }
 /* margin:0 is load-bearing — the global `li { margin-bottom }` otherwise inflates
-   the flex line's cross-size, stretching the current-page leaf taller than ancestors */
-.zBreadcrumb-item { display: inline-flex; margin: 0; }
-/* every crumb is a chevron: pointer on the right, incoming notch on the left */
+   the flex line's cross-size, stretching the current-page segment taller than the rail */
+.zBreadcrumb-item { display: inline-flex; align-items: center; margin: 0; }
+/* uniform crumb box — a, span AND the active leaf share ONE geometry so the rhythm
+   reads perfectly even; only fill + weight change for the active page */
 .zBreadcrumb-item > a,
 .zBreadcrumb-item > span,
 .zBreadcrumb-item.zActive {
   display: inline-flex;
   align-items: center;
-  padding: 0.3rem 0.8rem 0.3rem calc(0.8rem + var(--zcrumb-notch));
-  margin-left: calc(var(--zcrumb-gap) - var(--zcrumb-notch));
-  line-height: 1.25;
+  padding: var(--zcrumb-pad-y) var(--zcrumb-pad-x);
+  line-height: 1.2;
   text-decoration: none;
+  border-radius: var(--zcrumb-radius);
   transition: background 0.15s ease, color 0.15s ease;
-  background: var(--zcrumb-fill, color-mix(in srgb, currentColor 9%, transparent));
-  color: var(--zcrumb-ink, color-mix(in srgb, currentColor 70%, transparent));
-  clip-path: polygon(0 0, calc(100% - var(--zcrumb-notch)) 0, 100% 50%,
-                     calc(100% - var(--zcrumb-notch)) 100%, 0 100%, var(--zcrumb-notch) 50%);
-}
-/* first crumb: flat left edge (nothing points into it) — round the outer-left corners */
-.zBreadcrumb-item:first-child > a,
-.zBreadcrumb-item:first-child > span,
-.zBreadcrumb-item:first-child.zActive {
-  margin-left: 0;
-  padding-left: 0.85rem;
-  border-radius: var(--zcrumb-radius) 0 0 var(--zcrumb-radius);
-  clip-path: polygon(0 0, calc(100% - var(--zcrumb-notch)) 0, 100% 50%,
-                     calc(100% - var(--zcrumb-notch)) 100%, 0 100%);
+  color: var(--zcrumb-ink, color-mix(in srgb, currentColor 54%, transparent));
 }
 /* clickable ancestor (manual zMenu / session hop) */
 .zBreadcrumb-item > a:hover {
-  background: var(--zcrumb-hover-bg, color-mix(in srgb, currentColor 16%, transparent));
-  color: var(--text);
+  background: var(--zcrumb-hover-bg, color-mix(in srgb, currentColor 10%, transparent));
+  color: currentColor;
 }
-/* quiet, non-interactive ancestor (structure / manual zMenu:false) */
-.zBreadcrumb-item > a[aria-disabled="true"] {
-  color: var(--zcrumb-muted, color-mix(in srgb, currentColor 50%, transparent));
+/* quiet, non-interactive ancestor (structure / manual zMenu:false / session span) */
+.zBreadcrumb-item > a[aria-disabled="true"],
+.zBreadcrumb-item > span {
+  color: var(--zcrumb-muted, color-mix(in srgb, currentColor 42%, transparent));
   pointer-events: none;
   cursor: default;
 }
-/* current page (always last): incoming notch, flat trailing edge, solid accent —
-   round the outer-right corners */
+/* current page (always last): the rail's filled end segment. Bleeds the rail's own
+   padding (top / bottom / right, +1px border) so it reaches full rail height and
+   hugs the rounded end; flat leading edge so it reads as part of the track, not a
+   pill on top. */
 .zBreadcrumb-item.zActive {
-  padding-right: 1rem;
-  font-weight: 600;
-  background: var(--zcrumb-active-bg, color-mix(in srgb, var(--color-secondary, #9370DB) 88%, var(--page-bg)));
-  color: var(--zcrumb-active-ink, var(--page-bg));
+  font-weight: 650;
+  align-self: stretch;
+  background: var(--zcrumb-active-bg, var(--color-info, #5CA9FF));
+  color: var(--zcrumb-active-ink, #fff);
+  margin: calc(-1 * var(--zcrumb-rail-pad-y) - 1px)
+          calc(-1 * var(--zcrumb-rail-pad-x) - 1px)
+          calc(-1 * var(--zcrumb-rail-pad-y) - 1px) 0;
+  padding: calc(var(--zcrumb-pad-y) + var(--zcrumb-rail-pad-y) + 1px) 0.8rem;
   border-radius: 0 var(--zcrumb-radius) var(--zcrumb-radius) 0;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, var(--zcrumb-notch) 50%);
 }
-/* lone crumb (single-block session / fresh page): no points — a plain solid tag */
+/* lone crumb (single-block session / fresh page): no ancestors — fill the WHOLE
+   rail, both ends rounded. */
 .zBreadcrumb-item:only-child.zActive {
-  margin-left: 0;
-  padding-left: 0.85rem;
-  clip-path: none;
+  margin-left: calc(-1 * var(--zcrumb-rail-pad-x) - 1px);
   border-radius: var(--zcrumb-radius);
 }
 

@@ -456,11 +456,14 @@ export class NavigationRenderer {
         return segs.length > 0 ? segs[segs.length - 1] : p;
       });
     }
-    // zPath strings (@.UI.* not yet resolved): minimum-depth uniqueness algorithm
+    // zPath strings (@.UI.* not yet resolved): minimum-depth uniqueness algorithm.
+    // Floor = depth 1 (the block leaf) — the SAME leaf rule session crumbs use
+    // server-side (scope.rsplit('.',1)[-1]); manual just escalates on collision, so
+    // both modes read the same clean leaf label (SSOT). Escalates only when leaves clash.
     const stripped = paths.map(p => p.split('#')[0]);
     const parts = stripped.map(p => p.split('.'));
     const maxDepth = Math.max(...parts.map(p => p.length));
-    for (let depth = 2; depth < maxDepth; depth++) {
+    for (let depth = 1; depth < maxDepth; depth++) {
       const labels = parts.map(p => p.slice(-depth).join('.'));
       if (new Set(labels).size === labels.length) return labels;
     }
