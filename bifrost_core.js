@@ -1605,6 +1605,32 @@ class BifrostCore {
     }
 
     /**
+     * zCrumbs bulk-rewind — the `^` suffix / {zCrumbs:{show:none, zBack:<zPath>}}
+     * longhand. UNLIKE zBack (single hop) this unwinds the trail to an ARBITRARY
+     * on-trail ancestor in one step, dropping the detour.
+     *
+     * SSOT realization: a rewind to a zPath is "navigate to that on-trail ancestor."
+     * In Bifrost the bulk-back is NOT decided client-side — it falls out of the
+     * server's execute_walker trail reconciliation: navigating to a scope already
+     * on the trail pops every scope opened AFTER it (message_walker → pop_to_scope,
+     * "the SAME unwind the zCLI crumb click uses"). So we route the target through
+     * the SAME path a clickable crumb takes — client.zLink — and let the server
+     * drop the detour. An OFF-trail target naturally forwards as an ordinary hop,
+     * which is exactly the documented `^` fallback. zPath only (bare-key in-block
+     * rewind is a zCLI/zTerminal concern; a bare key is not a Bifrost route).
+     * @param {string} target - @. zPath of the on-trail ancestor to rewind to
+     * @param {string|null} originKey - SSOT click-origin section key
+     */
+    async zCrumb(target, originKey = null) {
+      if (!target) {
+        this.logger.warn('[zCrumb] No target — ignoring rewind');
+        return;
+      }
+      this.logger.log(`[zCrumb] Bulk-rewind → ${target} (origin: ${originKey}) — via zLink + server pop_to_scope`);
+      return this.zLink(target, originKey);
+    }
+
+    /**
      * Fire-and-forget raw send — the SSOT for any intent the server answers with
      * STREAMED instructions rather than a single _requestId-correlated reply:
      * execute_walker (chunks) and the deferred-navigate dispatch fallback (a

@@ -120,8 +120,20 @@ export default class ButtonRenderer {
     let delegateInline = null;
     let eventAction = null;
     let navAction = null;
+    let crumbAction = null;
     if (action && typeof action === 'object') {
-      if (action.zLink !== undefined || action.zDelta !== undefined) {
+      if (action.zCrumbs !== undefined && action.zCrumbs
+          && typeof action.zCrumbs === 'object' && action.zCrumbs.zBack !== undefined) {
+        // Dict-form zCrumbs bulk-rewind — the `^` suffix / {zCrumbs:{show:none,
+        // zBack:<key|zPath>}} longhand. NOT a forward hop: it UNWINDS the trail to
+        // an on-trail ancestor (dropping the detour). Without this branch the dict
+        // falls through to _fireEventAction and logs "Unsupported action event:
+        // zCrumbs". Route it to client.zCrumb, which dispatches the longhand so the
+        // server consumes the {zCrumb} signal via handle_zCrumb_back (engine SSOT).
+        crumbAction = action.zCrumbs;
+        action = null;
+        this.logger.log('[ButtonRenderer] dict-form zCrumbs rewind → zBack:', crumbAction.zBack);
+      } else if (action.zLink !== undefined || action.zDelta !== undefined) {
         // Dict-form navigation verb — the longhand {zLink:{target,zPsi}} /
         // {zDelta:{target,zPsi}} that carries a zPsi anchor. _fireEventAction only
         // knows display events, so without this branch the dict falls through and
@@ -205,6 +217,17 @@ export default class ButtonRenderer {
       const navPsi = this._navActionZPsi(navAction);
       if (navPsi) button.dataset.navZpsi = navPsi;
       this.logger.log('[ButtonRenderer] dict-nav button wired:', navStr, '| zPsi:', navPsi);
+    } else if (crumbAction) {
+      // zCrumbs bulk-rewind. Stop the click bubbling to the restored-nav delegate
+      // (double-nav guard, same as dict-nav above) and stamp the target so a
+      // REPLAYED button (handlers lost on trail restore) still rewinds.
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this._fireCrumbRewind(crumbAction, button);
+      });
+      const crumbTarget = crumbAction.zBack;
+      if (typeof crumbTarget === 'string') button.dataset.navZcrumb = crumbTarget;
+      this.logger.log('[ButtonRenderer] zCrumb-rewind button wired → zBack:', crumbTarget);
     } else if (eventAction) {
       // Longhand dict action → exactly one zEvent, dispatched client-side on
       // click via the orchestrator. Event-agnostic: how that event renders
@@ -628,6 +651,41 @@ export default class ButtonRenderer {
       const blockName = String(target).replace(/^\$/, '').trim();
       this.logger.log(`[ButtonRenderer] zDelta (dict) → ${blockName} (zPsi: ${zPsi})`);
       if (client.zDelta) client.zDelta(blockName, originKey, zPsi);
+    }
+  }
+
+  /**
+   * Fire a zCrumbs bulk-rewind ({zCrumbs:{show:none, zBack:<key|zPath>}}).
+   *
+   * The `^` suffix sugar and this longhand both mean "unwind the trail to an
+   * on-trail ancestor, dropping the detour" — the lone BULK-BACK verb. Routes to
+   * client.zCrumb, which dispatches the longhand so the SERVER consumes the
+   * {zCrumb} signal via the engine SSOT (handle_zCrumb_back). A bare-key target
+   * is an in-block rewind; a zPath crosses blocks — both resolved server-side.
+   *
+   * @private
+   * @param {Object|string} crumbAction - {show, zBack} (or a bare target).
+   * @param {HTMLElement} button - The clicked button (origin-key source).
+   */
+  _fireCrumbRewind(crumbAction, button) {
+    const client = this.client || window.bifrostClient;
+    if (!client) {
+      this.logger.warn('[ButtonRenderer] No client — cannot fire zCrumb rewind');
+      return;
+    }
+    const target = (crumbAction && typeof crumbAction === 'object')
+      ? crumbAction.zBack
+      : crumbAction;
+    if (!target) {
+      this.logger.warn('[ButtonRenderer] zCrumb rewind missing zBack target');
+      return;
+    }
+    const originKey = client.navOriginKey ? client.navOriginKey(button) : null;
+    if (client.zCrumb) {
+      this.logger.log(`[ButtonRenderer] zCrumb rewind → ${target}`);
+      client.zCrumb(target, originKey);
+    } else {
+      this.logger.warn('[ButtonRenderer] client.zCrumb unavailable for rewind:', target);
     }
   }
 

@@ -200,6 +200,7 @@ export function renderLink(linkData, container, client, logger = console) {
     color = '',
     window: windowFeatures = {},
     disabled = false,
+    zBlock = null,
   } = linkData;
 
   let detectedLinkType = link_type;
@@ -259,7 +260,7 @@ export function renderLink(linkData, container, client, logger = console) {
     case LINK_TYPE_INTERNAL_ZPATH:
     case 'internal_delta':  // Backend sends with underscore prefix
     case 'internal_zpath':  // Backend sends with underscore prefix
-      _setupInternalLink(link, href, target, windowFeatures, client, logger);
+      _setupInternalLink(link, href, target, windowFeatures, client, logger, zBlock);
       break;
 
     case LINK_TYPE_EXTERNAL:
@@ -354,7 +355,7 @@ function _convertZPathToURL(href) {
  * @param {Object} client - BifrostClient instance
  * @param {Object} logger - Logger instance
  */
-function _setupInternalLink(link, href, target, windowFeatures, client, logger) {
+function _setupInternalLink(link, href, target, windowFeatures, client, logger, zBlock = null) {
   // Same-file delta hop ($Block) is NOT a route — it must dispatch zDelta over
   // the wire, exactly like a zBtn action: zDelta($Block). Sending it through
   // _navigateToRoute would 404 against /api/route-config (a block is not a URL).
@@ -407,8 +408,11 @@ function _setupInternalLink(link, href, target, windowFeatures, client, logger) 
       // trail came back as empty scopes.
       if (client && typeof client._navigateToRoute === 'function') {
         const origin = client.navOriginKey ? client.navOriginKey(link) : null;
-        logger.debug('[LinkPrimitives] Calling client._navigateToRoute:', navigationPath, 'origin:', origin);
-        client._navigateToRoute(navigationPath, { zOrigin: origin });
+        // zBlock rides out-of-band (server stamped it from the zPath tail). The
+        // URL is file-level; this tells execute_walker WHICH block to run, so a
+        // zURL/zAlpha to a non-default block lands there — zCLI parity.
+        logger.debug('[LinkPrimitives] Calling client._navigateToRoute:', navigationPath, 'origin:', origin, 'zBlock:', zBlock);
+        client._navigateToRoute(navigationPath, { zOrigin: origin, zBlock });
       } else {
         logger.error('[LinkPrimitives] [ERROR] BifrostClient._navigateToRoute() not available:', {
           hasClient: !!client,

@@ -479,11 +479,11 @@ export class NavigationRenderer {
     const folder = this.client?.zuiConfig?.zVaFolder || '';
     const file   = this.client?.zuiConfig?.zVaFile   || '';
     if (!folder && !file) return [];
-    // "@.UI.zProducts.zOS.Events" → strip root prefix → "UI.zProducts.zOS.Events" → split → drop mount root
+    // "@.zViews.zStack.zOS.Grammar.NavigationEvents" → strip root prefix → split → drop
+    // mount root (idx 0). Keep EVERY remaining segment — this must match the Python
+    // resolver (zCLI is truth); no z-prefix filter, or Grammar/NavigationEvents vanish.
     const folderParts = folder.replace(/^[@~]\./, '').split('.');
-    // Keep only z-prefixed segments (named sections like zProducts, zOS).
-    // Plain organizational folders (Events, UI, etc.) are file-system details, not nav levels.
-    const segments = folderParts.slice(1).filter(p => p && p.startsWith('z'));
+    const segments = folderParts.slice(1).filter(p => p);
     const fileLabel = file.startsWith('zUI.') ? file.slice(4) : file;
     return [...segments, ...(fileLabel ? [fileLabel] : [])];
   }
@@ -648,11 +648,11 @@ export class NavigationRenderer {
    * — the Python zCrumbs() method does NOT run in Bifrost mode (chunks are pre-built).
    * All derivation (labels, structure trail) must happen here in JS.
    *
-   * Modes:
+   * Modes (mirror the Python resolver — zCLI is truth, ONE logic per mode):
    *   manual    — trail[] of zPaths in eventData; derive labels; ancestors are zLink clickable
-   *   structure — derive trail from client.zuiConfig.zVaFolder/zVaFile; ancestors display-only
+   *   structure — derive trail from client.zuiConfig.zVaFolder/zVaFile; optional `parent` is a
+   *               zPath on the route that trims the front so the trail starts at its page
    *   session   — crumbs from separate try_gui_event payload (crumbs key) if present; else empty
-   *   static    — legacy: parent dot-path in eventData; display-only ancestors
    *
    * @param {Object} eventData - Raw event from backend: {event, show, trail?, parent?, crumbs?}
    * @returns {HTMLElement|null}
@@ -664,7 +664,9 @@ export class NavigationRenderer {
     const zMenu   = eventData.zMenu === true || eventData.zMenu === 'true';
     let displayLabels  = [];
     let navPaths       = null;  // zPaths for manual mode
-    let structureSegs  = null;  // raw URL segments for structure mode
+    let structureSegs  = null;  // raw URL segments for structure mode (post-trim, display)
+    let structureFull  = null;  // full derived segments (pre-trim, for cumulative routes)
+    let structureOffset = 0;    // index where the displayed trail starts (parent trim)
 
     if (show === 'manual') {
       // trail: array of zPaths injected by the expander
@@ -675,11 +677,24 @@ export class NavigationRenderer {
       this.logger.debug('[NavigationRenderer] manual mode, labels:', displayLabels);
 
     } else if (show === 'structure') {
-      // Derive from current page context — raw segments double as URL path parts
-      structureSegs = this._deriveStructureTrail();
+      // Derive from current page context — raw segments double as URL path parts.
+      // SAME logic as the Python resolver (zCLI is truth): parent is a zPath ALREADY
+      // ON THE ROUTE that tells the SAME trail where to start — the deepest of its
+      // segments on the trail becomes the first crumb; everything above is trimmed.
+      structureFull = this._deriveStructureTrail();
+      if (!structureFull.length) return null;
+      const parentPath = eventData.parent || '';
+      if (parentPath) {
+        const pSegs = parentPath.replace(/^[@~]\./, '').split('.').filter(s => s && s !== 'zUI');
+        for (let i = pSegs.length - 1; i >= 0; i--) {
+          const idx = structureFull.indexOf(pSegs[i]);
+          if (idx !== -1) { structureOffset = idx; break; }
+        }
+      }
+      structureSegs = structureFull.slice(structureOffset);
       if (!structureSegs.length) return null;
       displayLabels = structureSegs;
-      this.logger.debug('[NavigationRenderer] structure mode, zMenu=%s, trail:', zMenu, displayLabels);
+      this.logger.debug('[NavigationRenderer] structure mode, zMenu=%s, offset=%s, trail:', zMenu, structureOffset, displayLabels);
 
     } else if (show === 'session') {
       // Session crumbs are a FAITHFUL, UNFILTERED echo of zSession's trail (the
@@ -697,20 +712,13 @@ export class NavigationRenderer {
       }
       this.logger.debug('[NavigationRenderer] session echo, hops:', trail.map(t => t.label));
       return this._renderSessionEcho(trail);
-
-    } else if (show === 'static') {
-      // Legacy: parent dot-path → display-only label trail
-      const parent = eventData.parent || '';
-      if (!parent) return null;
-      displayLabels = parent.split('.');
-      this.logger.debug('[NavigationRenderer] static (legacy) mode, labels:', displayLabels);
     }
 
     if (!displayLabels || !displayLabels.length) return null;
 
     // Build the crumb descriptors, then funnel through the ONE shared ribbon
-    // renderer so manual / structure / static share the exact same style as the
-    // session echo. Only the per-crumb nav (zLink vs route vs inert) differs.
+    // renderer so manual / structure share the exact same style as the session
+    // echo. Only the per-crumb nav (zLink vs route vs inert) differs.
     const crumbs = displayLabels.map((label, index) => {
       const isLast = index === displayLabels.length - 1;
       if (isLast) {
@@ -724,8 +732,9 @@ export class NavigationRenderer {
           : { text: label, role: 'ev', nav: null };
       }
       if (show === 'structure' && structureSegs) {
-        // structure ancestors: cumulative URL route, clickable only with zMenu
-        const href = '/' + structureSegs.slice(0, index + 1).join('/');
+        // structure ancestors: cumulative URL route from the FULL path (so a parent-
+        // trimmed trail still routes correctly), clickable only with zMenu
+        const href = '/' + structureFull.slice(0, structureOffset + index + 1).join('/');
         return zMenu
           ? { text: label, role: 'om', nav: this._routeNav(href) }
           : { text: label, role: 'ev', nav: null };

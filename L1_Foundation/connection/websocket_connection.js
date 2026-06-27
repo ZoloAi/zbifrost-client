@@ -47,7 +47,21 @@ export class WebSocketConnection {
       if (resumeId) {
         url += (url.includes('?') ? '&' : '?') + 'zresume=' + encodeURIComponent(resumeId);
       }
-    } catch (_) { /* storage unavailable — connect without resume */ }
+      // Per-tab trail token (ztab): sessionStorage is scoped to THIS tab and
+      // survives a reload (but not a new tab), so the server can rehydrate this
+      // tab's crumb trail on reconnect and keep browser Back/Forward in lockstep
+      // with the engine trail. Mint once per tab; a new tab mints a fresh token →
+      // a fresh trail. Paired with the zsid IDENTITY cookie (per browser) — scope
+      // dictates the carrier: cookie for identity, sessionStorage for the trail.
+      if (typeof sessionStorage !== 'undefined') {
+        let ztab = sessionStorage.getItem('zOS_tab');
+        if (!ztab) {
+          ztab = Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+          sessionStorage.setItem('zOS_tab', ztab);
+        }
+        url += (url.includes('?') ? '&' : '?') + 'ztab=' + encodeURIComponent(ztab);
+      }
+    } catch (_) { /* storage unavailable — connect without resume/ztab */ }
     return url;
   }
 

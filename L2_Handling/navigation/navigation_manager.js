@@ -178,11 +178,24 @@ export class NavigationManager {
    * @private
    */
   _dispatchRestoredNavButton(btn) {
+    const client = this.client;
+    // zCrumbs bulk-rewind button (stamped data-nav-zcrumb): a restored rewind
+    // still unwinds to its on-trail target via the SAME zLink + server pop_to_scope
+    // path the live click uses. Checked first — a crumb button carries no
+    // wizardAction string.
+    const crumbTarget = btn.dataset && btn.dataset.navZcrumb;
+    if (crumbTarget) {
+      const crumbOrigin = client.navOriginKey ? client.navOriginKey(btn) : null;
+      this.logger.info('[ClientNav] Restored zCrumb rewind → %s', crumbTarget);
+      if (client.zCrumb) {
+        client.zCrumb(crumbTarget, crumbOrigin);
+        return true;
+      }
+    }
     const action = btn.dataset && btn.dataset.wizardAction;
     if (!action) {
       return false;
     }
-    const client = this.client;
     const originKey = client.navOriginKey ? client.navOriginKey(btn) : null;
     // Persisted zPsi anchor (dict-form buttons) — forward it so a restored
     // zLink/zDelta + zPsi button still lands on its section, not the top.
@@ -336,6 +349,16 @@ export class NavigationManager {
     }
     client._currentPath = routePath;
     client._currentRouteConfig = entry.routeConfig || null;
+    // Keep zuiConfig (same-file verb SSOT) in lockstep with the replayed page so
+    // a $delta/zDelegate after an offline replay hops against the right file.
+    if (entry.routeConfig) {
+      client.zuiConfig = {
+        ...(client.zuiConfig || {}),
+        zVaFile: entry.routeConfig.zVaFile,
+        zVaFolder: entry.routeConfig.zVaFolder,
+        zBlock: entry.routeConfig.zBlock,
+      };
+    }
     // We served a page — cancel any pending offline retry.
     client._pendingOfflineNav = null;
 
@@ -392,7 +415,7 @@ export class NavigationManager {
    * @param {Object} options - Navigation options
    */
   async navigateToRoute(routePath, options = {}) {
-    const { skipHistory = false, navbar = false, zOrigin = null, zBack = false } = options;
+    const { skipHistory = false, navbar = false, zOrigin = null, zBack = false, zBlock: targetZBlock = null } = options;
 
     this.client._isClientSideNav = true;
 
@@ -429,8 +452,13 @@ export class NavigationManager {
       }
       routeConfig = await res.json();
 
-      const { zBlock, zVaFile, zVaFolder, zMeta } = routeConfig;
-      this.logger.debug('[ClientNav] Route config', { zVaFile, zVaFolder, zBlock });
+      const { zBlock: routeZBlock, zVaFile, zVaFolder, zMeta } = routeConfig;
+      // A zURL/zAlpha to a specific block carries it out-of-band (engine SSOT:
+      // the zPath tail). Honor it over the route's auto-discovered FIRST block
+      // so a cross-file link lands on the named block — exactly like zCLI. The
+      // URL is unchanged (file-level); only the walker target block differs.
+      const zBlock = targetZBlock || routeZBlock;
+      this.logger.debug('[ClientNav] Route config', { zVaFile, zVaFolder, zBlock, routeZBlock, targetZBlock });
 
       // Per-page navbar (SSOT: server-resolved via route-config).
       this._applyRouteNavBar(routeConfig);
@@ -464,6 +492,18 @@ export class NavigationManager {
       // Track the destination so the NEXT snapshot (on leave) is stamped right.
       this.client._currentPath = routePath;
       this.client._currentRouteConfig = routeConfig;
+      // SSOT: refresh the live page context. zuiConfig is parsed ONCE from the
+      // full-load <zui-config> head and is the source same-file verbs read from
+      // (zDelta/zDelegate at bifrost_core, structure-mode crumbs at
+      // navigation_renderer). SPA nav never reloads the head, so without this it
+      // stays pinned to the BOOT file and every same-file $delta hops against the
+      // wrong page. Mirror the fresh route values in so the live page is SSOT.
+      this.client.zuiConfig = {
+        ...(this.client.zuiConfig || {}),
+        zVaFile,
+        zVaFolder,
+        zBlock,
+      };
       // A live server nav supersedes any pending offline retry.
       this.client._pendingOfflineNav = null;
 
