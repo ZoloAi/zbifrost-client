@@ -552,8 +552,15 @@ export class ZDisplayOrchestrator {
         continue;
       }
 
-      // zText shorthand: inline text paragraph — render directly, no event dispatch
-      if (key === 'zText' && value) {
+      // zText shorthand: inline text paragraph — render directly, no event dispatch.
+      // ONLY the raw author form (zText: "str" | {content, color}). When the server
+      // has already expanded it to {zDisplay:{event:text,...}} (e.g. post-gate
+      // zWizardReveal chunks), let it fall through to the generic zDisplay path —
+      // reading value.content here would paint an empty <p>.
+      const _zTextRaw = key === 'zText' && value &&
+        (typeof value === 'string' ||
+          (typeof value === 'object' && !value.zDisplay && !value.event));
+      if (_zTextRaw) {
         const content    = typeof value === 'string' ? value : (value?.content || '');
         const color      = value?.color;
         const extraClass = (!Array.isArray(value) && value?._zClass) ? String(value._zClass) : '';
@@ -1684,7 +1691,7 @@ export class ZDisplayOrchestrator {
    * Flow:
    *   1. Render a spinner placeholder in parentElement
    *   2. Send execute_zfunc { zfunc, requestId } over WebSocket
-   *   3. If the plugin calls input(), the backend emits request_input with
+   *   3. If the plugin calls input(), the backend emits sandbox_input_request with
    *      zfuncRequestId — handled by _handleZFuncInput (renders inline widget)
    *   4. When the plugin finishes, backend sends execute_zfunc_response —
    *      handled by _handleZFuncResponse (resolves the promise here)
@@ -1865,7 +1872,7 @@ export class ZDisplayOrchestrator {
   }
 
   /**
-   * Handle a request_input event scoped to a zFunc execution.
+   * Handle a sandbox_input_request event scoped to a zFunc execution.
    * Renders an inline prompt widget inside the matching zfunc-wrapper div.
    *
    * For y/n prompts: two buttons (Yes / No).

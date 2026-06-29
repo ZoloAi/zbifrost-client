@@ -394,9 +394,9 @@ export class MessageHandler {
         return;
       }
 
-      // Handle request_input for zTerminal interactive input
-      if (message.event === PROTOCOL_EVENTS.REQUEST_INPUT) {
-        this.logger.log('[MessageHandler] request_input received:', message.requestId, message.prompt, 'isPassword:', message.isPassword);
+      // Handle sandbox_input_request for zTerminal / sandbox interactive input
+      if (message.event === PROTOCOL_EVENTS.SANDBOX_INPUT_REQUEST) {
+        this.logger.log('[MessageHandler] sandbox_input_request received:', message.requestId, message.prompt, 'isPassword:', message.isPassword);
 
         // zFunc execution: route to inline widget rendered by ZDisplayOrchestrator
         if (message.zfuncRequestId) {
@@ -528,7 +528,7 @@ export class MessageHandler {
         return;
       }
 
-      if (message.event === PROTOCOL_EVENTS.INPUT_REQUEST || message.type === PROTOCOL_EVENTS.INPUT_REQUEST) {
+      if (message.event === PROTOCOL_EVENTS.DISPLAY_PROMPT_REQUEST || message.type === PROTOCOL_EVENTS.DISPLAY_PROMPT_REQUEST) {
         this.hooks.call('onInput', message);
         return;
       }

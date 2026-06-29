@@ -776,7 +776,7 @@ export default class TerminalRenderer {
   /**
    * Handle input request from backend
    * Shows an input field in the terminal output area
-   * Called by message handler when request_input is received
+   * Called by message handler when sandbox_input_request is received
    * @static
    * @param {string} requestId - The request ID for this input
    * @param {string} prompt - The prompt text to display

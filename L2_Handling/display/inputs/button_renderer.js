@@ -422,13 +422,19 @@ export default class ButtonRenderer {
       this.logger.log(`[ButtonRenderer]  Button clicked: "${button.textContent}" (type: ${type}, value: ${value}, action: ${action})`);
       this.logger.log(`[ButtonRenderer] Button clicked: ${button.textContent} (type: ${type}, value: ${value}, action: ${action})`);
 
-      // For submit/reset buttons, let the form handle it naturally
+      // Submit/reset buttons normally belong to a <form> (zDialog): let the
+      // form's own submit event fire and don't send a WS response here.
+      // EXCEPTION — a parked wizard GATE button is a standalone `type: submit`
+      // with a requestId and NO enclosing <form>: it IS the gate, so there is no
+      // form to handle it. Fall through to the requestId branch below and send
+      // the gate response (the event is the gate; `!` is retired).
       if (type === 'submit' || type === 'reset') {
-        this.logger.log(`[ButtonRenderer] ${type} button - letting form handle submission`);
-        this.logger.log(`[ButtonRenderer] ${type} button - letting form handle submission`);
-        // Don't preventDefault, don't send WebSocket response
-        // The form's submit event will fire and can be handled separately
-        return;
+        const inForm = !!(button.closest && button.closest('form'));
+        if (inForm || !requestId) {
+          this.logger.log(`[ButtonRenderer] ${type} button - letting form handle submission`);
+          return;
+        }
+        this.logger.log('[ButtonRenderer] submit button is a standalone wizard gate — sending gate response');
       }
 
       // zLink action — auto-redirect, mirrors CLI semantics

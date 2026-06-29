@@ -146,9 +146,13 @@ export const PROTOCOL_EVENTS = {
   SPINNER_START: 'spinner_start',
   SPINNER_STOP: 'spinner_stop',
 
-  // Input request / response
-  REQUEST_INPUT: 'request_input',
-  INPUT_REQUEST: 'input_request',
+  // Input request / response.
+  // Two DIFFERENT request doors, one shared response hub:
+  //   SANDBOX_INPUT_REQUEST → zGuard sandbox/plugin input() (terminal line)
+  //   DISPLAY_PROMPT_REQUEST → zDisplay read-primitive (form widget)
+  // (renamed from the flipped near-twins request_input / input_request)
+  SANDBOX_INPUT_REQUEST: 'sandbox_input_request',
+  DISPLAY_PROMPT_REQUEST: 'display_prompt_request',
   INPUT_RESPONSE: 'input_response',
 
   // Execution / wizard / RBAC

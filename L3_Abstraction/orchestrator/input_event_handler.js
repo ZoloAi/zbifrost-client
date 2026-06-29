@@ -359,7 +359,76 @@ export class InputEventHandler {
     }
 
     this.logger.log(`[InputEventHandler] Rendered ${event} ${inputType} (id=${inputId}, aria-describedby=${ariaDescribedBy || 'none'}, condition=${condition || 'none'})`);
+
+    // SSOT — fields collect, the GATE submits. A nested wizard whose gate step is
+    // an INPUT (read_string) is stamped server-side with requestId + _renderInline.
+    // The field itself never carries a Submit; the gate (container) owns it — so we
+    // inject the Submit here and release the parked gate through the same transport
+    // a button gate uses (input_response → release_wizard_gate, value = field text).
+    if (eventData._renderInline && eventData.requestId) {
+      this.logger.log(`[InputEventHandler] Inline wizard gate input — injecting gate Submit (requestId=${eventData.requestId})`);
+      return this._wireInlineGateSubmit(element, eventData);
+    }
     return element;
+  }
+
+  /**
+   * Wrap an inline wizard-gate input with its gate Submit (gate-owns-submit SSOT).
+   * On submit (click or Enter) the field's text is sent as the gate's answer via
+   * input_response{requestId, value}; the server's release_wizard_gate seeds
+   * zHat[gate_key] = value and reveals the post-gate steps, pinned to this
+   * container so they land in place.
+   * @private
+   * @param {HTMLElement} element - the rendered field (bare input or label+input wrapper)
+   * @param {Object} eventData - carries requestId + submit_label/_zClass hints
+   * @returns {HTMLElement} container holding the field + Submit
+   */
+  _wireInlineGateSubmit(element, eventData) {
+    const requestId = eventData.requestId;
+    const field = (element.matches && element.matches('input, textarea, select'))
+      ? element
+      : element.querySelector('input, textarea, select');
+
+    const container = document.createElement('div');
+    container.className = 'zWizardGate-input';
+    container.appendChild(element);
+
+    const submit = document.createElement('button');
+    submit.type = 'button';
+    submit.className = eventData.submit_zClass || 'zc-btn zc-btn-primary';
+    submit.classList.add('zWizardGate-submit');
+    submit.textContent = eventData.submit_label || 'Submit';
+    container.appendChild(submit);
+
+    const send = () => {
+      if (submit.disabled) return;
+      const value = field ? (field.value || '') : '';
+      const client = this.client || window.bifrostClient;
+      const connection = client?.connection;
+      if (!connection) {
+        this.logger.error('[InputEventHandler] No WS connection for inline gate submit');
+        return;
+      }
+      // Pin the post-gate reveal to this gate's own container (append, once),
+      // mirroring the button gate's inline reveal.
+      const target = (submit.closest && submit.closest('[data-zkey]')) || container;
+      if (client) client._renderTarget = { el: target, mode: 'append', once: true };
+      connection.send(JSON.stringify({ event: 'input_response', requestId, value }));
+      this.logger.log(`[InputEventHandler] Inline gate submit → requestId=${requestId} value="${value}"`);
+      submit.disabled = true;
+      if (field) field.readOnly = true;
+    };
+
+    submit.addEventListener('click', send);
+    if (field) {
+      field.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !(field.tagName === 'TEXTAREA' && e.shiftKey)) {
+          e.preventDefault();
+          send();
+        }
+      });
+    }
+    return container;
   }
 
   /**
