@@ -417,6 +417,17 @@ export class NavigationManager {
   async navigateToRoute(routePath, options = {}) {
     const { skipHistory = false, navbar = false, zOrigin = null, zBack = false, zBlock: targetZBlock = null } = options;
 
+    // SSOT double-walk guard (see BifrostCore._isDuplicateWalk): drop a burst-
+    // duplicate navigation to the SAME route+block so a redirect-dispatcher chain
+    // (e.g. /zAccount → navigate_back /zAccount/Login) or a popstate race cannot
+    // paint the page twice. Placed BEFORE the DOM reset below so a dropped nav
+    // leaves no stranded "Loading…" surface. Back/Forward carry a distinct bit.
+    const _walkSig = `nav|${routePath}|${targetZBlock || ''}|${zBack ? 'B' : ''}`;
+    if (typeof this.client._isDuplicateWalk === 'function' && this.client._isDuplicateWalk(_walkSig)) {
+      this.logger.warn('[ClientNav] Dropped duplicate navigation (double-walk guard): %s', routePath);
+      return;
+    }
+
     this.client._isClientSideNav = true;
 
     try {
@@ -479,7 +490,11 @@ export class NavigationManager {
         ? (Array.isArray(zMeta.zBrush) ? zMeta.zBrush : [zMeta.zBrush])
         : [];
       brushes.forEach(brush => {
-        const href = `/styles/${brush}.css`;
+        // zOS convention (SSOT with server html_injectors._build_styles_links):
+        // a dot is a sub-directory separator (pages.home → /styles/pages/home.css).
+        // Leaving the dot literal here 404s the stylesheet, so the page renders
+        // unstyled on SPA nav while a full reload (server path) looks correct.
+        const href = `/styles/${brush.replace(/\./g, '/')}.css`;
         if (!document.querySelector(`link[href="${href}"]`)) {
           const link = document.createElement('link');
           link.rel = 'stylesheet';

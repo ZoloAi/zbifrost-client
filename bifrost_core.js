@@ -1648,11 +1648,48 @@ class BifrostCore {
         this.logger.warn('[_sendWalker] Not connected — dropping walker request', payload);
         return;
       }
+      // SSOT double-walk guard (see _isDuplicateWalk): a same-file hop must not be
+      // emitted twice in one burst (recursive re-walk, rapid repeat). The route
+      // family is guarded at ClientNavigationManager.navigateToRoute entry.
+      const sig = 'walk|' + [
+        payload.zBlock || '', payload.zVaFile || '', payload.zVaFolder || '',
+        payload.zBack ? 'B' : '', payload._zDelegateInline ? 'D' : '',
+      ].join('|');
+      if (this._isDuplicateWalk(sig)) {
+        this.logger.warn('[_sendWalker] Dropped duplicate execute_walker (double-walk guard):', sig);
+        return;
+      }
       try {
         const sid = this.messageHandler?._getSessionIdFromCookie?.();
         if (sid) payload._sessionId = sid;
       } catch (_) { /* cookie read is best-effort */ }
       this.connection.send(JSON.stringify(payload));
+    }
+
+    /**
+     * SSOT double-walk guard. A single logical navigation must paint a page at
+     * most once. A pure-redirect dispatcher (a `zLink` deferred as navigate_back),
+     * a popstate race, or a recursive re-walk can each emit a SECOND identical
+     * `execute_walker` within the same burst; the server faithfully re-renders it
+     * and append-only sections stack — the recurring "doubled section" bug (see the
+     * ping-pong note in zUI.zAccount and the _SKIP_KEYS zLogin patch). Instead of
+     * clearing the surface per-symptom, we drop a repeat of the same normalized
+     * walk signature inside a short burst window, at the emit source. A deliberate
+     * re-navigation to the same page after the window still runs; Back/Forward and
+     * inline-delegate carry their own signature bit so they are never swallowed by
+     * a preceding forward walk.
+     * @param {string} sig - normalized walk signature (caller-namespaced)
+     * @returns {boolean} true when this is a burst-duplicate and should be dropped
+     */
+    _isDuplicateWalk(sig) {
+      const WINDOW_MS = 600;
+      const now = Date.now();
+      if (this._lastWalkSig === sig && (now - (this._lastWalkTs || 0)) < WINDOW_MS) {
+        return true;
+      }
+      this._lastWalkSig = sig;
+      this._lastWalkTs = now;
+      return false;
     }
 
     /**
