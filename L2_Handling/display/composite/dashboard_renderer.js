@@ -133,7 +133,8 @@ export default class DashboardRenderer {
     (sidebar || []).forEach((panelName) => {
       const isDefault = panelName === defaultPanel;
       const meta      = panels[panelName] || {};
-      const label     = meta.label || panelName.replace(/_/g, ' ');
+      // Metadata contract (server _build_panel_metadata): { title, icon, description }.
+      const label     = meta.title || meta.label || panelName.replace(/_/g, ' ');
       const paneId    = `panel-${panelName}`;
 
       // Nav link — zTheme uses data-bs-target to show/hide panes
@@ -147,12 +148,27 @@ export default class DashboardRenderer {
       link.dataset.panel = panelName;
       if (!isDefault) link.setAttribute('tabindex', '-1');
 
+      // Icon SSOT: a Bootstrap `bi-*` name (same contract as IconRenderer) — strip
+      // an optional bi- prefix and build `bi bi-<name>`. A non-bi value (a legacy
+      // emoji) renders as literal text so it never produces an invalid class.
       if (meta.icon) {
-        const icon = document.createElement('i');
-        icon.className = `bi ${meta.icon} zme-2`;
-        link.appendChild(icon);
+        const clean = String(meta.icon).replace(/^bi-/, '');
+        if (/^[a-z0-9-]+$/.test(clean)) {
+          const icon = document.createElement('i');
+          icon.className = `bi bi-${clean} zme-2`;
+          icon.setAttribute('aria-hidden', 'true');
+          link.appendChild(icon);
+        } else {
+          link.appendChild(document.createTextNode(`${meta.icon} `));
+        }
       }
       link.appendChild(document.createTextNode(label));
+
+      // Description → native tooltip + accessible name on the nav link.
+      if (meta.description) {
+        link.setAttribute('title', meta.description);
+        link.setAttribute('aria-label', `${label} — ${meta.description}`);
+      }
       nav.appendChild(link);
 
       // Tab pane — chunk renderer targets .zDash-panel .zTab-pane.zActive

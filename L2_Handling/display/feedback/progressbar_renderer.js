@@ -171,15 +171,19 @@ export default class ProgressBarRenderer {
       eta = null
     } = event;
 
-    const showPercentage = event.showPercentage ?? event.show_percentage ?? true;
+    let showPercentage = event.showPercentage ?? event.show_percentage ?? true;
     const showETA = event.showETA ?? event.show_eta ?? false;
 
-    // Indeterminate (no total) → a full striped/animated bar that reads as "working".
+    // Indeterminate (no total) → a marching "working" bar. It must NOT claim a
+    // percentage (a 0% fill reads as stalled), and it needs the marquee class so
+    // the fill is actually visible (the inline width stays 0 for a no-total bar).
     let { total, striped = false, animated = false } = event;
-    if (!total) {
+    const indeterminate = !total;
+    if (indeterminate) {
       total = 100;
       striped = true;
       animated = true;
+      showPercentage = false;
     }
 
     // Re-render of a bar we already drew (a wizard advancing past its gate
@@ -198,6 +202,13 @@ export default class ProgressBarRenderer {
       progressId, label, current, total,
       showPercentage, showETA, eta, color, striped, animated, height
     );
+
+    // Marquee treatment for a no-total bar: tag the track so the fill marches
+    // across at a fixed width instead of sitting invisible at 0%.
+    if (indeterminate) {
+      const track = element.querySelector('.zProgress');
+      if (track) { track.classList.add('zProgress--indeterminate'); }
+    }
 
     // Register so streamed updates (same progressId) update this node in place.
     this._activeProgressBars.set(progressId, {

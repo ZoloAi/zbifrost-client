@@ -2292,3 +2292,217 @@ zNavBar .zNavbar {
   .zMenu-nav .zNav-link:hover,
   .zMenu-container .zMenu-option button:hover { transform: none; }
 }
+
+/* ─── 12. zSwiper / zCarousel ──────────────────────────────────────────────── */
+/*
+ * Canonical carousel chrome for zSwiper (see swiper_renderer.js). Self-contained:
+ * the component owns every part it draws (wrapper, label, slide, controls, dots)
+ * so it never depends on utility classes that may not exist.
+ *
+ * Built from currentColor + transparent mixes (same approach as §11 zDash), with
+ * the brand accent (--color-secondary) only on the active dot — so ONE rule set
+ * self-balances on a light OR dark app, no data-theme / media query plumbing.
+ */
+
+.zCarousel-wrapper { margin: 1rem 0; }
+.zCarousel-label { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.6rem; }
+
+/* Frame — a faint wash of the host ink; clips the slides that sit inside it. */
+.zCarousel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, currentColor 3%, transparent);
+}
+.zCarousel-inner { position: relative; }
+
+/* THE rule that makes it a carousel and not a stack: one slide shows at a time. */
+.zCarousel-item { display: none; }
+.zCarousel-item.zActive { display: block; }
+
+.zCarousel-slide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 200px;
+  padding: 2rem 3rem 2.75rem;
+}
+
+/* Fade variant — keep slides stacked and cross-fade opacity instead of swapping. */
+.zCarousel-fade .zCarousel-inner { min-height: 200px; }
+.zCarousel-fade .zCarousel-item {
+  display: block;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+.zCarousel-fade .zCarousel-item.zActive {
+  position: relative;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Prev / next controls — round buttons floated over the frame edges. */
+.zCarousel-control-prev,
+.zCarousel-control-next {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 2.4rem;
+  height: 2.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: currentColor;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  transition: background 0.15s;
+}
+.zCarousel-control-prev { left: 0.6rem; }
+.zCarousel-control-next { right: 0.6rem; }
+.zCarousel-control-prev:hover,
+.zCarousel-control-next:hover { background: color-mix(in srgb, currentColor 18%, transparent); }
+
+/* Chevrons drawn from borders — no icon-font dependency. */
+.zCarousel-control-prev-icon,
+.zCarousel-control-next-icon {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+}
+.zCarousel-control-prev-icon { transform: rotate(-135deg); margin-left: 4px; }
+.zCarousel-control-next-icon { transform: rotate(45deg); margin-right: 4px; }
+
+/* Position dots. */
+.zCarousel-indicators {
+  position: absolute;
+  bottom: 0.6rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  z-index: 2;
+}
+.zCarousel-indicators button {
+  width: 0.5rem;
+  height: 0.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  background: color-mix(in srgb, currentColor 25%, transparent);
+  transition: background 0.15s, transform 0.15s;
+}
+.zCarousel-indicators button:hover { background: color-mix(in srgb, currentColor 45%, transparent); }
+.zCarousel-indicators button.zActive {
+  background: var(--color-secondary, currentColor);
+  transform: scale(1.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zCarousel-fade .zCarousel-item { transition: none; }
+  .zCarousel-indicators button { transition: none; }
+}
+
+/* ─── 13. zTerminal ────────────────────────────────────────────────────────── */
+/*
+ * Self-contained chrome for the zTerminal widget (see terminal_renderer.js).
+ * zTerminal is a DELIBERATELY DARK card (like zTable) — it reads as a console on
+ * a light OR dark page, so it carries its own dark palette instead of currentColor.
+ * A dark theme can reskin by overriding the --zterm-* vars on .zTerminal-container.
+ *
+ * Why this block is the SSOT: the renderer used to lean on utility/slot classes
+ * (zCard, zCard-body, zCard-footer, zM-0, zP-3, zMb-3) that were NEVER part of
+ * zbase — so the code <pre> fell through to the generic `pre` baseline (§ pre
+ * above) and inherited its margin + border + radius, prising the header, code,
+ * and output apart. Everything the widget draws now lives here, flush by default.
+ */
+.zTerminal-container {
+  --zterm-surface: #1e1e2e;
+  --zterm-output:  #0d0d14;
+  --zterm-border:  #333;
+  --zterm-ink:     #e0e0e0;
+  margin: 0 0 var(--space-4);
+  border: 1px solid var(--zterm-border);
+  border-radius: 8px;
+  overflow: hidden;                       /* clip children to the rounded frame */
+  background: var(--zterm-surface);
+  color: var(--zterm-ink);
+}
+
+/* Header — title + language on the left, mode badge + Copy/Run on the right. */
+.zTerminal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--zterm-surface);
+  border-bottom: 1px solid var(--zterm-border);
+}
+.zTerminal-header-left,
+.zTerminal-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.zTerminal-title {
+  color: var(--zterm-ink);
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+.zTerminal-lang {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* Body — the code area owns NO padding; the <pre> inside owns it. */
+.zTerminal-body { background: var(--zterm-surface); }
+
+/* THE reset: neutralise BOTH the generic `pre` baseline AND prism-tomorrow within
+ * the widget so the three sections sit flush. Prism's highlightElement() promotes
+ * the `language-*` class onto the <pre>, so prism-tomorrow's `pre[class*="language-"]`
+ * (0,1,1) matches and — loaded after zbase at equal specificity — would win (its
+ * .5em margin + 1em padding + #2d2d2d background = a floating lighter panel with a
+ * gap). We list the attribute variant too so `.zTerminal-body pre[class*="language-"]`
+ * (0,2,1) out-specifies it. Padding is HORIZONTAL-ONLY: no vertical gap between the
+ * code and the header divider above / the output below (the body butts flush). */
+.zTerminal-body pre,
+.zTerminal-body pre[class*="language-"] {
+  margin: 0;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: auto;
+}
+
+/* Output — the run-result footer; hidden until a Run streams into it. */
+.zTerminal-output {
+  padding: var(--space-3);
+  background: var(--zterm-output);
+  color: var(--zterm-ink);
+  border-top: 1px solid var(--zterm-border);
+  font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+  white-space: pre-wrap;
+  overflow: auto;
+}

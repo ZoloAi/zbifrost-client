@@ -77,22 +77,54 @@ export default class SwiperRenderer {
    * @returns {HTMLElement} Swiper container element
    */
   init(event) {
+    // WS path (imperative display.swiper()): build the deck and self-append to
+    // the target container, mirroring the other *_init widget renderers.
+    const element = this._build(event);
+    if (!element) {
+      return null;
+    }
+    const container = event.container || '#app';
+    const target = document.querySelector(container) || document.body;
+    target.appendChild(element);
+    this.logger.log('[SwiperRenderer] Swiper initialized (appended)');
+    return element;
+  }
+
+  /**
+   * Render a swiper for the declarative (chunked walker) path and RETURN the node
+   * for the orchestrator to place in page flow — mirrors ProgressBarRenderer.renderInline.
+   * @param {Object} event - zDisplay swiper event ({event:'swiper', slides, ...})
+   * @returns {HTMLElement|null} The swiper node, or null when there are no slides.
+   */
+  renderInline(event) {
+    return this._build(event);
+  }
+
+  /**
+   * Build + wire a swiper (structure, tracking, auto-advance, keyboard nav) and
+   * return its node WITHOUT appending. Shared by init (WS) and renderInline (walker).
+   * @private
+   */
+  _build(event) {
     const {
-      swiperId,
       label = 'Slides',
       slides = [],
-      currentSlide = 0,
-      _totalSlides,
-      autoAdvance = true,
       delay = 3,
       loop = false,
-      container = '#app',
       variant = 'slide',
       showIndicators = true,
       showControls = true
     } = event;
 
-    this.logger.log('[SwiperRenderer] Initializing swiper:', {
+    // Backend emits snake_case for these (display_constants.py: current_slide,
+    // auto_advance); accept both forms — same dual-read as progressbar_renderer.js.
+    const currentSlide = event.currentSlide ?? event.current_slide ?? 0;
+    const autoAdvance = event.autoAdvance ?? event.auto_advance ?? true;
+    // The imperative WS path supplies a swiperId; the declarative zUI path does
+    // not — mint one so DOM ids and the active-swiper map stay unique per deck.
+    const swiperId = event.swiperId || `swiper-${Math.random().toString(36).slice(2, 9)}`;
+
+    this.logger.log('[SwiperRenderer] Building swiper:', {
       swiperId,
       label,
       slidesCount: slides.length
@@ -103,7 +135,6 @@ export default class SwiperRenderer {
       return null;
     }
 
-    // Create swiper structure using primitives and zTheme classes
     const swiperContainer = this._createSwiperContainer(
       swiperId,
       label,
@@ -114,11 +145,6 @@ export default class SwiperRenderer {
       showControls
     );
 
-    // Find target container
-    const targetElement = document.querySelector(container) || document.body;
-    targetElement.appendChild(swiperContainer);
-
-    // Track active swiper
     const swiperData = {
       element: swiperContainer,
       label,
@@ -134,15 +160,12 @@ export default class SwiperRenderer {
 
     this._activeSwipers.set(swiperId, swiperData);
 
-    // Start auto-advance if enabled
     if (autoAdvance && delay > 0) {
       this._startAutoAdvance(swiperId);
     }
 
-    // Add keyboard navigation
     this._addKeyboardNav(swiperId);
 
-    this.logger.log('[SwiperRenderer] Swiper initialized successfully');
     return swiperContainer;
   }
 
@@ -211,13 +234,13 @@ export default class SwiperRenderer {
     // Main container with wrapper for label
     const wrapper = createDiv({
       id: `${swiperId}-wrapper`,
-      class: 'zMy-3'
+      class: 'zCarousel-wrapper'
     });
 
     // Label/title (using primitive)
     if (label) {
       const labelEl = createDiv({
-        class: 'zH4 zMb-2'
+        class: 'zCarousel-label'
       });
       labelEl.textContent = label;
       wrapper.appendChild(labelEl);
@@ -243,10 +266,9 @@ export default class SwiperRenderer {
         'data-slide-index': index
       });
 
-      // Slide content wrapper
+      // Slide content wrapper — component-owned styling (see zbase.css §12)
       const slideContentDiv = createDiv({
-        class: 'zP-5 zBg-light zText-center',
-        style: 'min-height: 200px; display: flex; align-items: center; justify-content: center;'
+        class: 'zCarousel-slide'
       });
       slideContentDiv.innerHTML = slideContent; // Allow HTML in slides
 

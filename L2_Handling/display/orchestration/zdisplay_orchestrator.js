@@ -1359,6 +1359,16 @@ export class ZDisplayOrchestrator {
         break;
       }
 
+      case 'swiper': {
+        // Declarative zSwiper (expands to {event: swiper}). Build inline and
+        // return the node — same place/return contract as progress_bar — so the
+        // deck renders in page flow instead of self-appending to <body>.
+        const swiperRenderer = await this.client._ensureSwiperRenderer();
+        element = swiperRenderer.renderInline(eventData);
+        this.logger.debug('[renderZDisplayEvent] Rendered swiper (inline)');
+        break;
+      }
+
       case 'list': {
         // Use modular ListRenderer for lists
         const listRenderer = await this.client._ensureListRenderer();

@@ -101,9 +101,11 @@ export default class TerminalRenderer {
     // language would allow it — for "copy this snippet" blocks. Default true.
     const runEnabled = !(data.zRun === false || data.zRun === 'false' || data.zRun === 'False');
 
-    // Create main container (_zClass is appended centrally by the orchestrator SSOT)
+    // Create main container (_zClass is appended centrally by the orchestrator SSOT).
+    // All chrome lives in zbase.css §13 (.zTerminal-*) — self-contained, no reliance
+    // on utility/slot classes that aren't part of the canonical baseline.
     const container = document.createElement('div');
-    container.className = 'zTerminal-container zCard zMb-3';
+    container.className = 'zTerminal-container';
     container.id = terminalId;
 
     // Header: title + language, a constant mode badge, Copy, and Run (only when
@@ -172,38 +174,20 @@ export default class TerminalRenderer {
    */
   _createHeader(title, language, terminalId, code = '', mode = 'sandbox', runEnabled = true) {
     const header = document.createElement('div');
-    header.style.cssText = `
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #1e1e2e;
-      border-bottom: 1px solid #333;
-      border-radius: 8px 8px 0 0;
-      padding: 8px 12px;
-      margin: 0;
-    `;
+    header.className = 'zTerminal-header';
 
     // Left side: title + badge
     const leftContainer = document.createElement('div');
-    leftContainer.style.cssText = 'display: flex; align-items: center; gap: 10px; margin: 0;';
+    leftContainer.className = 'zTerminal-header-left';
 
     // Title
     const titleEl = document.createElement('span');
-    titleEl.style.cssText = `color: #e0e0e0; font-weight: ${TYPOGRAPHY.FONT_WEIGHTS.MEDIUM}; font-size: 0.9rem; margin: 0;`;
+    titleEl.className = 'zTerminal-title';
     titleEl.textContent = title;
 
     // Language badge
     const langBadge = document.createElement('span');
-    langBadge.style.cssText = `
-      background: rgba(59, 130, 246, 0.2);
-      color: #60a5fa;
-      border: 1px solid rgba(59, 130, 246, 0.3);
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 0.75rem;
-      font-weight: ${TYPOGRAPHY.FONT_WEIGHTS.MEDIUM};
-      margin: 0;
-    `;
+    langBadge.className = 'zTerminal-lang';
     langBadge.textContent = language;
 
     leftContainer.appendChild(titleEl);
@@ -212,7 +196,7 @@ export default class TerminalRenderer {
     // Right side: constant mode badge (the instance's trust dial) + Copy +
     // a Run button ONLY when execution is actually possible here.
     const buttonContainer = document.createElement('div');
-    buttonContainer.style.cssText = 'display: flex; align-items: center; gap: 8px; margin: 0;';
+    buttonContainer.className = 'zTerminal-actions';
 
     // The mode badge is a per-instance fact (from zEnv), shown on every block so
     // the trust context is unambiguous — never a per-language guess.
@@ -363,13 +347,11 @@ export default class TerminalRenderer {
    */
   _createCodeBlock(content, language) {
     const codeWrapper = document.createElement('div');
-    codeWrapper.className = 'zCard-body zP-0';
-    codeWrapper.style.backgroundColor = 'var(--zs-dark, #1e1e2e)';
+    codeWrapper.className = 'zTerminal-body';
 
+    // Bare <pre>: zbase.css §13 (.zTerminal-body pre) owns margin/padding/bg/overflow
+    // and resets the generic `pre` baseline so the sections sit flush.
     const pre = document.createElement('pre');
-    pre.className = 'zM-0 zP-3';
-    pre.style.backgroundColor = 'transparent';
-    pre.style.overflow = 'auto';
 
     const code = document.createElement('code');
     
@@ -398,16 +380,12 @@ export default class TerminalRenderer {
    * @private
    */
   _createOutputArea(terminalId) {
+    // Chrome (bg/border/font/wrap) lives in zbase.css §13 (.zTerminal-output);
+    // only the show/hide toggle is behavioural and stays inline.
     const outputArea = document.createElement('div');
     outputArea.id = `${terminalId}_output`;
-    outputArea.className = 'zTerminal-output zCard-footer zP-3';
+    outputArea.className = 'zTerminal-output';
     outputArea.style.display = 'none';
-    outputArea.style.backgroundColor = 'var(--zs-dark, #0d0d14)';
-    outputArea.style.color = '#e0e0e0';
-    outputArea.style.borderTop = '1px solid var(--zs-border-color, #333)';
-    outputArea.style.fontFamily = 'monospace';
-    outputArea.style.whiteSpace = 'pre-wrap';
-    outputArea.style.overflow = 'auto';
 
     return outputArea;
   }
