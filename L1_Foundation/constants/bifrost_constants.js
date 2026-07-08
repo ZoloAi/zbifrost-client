@@ -125,6 +125,7 @@ export const EVENT_TYPES = {
 export const PROTOCOL_EVENTS = {
   // Transport / connection control
   RENDER_CHUNK: 'render_chunk',
+  RENDER_MODAL: 'render_modal',
   CONNECTION_INFO: 'connection_info',
   NAVIGATE_BACK: 'navigate_back',
   OPEN_URL: 'open_url',

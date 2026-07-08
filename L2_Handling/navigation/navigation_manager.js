@@ -216,6 +216,13 @@ export class NavigationManager {
         client.zDelta(blockName, originKey, zPsi);
         return true;
       }
+    } else if (action.startsWith('zModal(')) {
+      const target = action.slice(7, -1).trim();
+      this.logger.info('[ClientNav] Restored zModal button → %s', target);
+      if (client.zModal) {
+        client.zModal(target);
+        return true;
+      }
     } else if (action === 'zBack') {
       this.logger.info('[ClientNav] Restored zBack button');
       if (client.zBack) {

@@ -2506,3 +2506,53 @@ zNavBar .zNavbar {
   white-space: pre-wrap;
   overflow: auto;
 }
+
+/* ─── 11. zModal — floating detour overlay ─────────────────────────────────
+ * The Bifrost skin of the zModal CALL verb: backdrop + centered card the
+ * ModalRenderer mounts on <body> when a render_modal frame arrives. Only the
+ * STRUCTURE lives here (position, layering, dismiss affordance) — the card
+ * inherits the page palette via the tokens above; apps re-skin via zBrush. */
+.zModal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000; /* Z_INDEX.MODAL — above content, below toasts (1100) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(29, 34, 48, 0.55); /* --text at 55% — dims, never blacks out */
+  backdrop-filter: blur(2px);
+  padding: var(--space-4, 1rem);
+}
+
+.zModal-card {
+  position: relative;
+  background: var(--page-bg, #fff);
+  color: var(--text, #1d2230);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+  width: min(560px, 100%);
+  max-height: min(80vh, 100%);
+  overflow: auto;
+  padding: var(--space-4, 1rem) var(--space-4, 1.25rem);
+  animation: zModal-pop 160ms ease-out;
+}
+
+@keyframes zModal-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+
+.zModal-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  opacity: 0.55;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+}
+.zModal-close:hover { opacity: 1; }

@@ -121,6 +121,7 @@ export default class ButtonRenderer {
     let eventAction = null;
     let navAction = null;
     let crumbAction = null;
+    let modalAction = null;
     if (action && typeof action === 'object') {
       if (action.zCrumbs !== undefined && action.zCrumbs
           && typeof action.zCrumbs === 'object' && action.zCrumbs.zBack !== undefined) {
@@ -142,6 +143,16 @@ export default class ButtonRenderer {
         navAction = action;
         action = null;
         this.logger.log('[ButtonRenderer] dict-form nav →', Object.keys(navAction).join(','));
+      } else if (action.zModal !== undefined) {
+        // Dict-form zModal — the CALL verb. The spec may be inline content
+        // ({zH1: …}), a "$Block"/"@.zPath" string, or the {zUI, params} longhand.
+        // _fireEventAction only knows display events, so without this branch it
+        // logs "Unsupported action event: zModal". Route it to client.zModal,
+        // which dispatches server-side; the staged detour comes back as a
+        // render_modal frame → ModalRenderer overlay.
+        modalAction = action.zModal;
+        action = null;
+        this.logger.log('[ButtonRenderer] dict-form zModal action captured');
       } else if (action.zDelegate !== undefined) {
         const spec = action.zDelegate;
         const target = (spec && typeof spec === 'object')
@@ -217,6 +228,19 @@ export default class ButtonRenderer {
       const navPsi = this._navActionZPsi(navAction);
       if (navPsi) button.dataset.navZpsi = navPsi;
       this.logger.log('[ButtonRenderer] dict-nav button wired:', navStr, '| zPsi:', navPsi);
+    } else if (modalAction !== null) {
+      // Dict-form zModal. Fire-and-forget dispatch to the server (the CALL verb
+      // runs there); stop the click bubbling to the restored-nav delegate.
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const client = this.client || window.bifrostClient;
+        if (client?.zModal) {
+          client.zModal(modalAction);
+        } else {
+          this.logger.warn('[ButtonRenderer] zModal unavailable on client');
+        }
+      });
+      this.logger.log('[ButtonRenderer] zModal button wired');
     } else if (crumbAction) {
       // zCrumbs bulk-rewind. Stop the click bubbling to the restored-nav delegate
       // (double-nav guard, same as dict-nav above) and stamp the target so a
@@ -460,6 +484,19 @@ export default class ButtonRenderer {
         const client = this.client || window.bifrostClient;
         if (client?.zBack) {
           client.zBack();
+        }
+        return;
+      }
+
+      // zModal action — the CALL verb: server runs the detour, ships a
+      // render_modal frame back; the route never moves. Mirrors CLI semantics.
+      if (action && action.startsWith('zModal(')) {
+        const target = action.slice(7, -1).trim();
+        this.logger.log(`[ButtonRenderer] zModal action — detour to: ${target}`);
+        event.stopPropagation();
+        const client = this.client || window.bifrostClient;
+        if (client?.zModal) {
+          client.zModal(target);
         }
         return;
       }

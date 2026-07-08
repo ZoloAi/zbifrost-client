@@ -35,6 +35,7 @@ export class WidgetHookManager {
     await this.registerDashboardHook() && count++;
     await this.registerWizardGateResultHook() && count++;
     await this.registerMenuHook() && count++;
+    await this.registerModalHook() && count++;
     
     this.logger.log(`[WidgetHookManager] Registered ${count} hooks`);
   }
@@ -261,6 +262,21 @@ export class WidgetHookManager {
         this.logger.debug('[WidgetHookManager] onWizardGateResult triggered for gate:', message.gateKey);
         await this.client._ensureZDisplayOrchestrator();
         await this.client.zDisplayOrchestrator.handleWizardGateResult(message);
+      });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Register onRenderModal hook — zModal floating overlay (default for all apps)
+   */
+  async registerModalHook() {
+    if (!this.hooks.has('onRenderModal')) {
+      this.hooks.register('onRenderModal', async (message) => {
+        this.logger.debug('[WidgetHookManager] onRenderModal triggered:', message.source);
+        await this.client._ensureModalRenderer();
+        await this.client.modalRenderer.render(message);
       });
       return true;
     }

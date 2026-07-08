@@ -156,6 +156,12 @@ export const RENDERER_REGISTRY = {
     passClient: true, // TerminalRenderer needs client for execution
     exposeToWindow: true // Expose to window._TerminalRenderer for message handler
   },
+  modal: {
+    path: 'L2_Handling/display/composite/modal_renderer.js',
+    className: 'ModalRenderer',
+    isDefault: true,
+    passClient: true // ModalRenderer needs client for nested rendering + dismiss
+  },
   
   // Feedback - UI State
   spinner: {

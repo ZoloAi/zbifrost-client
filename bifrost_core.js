@@ -1114,6 +1114,12 @@ class BifrostCore {
       return this.menuRenderer;
     }
 
+    async _ensureModalRenderer() {
+      const registry = await this._ensureRendererRegistry();
+      this.modalRenderer = await registry.ensureRenderer('modal');
+      return this.modalRenderer;
+    }
+
 
     // 
     // Connection Management
@@ -1509,6 +1515,33 @@ class BifrostCore {
     }
 
     /**
+     * zModal — the CALL verb: ask the server to run a block as a detour and ship
+     * it back as a render_modal frame (→ ModalRenderer overlay). The route never
+     * moves and no history entry is written — dismissal is client-local.
+     * FIRE-AND-FORGET like zLink/zDelta: the dispatch stages _zPendingModal
+     * server-side and the bridge flushes it as a render_modal event, never a
+     * _requestId-correlated response — send() would leak a timeout callback.
+     * @param {string|Object} spec - "$Block" / "@.zPath" string, inline content
+     *   dict ({zH1: …}), or the {zUI, params} longhand.
+     */
+    async zModal(spec) {
+      const payload = { event: 'dispatch', zKey: 'zModal' };
+      payload.zHorizontal = (typeof spec === 'string')
+        ? `zModal(${spec})`
+        : { zModal: spec };
+      // Routed pages: the server session's zVaFile still points at the spark
+      // HOME, so a bare $Block would resolve against the wrong file. Ship THIS
+      // page's file identity (zuiConfig — the same source zDelta's
+      // execute_walker uses) so same-file targets resolve where they were authored.
+      const zVaFile = this.zuiConfig?.zVaFile;
+      const zVaFolder = this.zuiConfig?.zVaFolder;
+      if (zVaFile) payload.zVaFile = zVaFile;
+      if (zVaFolder) payload.zVaFolder = zVaFolder;
+      this.logger.log('[zModal] Detour dispatch:', typeof spec === 'string' ? spec : '(inline dict)');
+      this._sendWalker(payload);
+    }
+
+    /**
      * zDelegate (inline) — render a dotted target section ($Block.Section) IN PLACE
      * within the carrier's parent key container, routeless and AJAX-like. Unlike
      * zDelta (which swaps the whole zVaF panel + is crumb-aware), this keeps the
@@ -1651,8 +1684,16 @@ class BifrostCore {
       // SSOT double-walk guard (see _isDuplicateWalk): a same-file hop must not be
       // emitted twice in one burst (recursive re-walk, rapid repeat). The route
       // family is guarded at ClientNavigationManager.navigateToRoute entry.
+      // The signature MUST carry the event type + selection/dispatch identity:
+      // menu_selection and dispatch payloads have no zBlock/zVaFile, so without
+      // them every pick collapsed to one signature and the SECOND pick inside
+      // the burst window was silently dropped (fast automated clicks — e.g. a
+      // zRaven pick right after a client-local zModal dismiss — hit this).
       const sig = 'walk|' + [
+        payload.event || '',
         payload.zBlock || '', payload.zVaFile || '', payload.zVaFolder || '',
+        payload.selected || '', payload.zKey || '',
+        (typeof payload.zHorizontal === 'string' ? payload.zHorizontal : ''),
         payload.zBack ? 'B' : '', payload._zDelegateInline ? 'D' : '',
       ].join('|');
       if (this._isDuplicateWalk(sig)) {

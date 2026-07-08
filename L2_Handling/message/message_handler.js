@@ -173,6 +173,23 @@ export class MessageHandler {
         return;
       }
 
+      // zModal overlay (the CALL verb's Bifrost skin) — a detour staged
+      // server-side and flushed by the bridge; renders floating, never
+      // touches the page or the route (dismissal is client-local).
+      if (message.event === PROTOCOL_EVENTS.RENDER_MODAL) {
+        this.logger.debug('[MessageHandler] Modal event detected:', message.source);
+        if (message.data) {
+          message.data = _decodeRenderNode(message.data);
+        }
+        try {
+          this.hooks.call('onRenderModal', message);
+        } catch (hookError) {
+          this.logger.error('[MessageHandler] Error rendering modal:', hookError);
+          this.hooks.call('onError', { type: 'modal_render_error', error: hookError, message });
+        }
+        return;
+      }
+
       // Connection info event (session data from backend) - v1.6.0
       if (message.event === PROTOCOL_EVENTS.CONNECTION_INFO) {
         this.logger.debug('[MessageHandler] Connection info detected');
