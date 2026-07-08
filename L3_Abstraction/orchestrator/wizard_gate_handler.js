@@ -51,6 +51,17 @@ export class WizardGateHandler {
    * @param {string} wizardPath - Dot-path from file root to this wizard dict
    */
   async renderWizardGated(data, parentElement, gateKey, wizardPath) {
+    // The gate key is consumed HERE — clear it before any nested renderItems()
+    // call (pre-gate steps below, and the gate step's own content at the
+    // renderItems call further down). Server sets _pendingGateKey once per
+    // chunk and the orchestrator only clears it AFTER the whole top-level
+    // renderItems() returns, so without this, every recursive renderItems()
+    // spawned from this function re-detects the SAME gate key on the SAME
+    // dict shape ({cleanGateKey: gateStepValueToRender}) and calls back into
+    // renderWizardGated forever — a real infinite-recursion bug (stack
+    // overflow) for any zDialog/zWizard step reached via direct navigation
+    // (e.g. zDelta into a `{zDialog: ..., Back: zBtn}` block).
+    this.orchestrator._pendingGateKey = null;
     const cleanGateKey = gateKey.replace('!', '');
     // zProgress is wizard CHROME (a progress readout), not a step. Exclude it from
     // the step list so it never renders inline as a mis-positioned step, then draw
@@ -174,12 +185,22 @@ export class WizardGateHandler {
     const hasOwnSubmit = gateWrapper.querySelector('button[type="submit"]');
 
     // An authored gate button (zBtn → <button class="zBtn">) acts as the gate's
-    // own advance control. Repurpose its click to drive wizard_gate_submit instead
-    // of the orphan input_response that button_renderer wires by default.
-    const authoredBtn = hasOwnSubmit ? null : gateWrapper.querySelector('button.zBtn');
+    // own advance control ONLY when it has no declared action of its own — a
+    // bare "Continue"/"Submit" button in a real wizard step. button_renderer
+    // stamps data-wizard-action on any button with an explicit action: (zBack,
+    // zDelta, zAlpha…), and that button already knows what to do on click.
+    // The server's chunked engine gates ANY block that follows a blocking
+    // input (zDialog) — even a plain trailing nav button like a dialog's own
+    // "← Back" — so without this guard we'd steal the click of an ordinary
+    // nav button and reroute it into wizard_gate_submit instead of navigating.
+    const rawAuthoredBtn = hasOwnSubmit ? null : gateWrapper.querySelector('button.zBtn');
+    const authoredBtn = (rawAuthoredBtn && !rawAuthoredBtn.hasAttribute('data-wizard-action'))
+      ? rawAuthoredBtn
+      : null;
 
-    if (hasOwnSubmit) {
-      // zDialog form owns its submit — nothing to inject.
+    if (hasOwnSubmit || (rawAuthoredBtn && !authoredBtn)) {
+      // zDialog form owns its submit, OR the authored button already has its
+      // own nav action (zBack/zDelta/…) — nothing to inject, let it act natively.
     } else if (authoredBtn) {
       // Strip button_renderer's input_response click handler (cloneNode drops
       // listeners) and own the click so it advances the gate.
