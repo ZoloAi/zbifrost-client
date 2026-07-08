@@ -463,6 +463,12 @@ export class FormRenderer {
   _createInput(fieldName, fieldType, required, fieldDef = null) {
     let input;
 
+    // Author styling hook — SAME convention as a standalone zInput (_zClass
+    // lands on the rendered <input>/<select>/<textarea>), just appended
+    // alongside the canonical class so zForm-control/zSelect theming survives.
+    const authorClass = (fieldDef && typeof fieldDef === 'object' && fieldDef._zClass)
+      ? ` ${fieldDef._zClass}` : '';
+
     if (fieldType === 'select') {
       // Render <select> for enum fields — canonical .zSelect (dropdown styling)
       const options = (fieldDef && typeof fieldDef === 'object' && fieldDef.options) ? fieldDef.options : [];
@@ -470,7 +476,7 @@ export class FormRenderer {
 
       input = createSelect({
         name: fieldName,
-        class: 'zSelect',
+        class: `zSelect${authorClass}`,
         required: required
       });
 
@@ -495,7 +501,7 @@ export class FormRenderer {
       const defaultVal = fieldObj.default;
       const taAttrs = {
         name: fieldName,
-        class: 'zForm-control',
+        class: `zForm-control${authorClass}`,
         rows: 4,
         required: required,
         placeholder: fieldObj.placeholder || `Enter ${this._formatLabel(fieldName).toLowerCase()}`,
@@ -533,7 +539,7 @@ export class FormRenderer {
 
       const attrs = {
         name: fieldName,
-        class: 'zForm-control',
+        class: `zForm-control${authorClass}`,
         required: required
       };
       // readonly / disabled — native attrs, parity with the zCLI input hub
