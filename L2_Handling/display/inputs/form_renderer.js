@@ -78,6 +78,19 @@ const _TYPE_PRESETS = {
   number: { message: 'Invalid number — enter a numeric value (e.g. 42, 3.14, -7)' },
 };
 
+/**
+ * Read a File as base64 (no `data:...;base64,` prefix) for the __zFile
+ * WS envelope — see the FormData collection note in _handleSubmit.
+ */
+function _fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',').pop());
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 /** Name-based type auto-detection — mirrors Python field_rules.detect_type(). */
 function _detectType(fieldName) {
   const lower = (fieldName || '').toLowerCase();
@@ -722,6 +735,24 @@ export class FormRenderer {
     const data = {};
     for (const [key, value] of formData.entries()) {
       data[key] = value;
+    }
+
+    // A `type: file` field's FormData value is a raw File object — it has no
+    // enumerable own properties, so JSON.stringify(File) is always "{}" and
+    // the byte content never reaches the server. Read each selected file as
+    // base64 and swap it for a plain, JSON-safe envelope the server-side
+    // zos-plugin SDK decodes back into the same raw shape a multipart upload
+    // produces (see core/zos_plugin/__init__.py:_decode_zfile_kwargs).
+    for (const [key, value] of Object.entries(data)) {
+      if (typeof File !== 'undefined' && value instanceof File) {
+        if (value.size === 0) { data[key] = null; continue; }
+        data[key] = {
+          __zFile: true,
+          filename: value.name,
+          content_type: value.type || 'application/octet-stream',
+          data_b64: await _fileToBase64(value),
+        };
+      }
     }
 
     // Multi-select (select + multi → checkbox group) submits repeated keys, which

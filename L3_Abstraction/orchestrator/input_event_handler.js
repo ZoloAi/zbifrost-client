@@ -748,15 +748,18 @@ export class InputEventHandler {
         
         // Parse option string for modifiers or extract from object
         let optionLabel, optionVal, optionDisabled;
-        if (typeof optionValue === 'string') {
-          const parsed = this._parseOptionString(optionValue);
-          optionLabel = parsed.cleanLabel;
-          optionVal = parsed.cleanLabel;
-          optionDisabled = parsed.isDisabled;
-        } else {
+        if (optionValue !== null && typeof optionValue === 'object' && !Array.isArray(optionValue)) {
           optionLabel = optionValue.label || optionValue.value || '';
           optionVal = optionValue.value || optionValue.label || '';
           optionDisabled = optionValue.disabled || false;
+        } else {
+          // zolo is string-first: a bare `options: [3, 4, 5, 6]` parses to real
+          // numbers, not strings — coerce before flag-parsing so a numeric
+          // option renders instead of an empty <option> (mirrors choice_group.js).
+          const parsed = this._parseOptionString(String(optionValue));
+          optionLabel = parsed.cleanLabel;
+          optionVal = parsed.cleanLabel;
+          optionDisabled = parsed.isDisabled;
         }
         
         optionElement.textContent = optionLabel;

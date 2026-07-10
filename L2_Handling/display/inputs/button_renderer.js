@@ -879,8 +879,12 @@ export default class ButtonRenderer {
    */
   _collectInlineContext(button) {
     const values = {};
+    // A checked radio/checkbox IS the group's answer (choice_group.js SSOT) —
+    // without :checked every unselected sibling would also match and stomp
+    // the real pick with an empty/first value.
     const fieldSel = 'input[type="text"], input[type="email"], input[type="number"], ' +
-      'input[type="password"], input.zForm-control, textarea, select';
+      'input[type="password"], input[type="radio"]:checked, input[type="checkbox"]:checked, ' +
+      'input.zForm-control, textarea, select';
 
     // Climb to the WIZARD container: the gate step's own [data-zkey] wraps only
     // the button, so we keep walking up until we hit the ancestor [data-zkey]
@@ -896,6 +900,21 @@ export default class ButtonRenderer {
       }
       node = node.parentElement;
     }
+
+    // Flat-sibling wizard (11_wizard.md's canonical "one step, one key" shape —
+    // each Q/Next pair is its OWN top-level step, e.g. zQuiz's Q1/Q1_Next): a
+    // multi-gate wizard reveals ONE segment per resolve, each its own sibling
+    // group, so the climb above (when it DOES find something) only ever finds
+    // THIS segment's own small wrapper — never one spanning earlier segments'
+    // fields too. Harvest is therefore ALWAYS widened to the whole render
+    // root regardless of what the climb found; build_gate_zhat only reads the
+    // specific keys each step needs, so picking up unrelated fields is
+    // harmless. (The climb's result is still used below as the render TARGET
+    // for the next reveal — a separate concern from value harvesting.)
+    const harvestScope =
+      button.closest('#zVaF-content') || document.getElementById('zVaF-content') ||
+      document.body;
+
     if (!container) {
       container = button.closest('[data-zkey]') || button.parentElement;
     }
@@ -904,7 +923,7 @@ export default class ButtonRenderer {
     }
 
     const containerKey = container.getAttribute('data-zkey');
-    container.querySelectorAll(fieldSel).forEach((field) => {
+    harvestScope.querySelectorAll(fieldSel).forEach((field) => {
       const keyEl = field.closest('[data-zkey]');
       const key = keyEl ? keyEl.getAttribute('data-zkey') : (field.id || field.name);
       if (key && key !== containerKey) {

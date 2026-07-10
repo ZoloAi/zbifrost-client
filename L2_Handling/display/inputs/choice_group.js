@@ -55,18 +55,22 @@ export function parseOptionFlags(optionString) {
   return { cleanLabel, isDisabled, isDefault };
 }
 
-/** Normalise a raw option (string with flags, or {label,value,disabled,default}). */
+/** Normalise a raw option (string with flags, {label,value,disabled,default}, or a
+ * bare scalar). zolo is string-first: an unquoted `options: [3, 4, 5, 6]` list
+ * parses to real numbers, not strings — coerce non-object scalars to string
+ * before flag-parsing so a numeric-answer option renders (mirrors the CLI-side
+ * fix in link_handler.py's extract_option_labels). */
 function normaliseOption(raw) {
-  if (typeof raw === 'string') {
-    const p = parseOptionFlags(raw);
-    return { label: p.cleanLabel, value: p.cleanLabel, disabled: p.isDisabled, isDefault: p.isDefault };
+  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+    return {
+      label: raw.label ?? raw.value ?? '',
+      value: raw.value ?? raw.label ?? '',
+      disabled: !!raw.disabled,
+      isDefault: !!raw.default
+    };
   }
-  return {
-    label: raw.label || raw.value || '',
-    value: raw.value || raw.label || '',
-    disabled: !!raw.disabled,
-    isDefault: !!raw.default
-  };
+  const p = parseOptionFlags(String(raw));
+  return { label: p.cleanLabel, value: p.cleanLabel, disabled: p.isDisabled, isDefault: p.isDefault };
 }
 
 /**

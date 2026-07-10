@@ -547,6 +547,13 @@ export class ZDisplayOrchestrator {
           : (value?.label || value?.content || key.replace(/_/g, ' '));
         const hEvt = { event: 'header', label, indent };
         if (value?.color) hEvt.color = value.color;
+        // Forward author styling hooks — same convention as zText below (line
+        // ~566) — otherwise the SSOT applyMetadata pass at renderZDisplayEvent's
+        // tail never sees them (it only reads eventData._zClass/_zStyle).
+        if (value && typeof value === 'object') {
+          if (value._zClass) hEvt._zClass = value._zClass;
+          if (value._zStyle) hEvt._zStyle = value._zStyle;
+        }
         const el = await this.renderZDisplayEvent(hEvt, parentElement);
         if (el) parentElement.appendChild(el);
         continue;
