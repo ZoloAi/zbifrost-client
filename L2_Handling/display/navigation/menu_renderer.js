@@ -110,9 +110,14 @@ export class MenuRenderer {
     const label = option.label || option.key || option;
     const key = option.key || option;
 
+    // data-zkey is the SSOT click-target attribute (bifrost_core.js's ancestry
+    // walk, ws_runner.py's zPick, every other renderer) — stamped on BOTH the
+    // row (for CSS/debugging parity with the rest of the client) and the
+    // button itself, since zRaven's zPick selector is `button[data-zkey=...]`
+    // directly, not a wrapping container.
     return `
-      <div class="zMenu-option zmb-2" data-key="${this._escapeHtml(key)}">
-        <button class="zBtn zBtn-outline-primary zW-100 zText-start zp-3" data-index="${index}">
+      <div class="zMenu-option zmb-2" data-zkey="${this._escapeHtml(key)}">
+        <button class="zBtn zBtn-outline-primary zW-100 zText-start zp-3" data-index="${index}" data-zkey="${this._escapeHtml(key)}">
           <span class="zBadge zBadge-secondary zme-2">${index + 1}</span>
           ${this._escapeHtml(label.replace(/[*~^$]/g, ''))}
         </button>
@@ -149,7 +154,7 @@ export class MenuRenderer {
     optionButtons.forEach((button, _idx) => {
       button.addEventListener('click', () => {
         const optionDiv = button.closest('.zMenu-option');
-        const selectedKey = optionDiv.dataset.key;
+        const selectedKey = optionDiv.dataset.zkey;
 
         this.logger.log('[MenuRenderer]  Menu selection:', selectedKey);
         this.logger.log('[MenuRenderer] Menu selection', { menu: menuKey, selected: selectedKey });

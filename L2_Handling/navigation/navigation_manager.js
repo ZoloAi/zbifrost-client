@@ -470,7 +470,7 @@ export class NavigationManager {
       }
       routeConfig = await res.json();
 
-      const { zBlock: routeZBlock, zVaFile, zVaFolder, zMeta } = routeConfig;
+      const { zBlock: routeZBlock, zVaFile, zVaFolder, zMeta, routeParams } = routeConfig;
       // A zURL/zAlpha to a specific block carries it out-of-band (engine SSOT:
       // the zPath tail). Honor it over the route's auto-discovered FIRST block
       // so a cross-file link lands on the named block — exactly like zCLI. The
@@ -525,6 +525,7 @@ export class NavigationManager {
         zVaFile,
         zVaFolder,
         zBlock,
+        routeParams,
       };
       // A live server nav supersedes any pending offline retry.
       this.client._pendingOfflineNav = null;
@@ -543,6 +544,13 @@ export class NavigationManager {
       if (navbar) walkerRequest.navbar = navbar;
       if (zOrigin) walkerRequest.zOrigin = zOrigin;
       if (zBack) walkerRequest.zBack = true;
+      // SSOT gap closer (mirrors bifrost_core's autoRequest): a dynamic route
+      // (e.g. /s/%slug) seats %route.* server-side for THIS route-config
+      // response's own set_route_params call above, but that seat lives in a
+      // per-request session unit that's gone by the time THIS execute_walker
+      // reaches the server over the already-open WS. Forward it so the server
+      // can re-seat %route.* before resolving the block's zMeta.zSpool.
+      if (routeParams) walkerRequest.params = routeParams;
       this.logger.debug('[ClientNav] Sending walker request', walkerRequest);
       this.client.connection.send(JSON.stringify(walkerRequest));
 

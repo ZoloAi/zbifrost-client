@@ -812,7 +812,7 @@ export class ZDisplayOrchestrator {
 
     // Reset menu to neutral — deselect all buttons, hide all content
     const resetMenu = () => {
-      ul.querySelectorAll('button[data-key]').forEach(b => b.classList.remove('active'));
+      ul.querySelectorAll('button[data-zkey]').forEach(b => b.classList.remove('active'));
       options.forEach(k => {
         const ph = placeholders[k];
         if (ph) { ph.style.display = 'none'; ph.innerHTML = ''; delete ph.dataset.rendered; }
@@ -826,10 +826,13 @@ export class ZDisplayOrchestrator {
       const btn = document.createElement('button');
       btn.className = 'zNav-link zBtn w-100 text-start zp-2';
       btn.setAttribute('role', 'menuitem');
-      btn.dataset.key = optKey;
+      // data-zkey is the SSOT click-target attribute (ws_runner.py's zPick,
+      // bifrost_core.js's ancestry walk, metadata_processor.js) — matches the
+      // container's own data-zkey (line above), NOT the legacy data-key.
+      btn.dataset.zkey = optKey;
       // Strip the leading delta/bounce/anchor modifier ($ ^ ~) so the visible
       // label reads cleanly ("$Edit_Profile" → "Edit Profile"). The raw optKey is
-      // preserved on data-key for selection/resolution.
+      // preserved on data-zkey for selection/resolution.
       const label = menuValue.labels?.[optKey] ?? optKey.replace(/^[$^~]+/, '').replace(/_/g, ' ');
       btn.innerHTML = `<span class="zBadge zBadge-secondary zme-2">${idx + 1}</span>${label}`;
 
@@ -942,7 +945,7 @@ export class ZDisplayOrchestrator {
       const backNav = document.createElement('button');
       backNav.className = 'zNav-link zBtn zW-100 zText-start zp-2';
       backNav.setAttribute('role', 'menuitem');
-      backNav.dataset.key = 'zBack';
+      backNav.dataset.zkey = 'zBack';
       backNav.innerHTML = `<span class="zBadge zBadge-secondary zme-2">${options.length + 1}</span>Back`;
       backNav.addEventListener('click', () => {
         const parentPh = containerDiv.closest('.zMenu-option-content');
@@ -953,7 +956,7 @@ export class ZDisplayOrchestrator {
           parentPh.innerHTML = '';
           delete parentPh.dataset.rendered;
           if (ownerContainer && ownerKey) {
-            const ownerBtn = ownerContainer.querySelector(`button[data-key="${ownerKey}"]`);
+            const ownerBtn = ownerContainer.querySelector(`button[data-zkey="${ownerKey}"]`);
             if (ownerBtn) ownerBtn.classList.remove('active');
           }
         } else {

@@ -224,8 +224,17 @@ export function createInput(type = 'text', attributes = {}) {
 export function createTextarea(attributes = {}) {
   const textarea = createElement('textarea');
 
-  if (Object.keys(attributes).length > 0) {
-    setAttributes(textarea, attributes);
+  // <textarea> has no `value` HTML attribute — its content comes from the
+  // `.value` DOM property (or text node), so `value` must be pulled out of
+  // the generic attribute bag and assigned directly; left to setAttributes
+  // below it silently no-ops and the field renders (and submits) empty.
+  const { value, ...rest } = attributes;
+
+  if (Object.keys(rest).length > 0) {
+    setAttributes(textarea, rest);
+  }
+  if (value !== null && value !== undefined) {
+    textarea.value = String(value);
   }
 
   return textarea;
