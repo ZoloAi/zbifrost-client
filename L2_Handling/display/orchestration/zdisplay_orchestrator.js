@@ -481,6 +481,18 @@ export class ZDisplayOrchestrator {
         continue;
       }
 
+      // zModal as inline content (e.g. a ~* menu option's body, a wizard step) —
+      // the block data already lives in this chunk, so there's no server detour
+      // to wait on; paint it locally through the SAME ModalRenderer overlay the
+      // CALL-verb's render_modal frame uses (SSOT rendering, zero round-trip).
+      if (key === 'zModal') {
+        const modalData = (value && typeof value === 'object') ? value : {};
+        this.logger.debug('[ZDisplayOrchestrator] zModal inline glance:', Object.keys(modalData));
+        await this.client._ensureModalRenderer();
+        await this.client.modalRenderer.render({ data: modalData, source: 'zModal' });
+        continue;
+      }
+
       // zLogger: app-level log — output to browser console (mirrors backend zos.app.log)
       if (key === 'zLogger') {
         let msg = '', level = 'INFO';
