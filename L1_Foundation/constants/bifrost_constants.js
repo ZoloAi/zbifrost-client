@@ -168,6 +168,14 @@ export const PROTOCOL_EVENTS = {
   APP_LOG: 'app_log',
 };
 
+// Wire-protocol compatibility version. Integer, bumped ONLY on breaking wire
+// changes (opcode renames/removals, event shape changes). The server (zGuard)
+// is the SSOT and emits its own protocol_version in connection_info; the
+// client warns on mismatch but never hard-fails — the normal skew is a
+// floating-channel client running ahead of a stale server .so. Dormant until
+// the server starts emitting the field.
+export const PROTOCOL_VERSION = 1;
+
 // navigate_back `reason` discriminators (SSOT).
 export const PROTOCOL_REASONS = {
   BOUNCE_BACK_COMPLETED: 'bounce_back_block_completed',

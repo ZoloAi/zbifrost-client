@@ -6,6 +6,4 @@
  * Provides: BifrostClient public API
  */
 
-// Export subdirectories (will be populated in Step 5)
-export * from './client/index.js';
 export * from './lifecycle/lifecycle.js';

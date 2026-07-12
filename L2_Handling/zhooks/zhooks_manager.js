@@ -21,7 +21,7 @@
 
 // name → module path (resolved against the client BASE_URL at load time).
 // SSOT for the set of module zHooks (opt-in, dynamically imported features).
-const ZHOOK_REGISTRY = {
+export const ZHOOK_REGISTRY = {
   crumbs_live: 'L2_Handling/zhooks/features/crumbs_live.js',
   cache_live: 'L2_Handling/zhooks/features/cache_live.js',
 };

@@ -17,7 +17,7 @@ After the socket opens, the server sends exactly one `connection_info`:
   "event": "connection_info",
   "data": {
     "server_version": "…",
-    "bifrost_core_url": "https://cdn.jsdelivr.net/gh/ZoloAi/zbifrost-client@v1.7.52/bifrost_core.js",
+    "bifrost_core_url": "https://cdn.jsdelivr.net/gh/ZoloAi/zbifrost-client@v1.7.105/bifrost_core.js",
     "nav_html": "<nav>…</nav>",        // pre-built, RBAC-filtered navbar
     "session": { "authenticated": false, "username": null, "role": null, … },
     "features": [ … ],

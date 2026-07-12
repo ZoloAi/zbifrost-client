@@ -7,7 +7,20 @@
     "type": "git",
     "url": "git+https://github.com/ZoloAi/zbifrost-client.git"
   },
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
+  "type": "module",
+  "main": "bifrost_client.js",
+  "files": [
+    "bifrost_client.js",
+    "bifrost_core.js",
+    "L1_Foundation",
+    "L2_Handling",
+    "L3_Abstraction",
+    "L4_Orchestration",
+    "zSys",
+    "syntax",
+    "docs"
+  ],
   "keywords": [
     "zos",
     "zbifrost",
@@ -19,6 +32,14 @@
     "access": "public"
   },
   "scripts": {
-    "release:patch": "npm version patch && npm publish"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm test",
+    "postpublish": "node scripts/postpublish.js",
+    "release:patch": "npm test && npm version patch && npm publish && git push && git push --tags"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3",
+    "vitest": "^2.1.9"
   }
 }

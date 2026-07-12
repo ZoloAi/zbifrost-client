@@ -213,7 +213,7 @@ export class GroupRenderer {
         }
         const textWrapper = document.createElement('div');
         textWrapper.classList.add('zInputGroup-text');
-        const { createInput } = await import('../primitives/form_primitives.js');
+        const { createInput } = await import('../../L2_Handling/display/primitives/form_primitives.js');
         const radioInput = createInput('radio', { 
           id: `${groupName}_${i}`, 
           name: groupName, 
@@ -334,7 +334,7 @@ export class GroupRenderer {
             textWrapper.classList.add('zInputGroup-text');
             
             // Create radio input
-            const { createInput } = await import('../primitives/form_primitives.js');
+            const { createInput } = await import('../../L2_Handling/display/primitives/form_primitives.js');
             const radioInput = createInput('radio', {
               id: `${groupName}_${i}`,
               name: groupName,
@@ -495,7 +495,7 @@ export class GroupRenderer {
               textWrapper.classList.add('zInputGroup-text');
               
               // Create radio input
-              const { createInput } = await import('../primitives/form_primitives.js');
+              const { createInput } = await import('../../L2_Handling/display/primitives/form_primitives.js');
               const radioInput = createInput('radio', {
                 id: `${groupName}_${i}`,
                 name: groupName,

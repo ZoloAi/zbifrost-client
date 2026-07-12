@@ -6,7 +6,7 @@
  * A production-ready WebSocket client for zCLI's zBifrost bridge.
  * Modular architecture with lazy loading and automatic zTheme integration.
  *
- * @version 1.6.7
+ * @version See package.json / git tag (release SSOT — do not pin here)
  * @author Gal Nachshon
  * @license MIT
  *
@@ -580,8 +580,7 @@ class BifrostCore {
         },
 
         _applyDarkMode: async (isDark) => {
-          // Use dark mode utility (Layer 2) - eliminates 100+ lines of duplicate code
-          const { applyDarkModeClasses } = await import(`${BASE_URL}utils/dark_mode_utils.js`);
+          const { applyDarkModeClasses } = await import(`${BASE_URL}zSys/theme/dark_mode_utils.js`);
           applyDarkModeClasses(isDark, {
             contentArea: this._zVaFElement,
             logger: this.logger
@@ -589,18 +588,21 @@ class BifrostCore {
         },
 
         addDarkModeToggle: async (navElement) => {
-          // Use DarkModeToggle widget (extracted for modularity)
-          const { DarkModeToggle } = await import(`${BASE_URL}widgets/dark_mode_toggle.js`);
-          const darkModeWidget = new DarkModeToggle(this.logger);
-
-          // Create toggle with theme change callback
-          darkModeWidget.create(navElement, (newTheme) => {
-            // Apply theme
-            this.hooks._applyDarkMode(newTheme === 'dark');
-
-            // Call onThemeChange hook if registered
+          const { getDarkModeFromStorage, toggleDarkMode } = await import(`${BASE_URL}zSys/theme/dark_mode_utils.js`);
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'zTheme-toggle';
+          btn.setAttribute('aria-label', 'Toggle dark mode');
+          btn.innerHTML = `<i class="bi ${getDarkModeFromStorage() ? 'bi-sun' : 'bi-moon'}"></i>`;
+          btn.addEventListener('click', () => {
+            const newTheme = toggleDarkMode(getDarkModeFromStorage(), {
+              contentArea: this._zVaFElement,
+              logger: this.logger
+            });
+            btn.innerHTML = `<i class="bi ${newTheme === 'dark' ? 'bi-sun' : 'bi-moon'}"></i>`;
             this.hooks.call('onThemeChange', newTheme);
           });
+          navElement.appendChild(btn);
         }
       };
 
@@ -1053,6 +1055,15 @@ class BifrostCore {
       const registry = await this._ensureRendererRegistry();
       this.progressBarRenderer = await registry.ensureRenderer('progressBar');
       return this.progressBarRenderer;
+    }
+
+    async _ensureInputRequestRenderer() {
+      if (!this.inputRequestRenderer) {
+        const module = await this._loadModule('input_request_renderer');
+        this.inputRequestRenderer = new module.InputRequestRenderer(this.logger);
+        this.logger.debug('InputRequestRenderer loaded');
+      }
+      return this.inputRequestRenderer;
     }
 
     // Orchestrators

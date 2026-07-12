@@ -32,6 +32,10 @@
  * means existing lazy-load call sites stay identical.
  */
 
+// SSOT for .zolo grammar location: server-announced syntaxBase (zui-config)
+// preferred, bundled syntax/ as fallback — see resolveSyntaxBase docstring.
+import { resolveSyntaxBase } from '../../L1_Foundation/bootstrap/prism_loader.js';
+
 export class AssetLoader {
   constructor(client) {
     this.client = client;
@@ -113,15 +117,16 @@ export class AssetLoader {
       this.logger.debug('[AssetLoader] Prism CSS already loaded');
     }
     
-    // Load custom .zolo theme overrides — bundled WITH the client (syntax/),
-    // resolved relative to this module so the zlsp palette ships built-in.
-    const zoloTheme = new URL('../../syntax/prism-zolo-theme.css', import.meta.url).href;
+    // Load custom .zolo theme overrides — server-announced bundle preferred
+    // (matches the engine's zolo-lsp), bundled syntax/ as fallback.
+    const syntaxAssets = resolveSyntaxBase();
+    const zoloTheme = `${syntaxAssets.base}prism-zolo-theme.css`;
     if (!document.querySelector(`link[href="${zoloTheme}"]`)) {
       const link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = zoloTheme;
       document.head.appendChild(link);
-      this.logger.debug('[AssetLoader] Prism .zolo custom theme loaded');
+      this.logger.debug(`[AssetLoader] Prism .zolo custom theme loaded (${syntaxAssets.source})`);
     }
 
     // Load Prism core + common languages
@@ -186,10 +191,10 @@ export class AssetLoader {
     const zoloLanguages = ['zolo', 'zspark', 'zui', 'zschema', 'zconfig', 'zenv'];
     const totalLanguages = zoloLanguages.length;
 
-    // zolo grammars ship WITH the client (syntax/), not the host app. Resolve
-    // them relative to this module so every zApp gets zolo highlighting for
-    // free — no per-app /static/js/prism-*.js copies required.
-    const syntaxBase = new URL('../../syntax/', import.meta.url).href;
+    // Server-announced bundle preferred (grammar == the engine's zolo-lsp),
+    // client-bundled syntax/ as fallback for servers that predate syntaxBase.
+    const { base: syntaxBase, source } = resolveSyntaxBase();
+    this.logger.debug(`[AssetLoader] .zolo grammars from: ${syntaxBase} (${source})`);
 
     const alreadyLoaded = zoloLanguages.every((lang) => window.Prism?.languages?.[lang]);
     if (alreadyLoaded) {

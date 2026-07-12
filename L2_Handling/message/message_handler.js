@@ -8,7 +8,7 @@
  */
 
 // Constants
-import { TIMEOUTS, PROTOCOL_EVENTS, PROTOCOL_REASONS } from '../../L1_Foundation/constants/bifrost_constants.js';
+import { TIMEOUTS, PROTOCOL_EVENTS, PROTOCOL_REASONS, PROTOCOL_VERSION } from '../../L1_Foundation/constants/bifrost_constants.js';
 import { zfuncSignalFrom } from '../display/feedback/zfunc_signal.js';
 
 // zRender op-code decoder — reverse map of render_opcodes.py EVENT_TO_OP
@@ -20,7 +20,7 @@ import { zfuncSignalFrom } from '../display/feedback/zfunc_signal.js';
 // entry count in sync (currently 35). If the server adds/renames an op, an
 // unknown opcode will surface via _warnUnknownOpcode() below instead of being
 // silently dropped.
-const _ZRENDER_OPS = {"tx":"text","hd":"header","im":"image","rt":"rich_text","ic":"icon","zu":"zURL","zt":"zTable","er":"error","wr":"warning","su":"success","inf":"info","rs":"read_string","pb":"progress_bar","mn":"zMenu","zd":"zDash","zdl":"zDialog","zi":"zInput","sep":"separator","cod":"code","lnk":"link","bdg":"badge","spn":"spinner","ls":"list","dl":"dl","btn":"button","rb":"read_bool","rp":"read_password","jsn":"json","div":"divider","crd":"card","ztrm":"zTerminal","sel":"selection","zcr":"zCrumbs","pc":"progress_complete","swi":"swiper_init"};
+export const _ZRENDER_OPS = {"tx":"text","hd":"header","im":"image","rt":"rich_text","ic":"icon","zu":"zURL","zt":"zTable","er":"error","wr":"warning","su":"success","inf":"info","rs":"read_string","pb":"progress_bar","mn":"zMenu","zd":"zDash","zdl":"zDialog","zi":"zInput","sep":"separator","cod":"code","lnk":"link","bdg":"badge","spn":"spinner","ls":"list","dl":"dl","btn":"button","rb":"read_bool","rp":"read_password","jsn":"json","div":"divider","crd":"card","ztrm":"zTerminal","sel":"selection","zcr":"zCrumbs","pc":"progress_complete","swi":"swiper_init"};
 
 // Surface opcode-mirror drift loudly (once per unknown op) so a server change
 // that this client hasn't mirrored is visible instead of silently swallowed.
@@ -34,7 +34,7 @@ function _warnUnknownOpcode(op) {
   );
 }
 
-function _decodeRenderNode(node) {
+export function _decodeRenderNode(node) {
   if (!node || typeof node !== 'object') return node;
   if (Array.isArray(node)) return node.map(_decodeRenderNode);
   // Node carrying an op code — decode known ops; flag unknown ones as drift.
@@ -71,6 +71,25 @@ export class MessageHandler {
     this.requestId = 0;
     this.callbacks = new Map();
     this.timeout = TIMEOUTS.REQUEST_TIMEOUT; // Default timeout from constants
+  }
+
+  /**
+   * Warn (once) if the server's wire-protocol version differs from ours.
+   *
+   * Dormant until zGuard emits protocol_version in connection_info. Warn-only
+   * by design: the expected skew is an auto-updating client ahead of a stale
+   * server .so, which must keep working.
+   */
+  _checkProtocolVersion(data) {
+    const serverVersion = data && data.protocol_version;
+    if (serverVersion === undefined || serverVersion === null) return; // server doesn't emit it yet
+    if (serverVersion === PROTOCOL_VERSION || this._protocolVersionWarned) return;
+    this._protocolVersionWarned = true;
+    console.warn(
+      `[zBifrost] Protocol version mismatch: client speaks v${PROTOCOL_VERSION}, ` +
+      `server emits v${serverVersion}. Continuing, but wire vocabulary may have ` +
+      `drifted — align the zbifrost-client release with the zGuard build.`
+    );
   }
 
   /**
@@ -193,6 +212,7 @@ export class MessageHandler {
       // Connection info event (session data from backend) - v1.6.0
       if (message.event === PROTOCOL_EVENTS.CONNECTION_INFO) {
         this.logger.debug('[MessageHandler] Connection info detected');
+        this._checkProtocolVersion(message.data);
         this.hooks.call('onConnectionInfo', message.data);
         // Also trigger onConnected for backward compatibility
         this.hooks.call('onConnected', message.data);
@@ -592,8 +612,8 @@ export class MessageHandler {
       // One handler serves both surfaces: a zUI/walker zFunc and a button/action
       // click both arrive here as zfunc_exec (the server ships the SSOT envelope).
       if (message.event === PROTOCOL_EVENTS.ZFUNC_EXEC) {
-        if (message.stdout) console.log('[zFunc stdout]', message.stdout);
-        console.log('[zFunc]', message.spec, '→', message.result, message.success ? '✓' : '✗');
+        if (message.stdout) this.logger.debug('[zFunc stdout]', message.stdout);
+        this.logger.debug('[zFunc]', message.spec, '→', message.result, message.success ? '✓' : '✗');
         this._emitZFuncSignal(message);
         return;
       }

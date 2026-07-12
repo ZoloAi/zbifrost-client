@@ -129,7 +129,7 @@ export const RENDERER_REGISTRY = {
   
   // Outputs - Navigation
   navigation: {
-    path: 'L2_Handling/display/outputs/navigation_renderer.js',
+    path: 'L2_Handling/display/navigation/navigation_renderer.js',
     className: 'NavigationRenderer',
     isDefault: false,
     passClient: true, // NavigationRenderer needs client for link primitives

@@ -107,7 +107,6 @@ export function createHeading(level = 1, attributes = {}) {
 
   // zH0: system-level heading rendered as native <h0> (zOS custom element)
   const tag = `h${level}`;
-  console.log(`[typography_primitives] Creating heading: level=${level}, tag=${tag}`);
   const heading = createElement(tag);
 
   if (Object.keys(attributes).length > 0) {

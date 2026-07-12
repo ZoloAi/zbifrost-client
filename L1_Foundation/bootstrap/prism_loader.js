@@ -6,6 +6,32 @@
  */
 
 /**
+ * Resolve the base URL for the .zolo Prism grammar bundle (SSOT).
+ *
+ * Preference order:
+ *   1. Server-announced `syntaxBase` from the injected zui-config script —
+ *      an OPAQUE, versioned URL (e.g. "/zsyntax/1.2.0/") served by zServer
+ *      straight from the installed zolo-lsp package, so highlighting always
+ *      matches the engine's actual grammar. Never assume its shape.
+ *   2. The client's bundled syntax/ dir — a FROZEN fallback for servers that
+ *      predate the announcement. Do not refresh it by hand; the served
+ *      bundle supersedes it.
+ *
+ * @returns {{base: string, source: string}} trailing-slash base + origin tag
+ */
+export function resolveSyntaxBase() {
+  try {
+    const el = document.getElementById('zui-config');
+    const announced = el ? JSON.parse(el.textContent)?.syntaxBase : null;
+    if (announced && typeof announced === 'string') {
+      const base = announced.endsWith('/') ? announced : `${announced}/`;
+      return { base, source: 'server (zolo-lsp)' };
+    }
+  } catch (e) { /* malformed zui-config — fall back to bundled */ }
+  return { base: new URL('../../syntax/', import.meta.url).href, source: 'bundled fallback' };
+}
+
+/**
  * Load Prism.js from CDN for syntax highlighting
  * 
  * NOTE: Prism requires specific load order (core → components → .zolo languages)
@@ -33,15 +59,16 @@ export function loadPrismJS(logger) {
     logger.debug('Prism.js CSS already loaded');
   }
   
-  // Load custom .zolo theme overrides — bundled WITH the client (syntax/),
-  // resolved relative to this module so the zlsp palette ships built-in.
-  const zoloTheme = new URL('../../syntax/prism-zolo-theme.css', import.meta.url).href;
+  // Load custom .zolo theme overrides — server-announced bundle preferred
+  // (matches the engine's zolo-lsp), bundled syntax/ as fallback.
+  const syntaxAssets = resolveSyntaxBase();
+  const zoloTheme = `${syntaxAssets.base}prism-zolo-theme.css`;
   if (!document.querySelector(`link[href="${zoloTheme}"]`)) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = zoloTheme;
     document.head.appendChild(link);
-    logger.debug('[Prism] .zolo custom theme loaded');
+    logger.debug(`[Prism] .zolo custom theme loaded (${syntaxAssets.source})`);
   }
 
   // Load Prism core + common languages
@@ -106,9 +133,10 @@ function loadPrismZolo(logger) {
   const zoloLanguages = ['zolo', 'zspark', 'zui', 'zschema', 'zconfig', 'zenv'];
   const totalLanguages = zoloLanguages.length;
 
-  // zolo grammars ship WITH the client (syntax/), not the host app. Resolve
-  // them relative to this module so every zApp gets zolo highlighting for free.
-  const syntaxBase = new URL('../../syntax/', import.meta.url).href;
+  // Server-announced bundle preferred (grammar == the engine's zolo-lsp),
+  // client-bundled syntax/ as fallback for servers that predate syntaxBase.
+  const { base: syntaxBase, source } = resolveSyntaxBase();
+  logger.debug(`[Prism] .zolo grammars from: ${syntaxBase} (${source})`);
 
   const alreadyLoaded = zoloLanguages.every((lang) => window.Prism?.languages?.[lang]);
   if (alreadyLoaded) {
