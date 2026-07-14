@@ -87,6 +87,49 @@ export class CacheManager {
   }
 
   /**
+   * Discard this tab's stale rendered DOM after the server refused a resume,
+   * then re-issue the page's walker so a clean render replaces it.
+   *
+   * Three surfaces hold stale state: the form-context map (keys the old
+   * dialogIds), the rendered-HTML cache (SPA tab HTML), and the content
+   * element itself. Clear all three, then re-send the autoRequest walker —
+   * chunks that may have already painted into the old surface are wiped, and
+   * the fresh stream paints into an empty content host. Best-effort: any step
+   * failing must not break the connection.
+   */
+  _hardResetRenderSurface() {
+    const client = this.client;
+
+    // 1. Drop stale form contexts — a stale dialogId can no longer submit.
+    try {
+      if (client.formRenderer && client.formRenderer.formContexts) {
+        client.formRenderer.formContexts.clear();
+      }
+    } catch (e) { this.logger.debug('[Cache] formContexts clear skipped:', e?.message); }
+
+    // 2. Clear the SPA rendered-HTML cache (same reason as cold-start clear).
+    try {
+      if (client.cache) client.cache.clear('rendered');
+    } catch (e) { this.logger.debug('[Cache] rendered cache clear skipped:', e?.message); }
+
+    // 3. Empty the content host so nothing stale survives the repaint.
+    try {
+      if (client._zVaFElement) client._zVaFElement.innerHTML = '';
+    } catch (e) { this.logger.debug('[Cache] content clear skipped:', e?.message); }
+
+    // 4. Re-issue the page's walker for a clean render. Fire-and-forget, exactly
+    //    as connect() auto-sends it; the server re-streams the whole page.
+    try {
+      const req = client.options && client.options.autoRequest;
+      if (req && req.event === 'execute_walker' && client.connection
+          && client.connection.isConnected()) {
+        client.connection.send(JSON.stringify(req));
+        this.logger.debug('[Cache] Re-issued walker after stale reset');
+      }
+    } catch (e) { this.logger.debug('[Cache] walker re-issue skipped:', e?.message); }
+  }
+
+  /**
    * Dynamically load a script (v1.6.0)
    * @param {string} src - Script URL
    */
@@ -114,6 +157,24 @@ export class CacheManager {
     // v1.6.0: Register hook to populate session from connection_info
     this.hooks.register('onConnectionInfo', async (data) => {
       try {
+        // Stale-DOM guard (SSOT with zGuard's server-side dialog registry):
+        // if we PRESENTED a ?zresume= id but the server minted a fresh session
+        // (session_resumed:false — e.g. a guest, or the server restarted and
+        // wiped its in-memory dialog registry / paused generators), then any DOM
+        // this tab is still showing predates the new session. Its forms carry
+        // dialogIds the new server never registered, so a submit is refused
+        // ("stale form") and partial cached chunks can paint over the fresh
+        // render. Hard-reset the surface so the fresh execute_walker paints clean.
+        try {
+          const presentedResume = sessionStorage.getItem('zOS_resume_id');
+          const serverResumed = data && data.session_resumed === true;
+          if (presentedResume && !serverResumed && !this._staleResetDone) {
+            this._staleResetDone = true;
+            this.logger.log('[Cache] Resume refused by server (fresh session) — discarding stale DOM and re-rendering');
+            this._hardResetRenderSurface();
+          }
+        } catch (_) { /* storage unavailable — nothing presented, nothing to reset */ }
+
         // Blue-green / scale-to-zero resume: remember our server session id so a
         // reconnect (auto-reconnect lands on a swapped-in instance) can present it
         // and resume the same session instead of re-authenticating from scratch.
