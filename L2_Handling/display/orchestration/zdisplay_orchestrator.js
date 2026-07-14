@@ -707,8 +707,14 @@ export class ZDisplayOrchestrator {
           }
           // Container was kept, element already appended to container
         }
-      } else if (value && value.zDialog) {
-        // Check if this has a direct zDialog form
+      } else if (value && value.zDialog
+          && Object.keys(value).filter(k => !k.startsWith('_')).length === 1) {
+        // Direct zDialog form — ONLY when the dialog is the container's sole
+        // content key. A container whose zDialog has SIBLINGS (e.g. Sign_Up_Col:
+        // {Page_Title, zDialog, Go_CheckEmail}) must fall through to the generic
+        // recursion below: this shortcut used to swallow the whole container and
+        // render just the form, silently dropping every sibling (page title,
+        // intro text, links) — the "only the form paints" bug.
         this.logger.log('  Rendering zDialog from direct value:', value.zDialog);
         const formRenderer = await this.client._ensureFormRenderer();
         const formElement = formRenderer.renderForm(value.zDialog);

@@ -103,8 +103,14 @@ export class WizardGateHandler {
     // When wizard gate renders zDialog, inject _dialogId if missing (backend may not have sent it yet)
     let gateStepValueToRender = gateStepValue;
     if (gateStepValue && typeof gateStepValue === 'object' && gateStepValue.zDialog) {
-      // Extract _dialogId from parent context if present, or generate one
-      const dialogId = gateStepValue._dialogId || this._generateDialogId();
+      // PRESERVE the server-stamped id: the walker registers onSubmit under
+      // zDialog._dialogId — minting a fresh one here re-keyed the rendered form
+      // to an id the server never registered, so every submit came back
+      // "Refusing client payload" (registry miss). Generate only when the
+      // backend truly sent none.
+      const dialogId = gateStepValue.zDialog._dialogId
+          || gateStepValue._dialogId
+          || this._generateDialogId();
       this.logger.log('[WizardGate] Injecting _dialogId into zDialog:', dialogId);
       
       // Create a new object with _dialogId injected into the zDialog object
