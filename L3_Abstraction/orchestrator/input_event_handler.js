@@ -459,6 +459,12 @@ export class InputEventHandler {
         if (resp.ok && json && json.ok && json.data && json.data.url) {
           this._swapAvatar(fileInput, json.data.url);
           this.logger.log(`[InputEventHandler] zAPI upload ok → ${json.data.url}`);
+          // Declarative follow-up (server-stamped from the onChange's nested
+          // onSuccess): dismiss a hosting modal and re-walk the target block —
+          // the same zDelta contract a dialog submit honors, so an upload is
+          // as live as a form. The _swapAvatar above stays as the instant
+          // optimistic paint; the re-walk is the authoritative one.
+          this._fireUploadOnSuccess(fileInput, eventData.zapi_onsuccess);
         } else {
           const err = (json && json.error) || `HTTP ${resp.status}`;
           this.logger.error(`[InputEventHandler] zAPI upload failed: ${err}`);
@@ -467,6 +473,37 @@ export class InputEventHandler {
         this.logger.error(`[InputEventHandler] zAPI upload error: ${e}`);
       }
     });
+  }
+
+  /**
+   * Fire the server-stamped upload onSuccess ("zDelta($Block)" / "$Block").
+   * Mirrors FormRenderer's dialog follow-up: when the upload input lives in a
+   * modal overlay and the delta target is on the page underneath, dismiss the
+   * overlay first, then re-fire the block's own zDelta hop.
+   * @param {HTMLInputElement} fileInput
+   * @param {string|undefined} onSuccess - raw authored value (zDelta form)
+   */
+  _fireUploadOnSuccess(fileInput, onSuccess) {
+    if (!onSuccess || typeof onSuccess !== 'string') return;
+    const raw = onSuccess.trim();
+    let blockName = null;
+    if (raw.startsWith('zDelta(')) {
+      blockName = raw.slice(7, -1).replace(/^\$/, '').trim();
+    } else if (raw.startsWith('$')) {
+      blockName = raw.slice(1).trim();
+    }
+    if (!blockName) {
+      this.logger.warn(`[InputEventHandler] Unsupported upload onSuccess: ${raw}`);
+      return;
+    }
+    const client = this.client || window.bifrostClient;
+    if (!client || typeof client.zDelta !== 'function') return;
+    this.logger.log(`[InputEventHandler] upload onSuccess → zDelta(${blockName})`);
+    if (fileInput.closest('.zModal-overlay')
+        && client.modalRenderer && typeof client.modalRenderer.dismiss === 'function') {
+      client.modalRenderer.dismiss();
+    }
+    client.zDelta(blockName);
   }
 
   /**

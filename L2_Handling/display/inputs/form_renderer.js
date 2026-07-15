@@ -214,7 +214,7 @@ export class FormRenderer {
     // enrichment — for those, an absent/empty fields list is the same authored
     // intent (a confirm-and-fire button), so fall back to the shape itself.
     if (dialog_mode === 'confirm' || !fields || fields.length === 0) {
-      return this._renderConfirmButton(title, onSubmit, _dialogId);
+      return this._renderConfirmButton(title, onSubmit, _dialogId, isLive);
     }
 
     // Create form container using primitives. A live form drops the zCard
@@ -336,21 +336,31 @@ export class FormRenderer {
    * @param {string} title - Dialog title (shown above the button)
    * @param {Object} onSubmit - onSubmit action from the dialog definition
    * @param {string} dialogId - Unique dialog identifier
+   * @param {boolean} [isLive=false] - fields-less + zLive: the AMBIENT one-click
+   *   confirm ("Clear filter") — renders as a plain toolbar button labeled with
+   *   the dialog TITLE (no card chrome, no generic 'Confirm').
    * @returns {HTMLElement} Confirm button container
    */
-  _renderConfirmButton(title, onSubmit, dialogId) {
+  _renderConfirmButton(title, onSubmit, dialogId, isLive = false) {
     const action = onSubmit?.zData?.action || 'submit';
     const isDangerous = action === 'delete';
-    const btnClass = isDangerous ? 'zBtn-danger' : 'zBtn-primary';
-    const btnLabel = isDangerous ? 'Confirm Delete' : 'Confirm';
+    const btnClass = isDangerous ? 'zBtn-danger' : (isLive ? 'zBtn-secondary' : 'zBtn-primary');
+    const btnLabel = isLive
+      ? (title || 'Confirm')
+      : (isDangerous ? 'Confirm Delete' : 'Confirm');
 
     this.logger.log(`[FormRenderer] fields:[] → confirm button mode | action: ${action} | dialogId: ${dialogId}`);
 
-    const container = createElement('div', ['zDialog-container', 'zCard', 'zp-4'], {
+    // A live confirm is unboxed (it IS the button) — same chrome-drop the
+    // live text form gets, so it seats in a toolbar row like a plain zBtn.
+    const confirmClasses = isLive
+      ? ['zDialog-container', 'zDialog-live']
+      : ['zDialog-container', 'zCard', 'zp-4'];
+    const container = createElement('div', confirmClasses, {
       'data-dialog-id': dialogId
     });
 
-    if (title) {
+    if (title && !isLive) {
       const titleElement = createElement('p', ['zmb-2', 'zText-muted']);
       titleElement.textContent = title;
       container.appendChild(titleElement);
@@ -1105,7 +1115,24 @@ export class FormRenderer {
       if (response.success) {
         const slot = formElement.querySelector('.zDialog-feedback');
         if (slot) clearElement(slot);
-        if (response.zdelta) this._fireZDelta(String(response.zdelta));
+        if (response.zdelta) {
+          const blockName = String(response.zdelta);
+          // A live confirm INSIDE a modal whose delta target lives on the
+          // page underneath (AvatarPicker's per-tile "Use as avatar") is a
+          // done deal — dismiss the overlay before the page repaints. A live
+          // form whose target is inside the overlay itself keeps it open.
+          const overlay = formElement.closest('.zModal-overlay');
+          if (overlay) {
+            const host = this._findZDeltaContainer(blockName);
+            if (!host || !overlay.contains(host)) {
+              if (this.client.modalRenderer
+                  && typeof this.client.modalRenderer.dismiss === 'function') {
+                this.client.modalRenderer.dismiss();
+              }
+            }
+          }
+          this._fireZDelta(blockName);
+        }
       } else {
         this._handleFailure(formElement, response);
       }
