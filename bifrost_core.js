@@ -1537,6 +1537,38 @@ class BifrostCore {
     }
 
     /**
+     * SCOPED intra-file block re-walk — repaint ONE already-rendered fragment
+     * in place, leaving the rest of the page (and the user's focus) untouched.
+     * The surgical sibling of zDelta: same execute_walker request (dotted
+     * targets supported server-side), but the stream lands in `el` via the
+     * SSOT render-target primitive instead of swapping the whole zVaF panel.
+     * No history entry (a fragment refresh isn't a navigation) and no scroll
+     * reset (the user may be mid-typing in a live filter above the fragment).
+     * Used by onSuccess: zDelta($Block) when $Block's container is on-page —
+     * the transport contract is unchanged (client-initiated, server streams).
+     * @param {string} blockName - target block ($ stripped, may be dotted)
+     * @param {HTMLElement} el - the DOM container the re-walk paints into
+     */
+    async zDeltaScoped(blockName, el) {
+      const zVaFile = this.zuiConfig?.zVaFile;
+      const zVaFolder = this.zuiConfig?.zVaFolder;
+      if (!zVaFile || !zVaFolder || !el) {
+        this.logger.warn(`[zDeltaScoped] Missing file identity or element — falling back to zDelta: ${blockName}`);
+        return this.zDelta(blockName);
+      }
+      this._renderTarget = { el, mode: 'replace', once: true };
+      this._pendingScrollAnchor = null;
+      this._pendingScrollTop = false;
+      this.logger.log(`[zDeltaScoped] Fragment re-walk: ${zVaFile} → ${blockName} (host: ${el.id || el.getAttribute?.('data-zkey') || 'el'})`);
+      // skipDupGuard: every scoped repaint of the SAME fragment carries the same
+      // walk signature BY DESIGN (live search fires one per debounced term) — the
+      // double-walk guard would swallow the second repaint in a burst. Duplicate
+      // suppression for live forms happens upstream (debounce + in-flight
+      // coalescing in FormRenderer), and 'replace' mode can't stack sections.
+      this._sendWalker({ event: 'execute_walker', zBlock: blockName, zVaFile, zVaFolder }, { skipDupGuard: true });
+    }
+
+    /**
      * zModal — the CALL verb: ask the server to run a block as a detour and ship
      * it back as a render_modal frame (→ ModalRenderer overlay). The route never
      * moves and no history entry is written — dismissal is client-local.
@@ -1697,8 +1729,11 @@ class BifrostCore {
      * Attaches the session id (matching MessageHandler.send) so server-side session
      * sync still works for routeless hops.
      * @param {Object} payload - execute_walker payload
+     * @param {Object} [opts] - {skipDupGuard} — a caller whose repeats are
+     *   INTENTIONAL and self-throttled (zDeltaScoped live repaints) opts out of
+     *   the burst dedupe; everyone else stays guarded.
      */
-    _sendWalker(payload) {
+    _sendWalker(payload, opts = {}) {
       if (!this.isConnected()) {
         this.logger.warn('[_sendWalker] Not connected — dropping walker request', payload);
         return;
@@ -1718,7 +1753,7 @@ class BifrostCore {
         (typeof payload.zHorizontal === 'string' ? payload.zHorizontal : ''),
         payload.zBack ? 'B' : '', payload._zDelegateInline ? 'D' : '',
       ].join('|');
-      if (this._isDuplicateWalk(sig)) {
+      if (!opts.skipDupGuard && this._isDuplicateWalk(sig)) {
         this.logger.warn('[_sendWalker] Dropped duplicate execute_walker (double-walk guard):', sig);
         return;
       }

@@ -151,6 +151,10 @@ export class FormRenderer {
     this.client = client;
     // Use Map to store multiple form contexts, keyed by _dialogId
     this.formContexts = new Map();
+    // zLive plumbing — per-dialog debounce timers and in-flight/rerun flags so
+    // keystroke-driven submits coalesce instead of stampeding the server.
+    this._liveTimers = new Map();
+    this._liveInflight = new Map();
 
     // Wrap renderForm with the error boundary (public API is renderForm).
     const originalRender = this.renderForm.bind(this);
@@ -181,8 +185,16 @@ export class FormRenderer {
       dialog_mode,
       onSubmit,
       zReset,
+      zLive,
       _dialogId
     } = eventData;
+
+    // zLive: true — an AMBIENT form (live filter). Submits fire per debounced
+    // input; the server side already declines to gate the walk on it (zstride).
+    const isLive = zLive === true || zLive === 'true';
+    // Author-tunable debounce: zLive: 300 (ms). Bare true → 300ms default.
+    const liveDebounceMs = (typeof zLive === 'number' && zLive > 0) ? zLive
+      : (parseInt(zLive, 10) > 1 ? parseInt(zLive, 10) : 300);
 
     // Store form context in Map, keyed by unique _dialogId.
     // Store as-is (fields array pre-resolution); _resolveFieldRules runs below
@@ -192,22 +204,31 @@ export class FormRenderer {
       table,
       onSubmit,
       fields: fields.map(_resolveFieldRules),
-      title
+      title,
+      live: isLive
     });
 
-    // dialog_mode: "confirm" → confirm button (backend-declared, SSOT signal)
-    // Backend sets this when fields: [] — we read the server signal, not fields.length
-    if (dialog_mode === 'confirm') {
+    // dialog_mode: "confirm" → confirm button (backend-declared, SSOT signal).
+    // Backend sets this when fields: [] on the RUNTIME dialog path (zDialog.handle).
+    // INLINE page dialogs stream as raw zUI metadata and never pass through that
+    // enrichment — for those, an absent/empty fields list is the same authored
+    // intent (a confirm-and-fire button), so fall back to the shape itself.
+    if (dialog_mode === 'confirm' || !fields || fields.length === 0) {
       return this._renderConfirmButton(title, onSubmit, _dialogId);
     }
 
-    // Create form container using primitives
-    const formContainer = createElement('div', ['zDialog-container', 'zCard', 'zp-4'], {
+    // Create form container using primitives. A live form drops the zCard
+    // chrome (it reads as a toolbar control, not a boxed form) and carries
+    // .zDialog-live so themes can style the search-bar shape directly.
+    const containerClasses = isLive
+      ? ['zDialog-container', 'zDialog-live']
+      : ['zDialog-container', 'zCard', 'zp-4'];
+    const formContainer = createElement('div', containerClasses, {
       'data-dialog-id': _dialogId
     });
 
-    // Form title
-    if (title) {
+    // Form title (a live form's title is its placeholder/label — skip the heading)
+    if (title && !isLive) {
       const titleElement = createElement('h2', ['zDialog-title', 'zCard-title', 'zmb-3']);
       titleElement.textContent = title;
       formContainer.appendChild(titleElement);
@@ -229,37 +250,73 @@ export class FormRenderer {
       form.appendChild(fieldGroup);
     });
 
-    // Actions row — Submit always; Reset ONLY when the author opted in with
-    // `zReset: true` (parity with the zCLI Submit/Reset chooser). Reset is a
-    // native type=reset (restores each field to its default for free); we only
-    // clear the feedback slot on top.
-    const actions = createElement('div', ['zDialog-actions']);
+    // Actions row — Submit always (except zLive, where typing IS the submit);
+    // Reset ONLY when the author opted in with `zReset: true` (parity with the
+    // zCLI Submit/Reset chooser). Reset is a native type=reset (restores each
+    // field to its default for free); we only clear the feedback slot on top.
+    if (!isLive) {
+      const actions = createElement('div', ['zDialog-actions']);
 
-    const submitButton = createElement('button', ['zBtn', 'zBtn-primary'], {
-      type: 'submit'
-    });
-    submitButton.textContent = 'Submit';
-    actions.appendChild(submitButton);
-
-    if (zReset) {
-      const resetButton = createElement('button', ['zBtn', 'zBtn-outline-secondary'], {
-        type: 'reset'
+      const submitButton = createElement('button', ['zBtn', 'zBtn-primary'], {
+        type: 'submit'
       });
-      resetButton.textContent = 'Reset';
-      actions.appendChild(resetButton);
+      submitButton.textContent = 'Submit';
+      actions.appendChild(submitButton);
+
+      if (zReset) {
+        const resetButton = createElement('button', ['zBtn', 'zBtn-outline-secondary'], {
+          type: 'reset'
+        });
+        resetButton.textContent = 'Reset';
+        actions.appendChild(resetButton);
+      }
+
+      form.appendChild(actions);
     }
 
-    form.appendChild(actions);
-
     // Feedback slot — success/error signals render here, below the actions.
+    // A live form keeps the slot for FAILURES only (quiet on success).
     const feedback = createElement('div', ['zDialog-feedback']);
     form.appendChild(feedback);
 
-    // Handle form submission
+    // Handle form submission (zLive: Enter still submits — it just flushes the
+    // pending debounce immediately instead of waiting out the timer).
     form.addEventListener('submit', (e) => {
       e.preventDefault();
-      this._handleSubmit(form, _dialogId);
+      if (isLive) {
+        const t = this._liveTimers.get(_dialogId);
+        if (t) { clearTimeout(t); this._liveTimers.delete(_dialogId); }
+        this._submitLive(form, _dialogId);
+      } else {
+        this._handleSubmit(form, _dialogId);
+      }
     });
+
+    // zLive: debounce keystrokes into coalesced quiet submits. `input` covers
+    // typing, paste, and the native search-clear ✕. `change` exists ONLY for
+    // controls that don't emit per-keystroke input (selects/checkboxes/radios):
+    // on a text field, `change` also fires on BLUR — e.g. the user clicking a
+    // sibling "Clear filter" button — and that stale-value re-submit would land
+    // AFTER the sibling's write and silently overwrite it.
+    if (isLive) {
+      const fire = () => {
+        const prior = this._liveTimers.get(_dialogId);
+        if (prior) clearTimeout(prior);
+        this._liveTimers.set(_dialogId, setTimeout(() => {
+          this._liveTimers.delete(_dialogId);
+          this._submitLive(form, _dialogId);
+        }, liveDebounceMs));
+      };
+      form.addEventListener('input', fire);
+      form.addEventListener('change', (e) => {
+        const t = e.target;
+        const tag = (t?.tagName || '').toLowerCase();
+        const typ = (t?.type || '').toLowerCase();
+        if (tag === 'select' || typ === 'checkbox' || typ === 'radio' || typ === 'file' || typ === 'date') {
+          fire();
+        }
+      });
+    }
 
     // Reset clears any standing feedback (native reset restores field defaults).
     form.addEventListener('reset', () => {
@@ -327,8 +384,35 @@ export class FormRenderer {
         const sig = resultSignalFrom(response, { ackOnVoid: true, ackText: 'Action completed.' });
         await this._emitSignal(container, sig.level, sig.text);
         if (response.success) {
-          btn.textContent = 'Done';
-          this.formContexts.delete(dialogId);
+          // A zVar confirm (session-var stamp, e.g. "Clear filter") is
+          // repeatable by design — the server keeps its registration, so the
+          // button must stay armed too. One-shot actions (inserts) retire.
+          const repeatable = !!(onSubmit && onSubmit.zVar);
+          if (repeatable) {
+            btn.disabled = false;
+            btn.textContent = btnLabel;
+            // Two declarative writers, one session var: a confirmed zVar stamp
+            // (e.g. "Clear filter" → ledger_q: '') must re-sync any LIVE form
+            // that writes the same keys, or its input keeps showing a term the
+            // server no longer holds (and the next keystroke would resurrect it).
+            this._resyncLiveForms(onSubmit.zVar, dialogId);
+          } else {
+            btn.textContent = 'Done';
+            this.formContexts.delete(dialogId);
+          }
+          // onSuccess: zDelta($Block) — same follow-up the main submit path
+          // honors: dismiss the hosting modal, re-fire the block's zDelta hop
+          // (scoped to the target's container when it's on-page).
+          if (response.zdelta && this.client && typeof this.client.zDelta === 'function') {
+            const blockName = String(response.zdelta);
+            this.logger.log('[FormRenderer] onSuccess zDelta (confirm) → re-walking block:', blockName);
+            setTimeout(() => {
+              if (this.client.modalRenderer && typeof this.client.modalRenderer.dismiss === 'function') {
+                this.client.modalRenderer.dismiss();
+              }
+              this._fireZDelta(blockName);
+            }, 600);
+          }
         } else {
           btn.disabled = false;
           btn.textContent = btnLabel;
@@ -899,6 +983,28 @@ export class FormRenderer {
       return;
     }
 
+    // onSuccess: zDelta($Block) — the server echoed the authored follow-up as
+    // response.zdelta (bare block name, possibly dotted $Block.Section). Show
+    // the signal briefly, then dismiss the hosting modal (no-op for inline
+    // forms) and re-fire the SAME zDelta hop a Refresh button would — the
+    // block re-walks with the fresh session state, so the page updates with
+    // zero manual close/refresh clicks. When the target's own container is
+    // already on-page, the repaint is SCOPED to it (zDeltaScoped) so the rest
+    // of the page — including this very form — stays untouched.
+    if (response.zdelta && this.client && typeof this.client.zDelta === 'function') {
+      const deltaSig = resultSignalFrom(response, { ackOnVoid: true, ackText: 'Done.' });
+      this._emitSignal(formElement, deltaSig.level, deltaSig.text);
+      const blockName = String(response.zdelta);
+      this.logger.log('[FormRenderer] onSuccess zDelta → re-walking block:', blockName);
+      setTimeout(() => {
+        if (this.client.modalRenderer && typeof this.client.modalRenderer.dismiss === 'function') {
+          this.client.modalRenderer.dismiss();
+        }
+        this._fireZDelta(blockName);
+      }, 600);
+      return;
+    }
+
     // Plain success — the form STAYS (like a real website): emit a success
     // signal below the actions and reset fields to their defaults so the user
     // can submit again. The form context is kept for the next submit.
@@ -913,6 +1019,148 @@ export class FormRenderer {
       this.client._fetchAndPopulateNavBar().catch(err => {
         this.logger.error('[FormRenderer] Failed to refresh navbar:', err);
       });
+    }
+  }
+
+  /**
+   * Resolve the on-page DOM container for a zDelta target block name.
+   * A dotted target ($Block.Section) walks data-zkey containers in order —
+   * the same convention the orchestrator stamps per rendered key. Falls back
+   * to the last path part anywhere on the page, then an id match (the block
+   * wrapper). Null → the target isn't rendered here (full-panel zDelta).
+   * @private
+   * @param {string} blockName - bare (possibly dotted) block name
+   * @returns {HTMLElement|null}
+   */
+  _findZDeltaContainer(blockName) {
+    const parts = String(blockName).split('.').filter(Boolean);
+    if (!parts.length) return null;
+    let el = document;
+    for (const part of parts) {
+      const next = el.querySelector(`[data-zkey="${part}"]`);
+      if (!next) { el = null; break; }
+      el = next;
+    }
+    if (el && el !== document) return el;
+    const last = parts[parts.length - 1];
+    return document.querySelector(`[data-zkey="${last}"]`)
+      || document.getElementById(last);
+  }
+
+  /**
+   * Fire the onSuccess zDelta — SCOPED to the target's own container when it
+   * is already on-page (fragment repaint, focus preserved), else the classic
+   * whole-panel block hop.
+   * @private
+   */
+  _fireZDelta(blockName) {
+    const host = this._findZDeltaContainer(blockName);
+    if (host && typeof this.client.zDeltaScoped === 'function') {
+      this.client.zDeltaScoped(blockName, host);
+      return;
+    }
+    this.client.zDelta(blockName);
+  }
+
+  /**
+   * zLive submit — the quiet, coalesced cousin of _handleSubmit. Collects the
+   * form the same way, but: no button state (there is none), no success
+   * signal, no form.reset() (the user is mid-typing), and the onSuccess
+   * zDelta fires IMMEDIATELY and scoped. Failures still surface inline.
+   * One submit in flight per dialog; keystrokes landing mid-flight coalesce
+   * into exactly one trailing re-submit.
+   * @private
+   */
+  async _submitLive(formElement, dialogId) {
+    const inflight = this._liveInflight.get(dialogId);
+    if (inflight) {
+      this._liveInflight.set(dialogId, { rerun: true });
+      return;
+    }
+    this._liveInflight.set(dialogId, { rerun: false });
+
+    const formContext = this.formContexts.get(dialogId);
+    if (!formContext) {
+      this.logger.error('[FormRenderer] No form context for live dialog:', dialogId);
+      this._liveInflight.delete(dialogId);
+      return;
+    }
+
+    const formData = new FormData(formElement);
+    const data = {};
+    for (const [key, value] of formData.entries()) data[key] = value;
+    // A cleared search box must still SUBMIT its (empty) key — FormData keeps
+    // empty text inputs, so nothing extra needed; selects/checkboxes follow
+    // the same simple path (live forms are filter-shaped, not upload-shaped).
+
+    try {
+      const response = await this.client.send({
+        event: 'form_submit',
+        dialogId,
+        data,
+        model: formContext.model,
+        table: formContext.table
+      });
+
+      if (response.success) {
+        const slot = formElement.querySelector('.zDialog-feedback');
+        if (slot) clearElement(slot);
+        if (response.zdelta) this._fireZDelta(String(response.zdelta));
+      } else {
+        this._handleFailure(formElement, response);
+      }
+      this._emitFormEvent(formElement, formContext, response.success, data, response);
+    } catch (error) {
+      this.logger.error('[FormRenderer] Live submit error:', error);
+    } finally {
+      const state = this._liveInflight.get(dialogId);
+      this._liveInflight.delete(dialogId);
+      if (state && state.rerun) {
+        // A newer keystroke landed mid-flight — run once more with the
+        // CURRENT field values so the last-typed term always wins.
+        this._submitLive(formElement, dialogId);
+      }
+    }
+  }
+
+  /**
+   * Re-sync live forms after ANOTHER dialog stamped the same session vars.
+   * A live form's onSubmit is {zVar: {<var>: 'zConv.<field>'}} — invert that
+   * mapping to find which DOM field mirrors each stamped var, and overwrite the
+   * input with the new authoritative value. Pending debounce timers for the
+   * form are cancelled: the server already holds this value, and letting a
+   * stale timer fire would resubmit the pre-stamp term right over it.
+   * @private
+   * @param {Object} stampedVars - the zVar dict the OTHER dialog just wrote
+   * @param {string} sourceDialogId - the writer (skipped — it has no live inputs)
+   */
+  _resyncLiveForms(stampedVars, sourceDialogId) {
+    if (!stampedVars || typeof stampedVars !== 'object') return;
+    for (const [dialogId, ctx] of this.formContexts.entries()) {
+      if (dialogId === sourceDialogId || !ctx.live) continue;
+      const varMap = ctx.onSubmit?.zVar;
+      if (!varMap || typeof varMap !== 'object') continue;
+
+      const form = document.querySelector(`form[data-dialog-id="${dialogId}"]`);
+      if (!form) continue;
+
+      let touched = false;
+      for (const [varKey, binding] of Object.entries(varMap)) {
+        if (!(varKey in stampedVars)) continue;
+        // binding 'zConv.q' → field name 'q'; a literal binding has no field.
+        const m = /^zConv\.(.+)$/.exec(String(binding));
+        if (!m) continue;
+        const input = form.querySelector(`[name="${m[1]}"]`);
+        if (!input) continue;
+        const v = stampedVars[varKey];
+        input.value = (v === null || v === undefined) ? '' : String(v);
+        touched = true;
+      }
+      if (touched) {
+        const t = this._liveTimers.get(dialogId);
+        if (t) { clearTimeout(t); this._liveTimers.delete(dialogId); }
+        this.logger.log('[FormRenderer] Live form re-synced to stamped vars:', dialogId);
+      }
     }
   }
 
