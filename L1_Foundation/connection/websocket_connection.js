@@ -22,6 +22,49 @@ export class WebSocketConnection {
       reconnectDelay: options.reconnectDelay || TIMEOUTS.RECONNECT_DELAY
     };
     this.ws = null;
+    this._messageCallback = null;   // re-bound on every (re)connect — see onMessage()
+    this._intentionalClose = false; // disconnect() was called — stay down
+    this._reconnectPending = false; // one reconnect in flight at a time
+    this._bindWakeListeners();
+  }
+
+  /**
+   * Instant reconnect on tab wake / network return.
+   *
+   * Mobile browsers kill the socket when a tab backgrounds — often with a
+   * CLEAN close, which the onclose reconnect used to skip entirely, and even
+   * a scheduled retry sat in a FROZEN timer until well after the user was
+   * back. Result: return to the tab, tap, dead socket, error toast — a false
+   * positive, since the next interaction reconnected anyway. These listeners
+   * make the wake itself the trigger: page becomes visible / bfcache-restores
+   * / network returns → if the socket isn't OPEN, reconnect NOW. Intentional
+   * disconnect() stays respected (the offline debug toggle depends on it).
+   */
+  _bindWakeListeners() {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return;
+    const wake = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (this._intentionalClose || this.isConnected()) return;
+      this._reconnect('wake');
+    };
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('pageshow', wake);
+    window.addEventListener('online', wake);
+  }
+
+  /**
+   * Guarded reconnect — at most one attempt in flight; re-binds the message
+   * callback (connect() creates a FRESH ws, and a reconnect that forgets the
+   * onmessage re-bind is a deaf socket).
+   * @private
+   */
+  _reconnect(reason) {
+    if (this._reconnectPending || this._intentionalClose || this.isConnected()) return;
+    this._reconnectPending = true;
+    this.logger.info(`Reconnecting (${reason})...`);
+    this.connect()
+      .catch(err => { this.logger.error('Reconnect failed:', err); })
+      .finally(() => { this._reconnectPending = false; });
   }
 
   /**
@@ -70,9 +113,16 @@ export class WebSocketConnection {
    * @returns {Promise<void>}
    */
   async connect() {
+    this._intentionalClose = false;
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(this._effectiveUrl());
-      
+
+      // Re-bind the message pump on EVERY connect — a reconnect creates a
+      // fresh ws, and the callback registered on the old one dies with it.
+      if (this._messageCallback) {
+        this.ws.onmessage = this._messageCallback;
+      }
+
       this.ws.onopen = () => {
         this.logger.info('Connected to server');
         this.hooks.call('onConnected', { url: this.url });
@@ -89,14 +139,11 @@ export class WebSocketConnection {
         this.logger.info('Disconnected from server');
         this.hooks.call('onDisconnected', event);
         
-        // Auto-reconnect if enabled and connection was not cleanly closed
-        if (this.options.autoReconnect && !event.wasClean) {
-          setTimeout(() => {
-            this.logger.info('Attempting to reconnect...');
-            this.connect().catch(err => {
-              this.logger.error('Reconnect failed:', err);
-            });
-          }, this.options.reconnectDelay);
+        // Auto-reconnect regardless of wasClean — mobile browsers close the
+        // socket CLEANLY when a tab backgrounds, and that close deserves a
+        // retry too. Intentional disconnect() is the one true opt-out.
+        if (this.options.autoReconnect && !this._intentionalClose) {
+          setTimeout(() => this._reconnect('close'), this.options.reconnectDelay);
         }
       };
     });
@@ -106,6 +153,7 @@ export class WebSocketConnection {
    * Disconnect from WebSocket server
    */
   disconnect() {
+    this._intentionalClose = true;
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -129,6 +177,7 @@ export class WebSocketConnection {
    * @param {Function} callback - Callback function for incoming messages
    */
   onMessage(callback) {
+    this._messageCallback = callback; // survives reconnects (re-bound in connect())
     if (this.ws) {
       this.ws.onmessage = callback;
     }
