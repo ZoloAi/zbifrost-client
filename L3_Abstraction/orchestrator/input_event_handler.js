@@ -449,6 +449,14 @@ export class InputEventHandler {
 
       const form = new FormData();
       form.append(field, file, file.name);
+      // Server-stamped context params (zAPI: {params: ...}, %data-resolved at
+      // walk time) — the upload's only context channel: the zAPI POST runs in
+      // a fresh identity-only session, so server-side zVars can't target it.
+      if (eventData.zapi_params && typeof eventData.zapi_params === 'object') {
+        for (const [k, v] of Object.entries(eventData.zapi_params)) {
+          form.append(k, String(v));
+        }
+      }
 
       try {
         this.logger.log(`[InputEventHandler] zAPI upload → ${method} ${url} (${file.name}, ${file.size}B)`);
