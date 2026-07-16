@@ -150,7 +150,13 @@ export class TableRenderer {
       _zColumn,          // Column-level classes: { colName: 'class1 class2' }
       _zRows,            // Row-pattern classes: { odd, even, first, last }
       _tableInstanceId,  // Unique DOM target ID for in-place navigation replacement
+      row_action,        // Per-row action: { label, stamp: {var: column}, target: '$Block' }
     } = data;
+
+    // Row-action config is only honored when it can actually fire (label + stamp).
+    const rowAction = (row_action && typeof row_action === 'object'
+      && row_action.label && row_action.stamp && typeof row_action.stamp === 'object')
+      ? row_action : null;
     
     // Use _zClass if provided, fallback to class attribute
     const customClass = _zClass || classAttr;
@@ -240,13 +246,13 @@ export class TableRenderer {
 
     // Render table head (if show_header is true)
     if (show_header && columns.length > 0) {
-      const thead = this._renderTableHead(columns, _zColumn);
+      const thead = this._renderTableHead(columns, _zColumn, rowAction);
       table.appendChild(thead);
     }
 
     // Render table body
     if (rows.length > 0) {
-      const tbody = this._renderTableBody(columns, rows, _zColumn, _zRows, offset, allRows.length);
+      const tbody = this._renderTableBody(columns, rows, _zColumn, _zRows, offset, allRows.length, rowAction);
       table.appendChild(tbody);
     } else {
       // Empty table body (semantic HTML)
@@ -276,6 +282,7 @@ export class TableRenderer {
         _zClass,
         _zColumn,
         _zRows,
+        row_action: rowAction,
       });
     } else if (hasMore && moreCount > 0) {
       // Simple truncation: Show "... N more rows" footer
@@ -329,7 +336,7 @@ export class TableRenderer {
    * @param {Array<string>} columns - Column names
    * @returns {HTMLElement} thead element
    */
-  _renderTableHead(columns, _zColumn) {
+  _renderTableHead(columns, _zColumn, rowAction = null) {
     const thead = createThead();
     const headerRow = createTr();
 
@@ -342,6 +349,14 @@ export class TableRenderer {
       headerRow.appendChild(th);
     });
 
+    // Trailing action column — header cell is intentionally blank (the button
+    // labels themselves say what the column does).
+    if (rowAction) {
+      const th = createTh();
+      th.className = 'zTable-action-col';
+      headerRow.appendChild(th);
+    }
+
     thead.appendChild(headerRow);
     return thead;
   }
@@ -353,7 +368,7 @@ export class TableRenderer {
    * @param {Array<Array|Object>} rows - Table rows
    * @returns {HTMLElement} tbody element
    */
-  _renderTableBody(columns, rows, _zColumn, _zRows, offset = 0, totalRows = null) {
+  _renderTableBody(columns, rows, _zColumn, _zRows, offset = 0, totalRows = null, rowAction = null) {
     const tbody = createTbody();
     const cellTracker = [];
     const datasetLastIndex = totalRows !== null ? totalRows - 1 : null;
@@ -440,10 +455,56 @@ export class TableRenderer {
         });
       }
 
+      // Trailing action cell — object rows only (row_action stamps column
+      // VALUES by name, which array rows don't carry).
+      if (rowAction && !Array.isArray(row)) {
+        const td = createTd();
+        td.className = 'zTable-action-col';
+        const btn = createButton('button');
+        btn.classList.add('zBtn', 'zBtn-sm', 'zBtn-outline-primary', 'zTable-action-btn');
+        btn.textContent = decodeUnicodeEscapes(String(rowAction.label), { basicEscapes: false });
+        btn.onclick = () => this._handleRowAction(rowAction, row);
+        td.appendChild(btn);
+        tr.appendChild(td);
+      }
+
       tbody.appendChild(tr);
     });
 
     return tbody;
+  }
+
+  /**
+   * Handle a row-action button click: resolve the stamp map against THIS row's
+   * cells and send a fire-and-forget 'table_row_action' event. The server
+   * writes the resolved values into the caller's session zVars and answers with
+   * 'table_row_action_ack' carrying the zDelta target — message_handler then
+   * re-fires the block hop (same follow-up a dialog's onSuccess zDelta uses),
+   * so any %var-gated drawer opens with the clicked row selected.
+   *
+   * stamp: { varName: columnKey } — columnKey is the row's dict key (qualified
+   * for joins, e.g. 'zRegistrar.email'). Cell descriptors ({val, _zClass})
+   * unwrap to their raw value.
+   * @private
+   */
+  _handleRowAction(rowAction, row) {
+    const stamp = {};
+    for (const [varName, columnKey] of Object.entries(rowAction.stamp)) {
+      let value = row[columnKey];
+      if (value !== null && typeof value === 'object' && !Array.isArray(value) && 'val' in value) {
+        value = value.val; // unwrap _zCells descriptor
+      }
+      stamp[varName] = (value === null || value === undefined) ? '' : String(value);
+    }
+    this.logger.log('[TableRenderer] Row action:', rowAction.label, stamp);
+    if (this.client && this.client.connection) {
+      this.client.connection.send(JSON.stringify({
+        event: 'table_row_action',
+        data: { stamp, target: rowAction.target || null }
+      }));
+    } else {
+      this.logger.warn('[TableRenderer] No client reference — cannot send table_row_action');
+    }
   }
 
   /**

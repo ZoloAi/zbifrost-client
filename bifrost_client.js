@@ -135,7 +135,14 @@
         ...(this._opts.coreOriginAllowlist || []),
       ];
       const coreOrigin = new URL(coreUrl).origin;
-      if (!allowedOrigins.includes(coreOrigin)) {
+      // Dev carve-out: a page served from localhost may load the core from
+      // another localhost port (ZBIFROST_CLIENT_BASE=http://localhost:<port>
+      // pointing at a source checkout). Local-machine only — a non-localhost
+      // page never gets this, so production pinning is unchanged.
+      const isLocalHostname = (h) => h === 'localhost' || h === '127.0.0.1';
+      const devLocalOk = isLocalHostname(window.location.hostname)
+        && isLocalHostname(new URL(coreUrl).hostname);
+      if (!allowedOrigins.includes(coreOrigin) && !devLocalOk) {
         this._coreLoading = false;
         this.logger.error(
           `Refusing to load bifrost core from disallowed origin "${coreOrigin}". ` +

@@ -135,6 +135,7 @@ export const PROTOCOL_EVENTS = {
   DISPLAY: 'display',
   OUTPUT: 'output',
   ZTABLE: 'zTable',
+  TABLE_ROW_ACTION_ACK: 'table_row_action_ack',
   ZDASH: 'zDash',
   ZMENU: 'zMenu',
   ZDIALOG: 'zDialog',

@@ -533,6 +533,25 @@ export class MessageHandler {
         return;
       }
 
+      // Row-action ack — the server stamped the clicked row's values into this
+      // session's zVars and echoes the authored zDelta target back. Re-fire the
+      // block hop HERE (scoped when the target's container is on-page), exactly
+      // like a dialog's onSuccess zDelta — the drawer/gate keyed on the stamped
+      // %var opens with the fresh selection.
+      if (message.event === PROTOCOL_EVENTS.TABLE_ROW_ACTION_ACK) {
+        const target = message.zdelta ? String(message.zdelta) : null;
+        this.logger.log('[MessageHandler] table_row_action_ack → zDelta:', target);
+        if (target && this.client && typeof this.client.zDelta === 'function') {
+          const host = this._findZDeltaContainer(target);
+          if (host && typeof this.client.zDeltaScoped === 'function') {
+            this.client.zDeltaScoped(target, host);
+          } else {
+            this.client.zDelta(target);
+          }
+        }
+        return;
+      }
+
       // zTable event emitted standalone (non-walker contexts, or fallback).
       // In walker/chunk mode, zTable is now injected inline into render_chunk
       // (see advanced_table.py + message_walker._resolve_zdata_reads).
@@ -765,6 +784,29 @@ export class MessageHandler {
       Promise.resolve(orch.renderZDisplayEvent({ event: sig.level, content: sig.text, flush: true, result: true, format: sig.format }))
         .catch((err) => this.logger.debug('[MessageHandler] zfunc signal toast skipped:', err));
     }
+  }
+
+  /**
+   * Resolve the on-page DOM container for a zDelta target block name.
+   * Mirror of FormRenderer._findZDeltaContainer (same data-zkey convention the
+   * orchestrator stamps per rendered key): dotted targets walk containers in
+   * order, then fall back to the last part anywhere on the page, then an id
+   * match. Null → the target isn't rendered here (full-panel zDelta).
+   * @private
+   */
+  _findZDeltaContainer(blockName) {
+    const parts = String(blockName).split('.').filter(Boolean);
+    if (!parts.length) return null;
+    let el = document;
+    for (const part of parts) {
+      const next = el.querySelector(`[data-zkey="${part}"]`);
+      if (!next) { el = null; break; }
+      el = next;
+    }
+    if (el && el !== document) return el;
+    const last = parts[parts.length - 1];
+    return document.querySelector(`[data-zkey="${last}"]`)
+      || document.getElementById(last);
   }
 
   /**
