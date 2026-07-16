@@ -366,7 +366,10 @@ export class FormRenderer {
       container.appendChild(titleElement);
     }
 
-    const btn = createElement('button', ['zBtn', btnClass]);
+    // type=submit is the selector CONTRACT: ravens and e2e suites click
+    // ".zModal-overlay button[type='submit']" for every dialog, fielded or
+    // not (pre-1.7.109 fieldless dialogs rode the full form path and got it).
+    const btn = createElement('button', ['zBtn', btnClass], { type: 'submit' });
     btn.textContent = btnLabel;
     btn.addEventListener('click', async () => {
       btn.disabled = true;
