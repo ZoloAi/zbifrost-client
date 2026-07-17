@@ -45,6 +45,8 @@
 // Layer 0: Primitives
 import { createButton } from '../primitives/interactive_primitives.js';
 import { convertStyleToString } from '../../../zSys/dom/style_utils.js';
+// SSOT `&.` plugin-ref → absolute page-origin URL (issue #3)
+import { resolvePluginUrl } from '../../../L1_Foundation/bootstrap/plugin_url.js';
 
 // 
 // Main Implementation
@@ -629,7 +631,10 @@ export default class ButtonRenderer {
     const segs = m[1].split('.');
     const fnName = segs.pop();
     if (!segs.length) return false;                 // need folder/file + function
-    const url = `/plugins/${segs.join('/')}.js`;
+    // Absolute page-origin URL (SSOT helper) — a root-relative specifier given
+    // to import() resolves against THIS module's URL, i.e. the CDN in
+    // production, and 404s every client plugin (issue #3).
+    const url = resolvePluginUrl(segs.join('.'));
     try {
       const mod = await import(url);
       const fn = (mod && typeof mod[fnName] === 'function')

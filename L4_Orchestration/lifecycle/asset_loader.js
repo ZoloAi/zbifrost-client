@@ -35,6 +35,8 @@
 // SSOT for .zolo grammar location: server-announced syntaxBase (zui-config)
 // preferred, bundled syntax/ as fallback — see resolveSyntaxBase docstring.
 import { resolveSyntaxBase } from '../../L1_Foundation/bootstrap/prism_loader.js';
+// SSOT `&.` plugin-ref → absolute page-origin URL (shared with button_renderer, issue #3)
+import { resolvePluginUrl } from '../../L1_Foundation/bootstrap/plugin_url.js';
 
 export class AssetLoader {
   constructor(client) {
@@ -69,8 +71,7 @@ export class AssetLoader {
       // exactly like zBrush styles (&.demos.confetti → /plugins/demos/confetti.js).
       let scriptUrl = scriptRef;
       if (scriptRef.startsWith('&.')) {
-        const pluginPath = scriptRef.substring(2).replace(/\./g, '/');
-        scriptUrl = `/plugins/${pluginPath}.js`;
+        scriptUrl = resolvePluginUrl(scriptRef);
         this.logger.debug('[AssetLoader] Resolving plugin: %s → %s', scriptRef, scriptUrl);
       }
 

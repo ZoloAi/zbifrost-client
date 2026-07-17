@@ -391,24 +391,31 @@ export default class TerminalRenderer {
   }
 
   /**
-   * Map language to Prism.js language identifier
+   * Map language to Prism.js language identifier.
+   *
+   * Aliases first (js → javascript), then ANY grammar Prism actually has
+   * loaded passes through verbatim — this is what lets every zolo variant
+   * (zolo, zspark, zschema, zconfig, zenv, …) highlight in a zTerminal: the
+   * zLSP-served bundle registers them all (see prism_loader.js), so a fence
+   * language is honored the moment its grammar exists, no whitelist to chase.
+   * Unknown grammars degrade to plaintext, never break.
    * @private
    */
   _mapToPrismLanguage(language) {
-    const langMap = {
-      'python': 'python',
-      'bash': 'bash',
-      'zui': 'zui',
-      'javascript': 'javascript',
+    const lang = String(language || '').toLowerCase();
+    const aliases = {
       'js': 'javascript',
-      'typescript': 'typescript',
       'ts': 'typescript',
-      'json': 'json',
-      'yaml': 'yaml',
-      'html': 'html',
-      'css': 'css'
+      'html': 'markup',
+      'shell': 'bash',
+      'sh': 'bash',
+      'yml': 'yaml'
     };
-    return langMap[language.toLowerCase()] || 'plaintext';
+    // Return the resolved name even when the grammar hasn't arrived yet —
+    // the loader's finish pass rehighlights every `language-*` block once the
+    // zolo bundle lands (prism_loader.js), so an early-rendered terminal
+    // self-heals. A name Prism never learns simply stays unhighlighted text.
+    return aliases[lang] || lang || 'plaintext';
   }
 
   /**

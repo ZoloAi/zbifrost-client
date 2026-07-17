@@ -65,6 +65,12 @@ export class NavigationManager {
       } else {
         this.client._histIdx = st.idx;
       }
+      // Seed the departed-page tracker on a hard load (navigateToRoute stamps it
+      // on every SPA hop). The popstate handler compares it against the restored
+      // URL to tell a cross-page Back from a same-page delta unwind.
+      if (this.client._currentPath == null) {
+        this.client._currentPath = window.location.pathname;
+      }
     }
 
     // Handle browser back/forward buttons
@@ -84,16 +90,35 @@ export class NavigationManager {
 
         // Freeze the page we're leaving (cache is a separate perf layer — used
         // only when the socket is down, never as navigation authority).
+        const departedPath = this.client._currentPath || path;
         await this.snapshotCurrentPage();
 
         if (isBack) {
-          // SSOT: browser Back is a bare zBack intent. The server pops its
-          // authoritative crumb trail and returns the previous block — we never
-          // pick the target from the URL or a cached paint (zCLI parity). Only when
-          // the socket is down do we replay the frozen paint as a courtesy.
-          // Call the low-level intent (NOT client.zBack(), which itself triggers
-          // history.back() — that would recurse through this very handler).
+          // TWO Back regimes, split by what the browser itself changed:
+          //
+          //   URL unchanged (same-page delta unwind) → bare zBack intent. The
+          //   server pops its authoritative crumb trail (zCLI parity) — the
+          //   trail is the ONLY map of block-level hops, so it stays SSOT here.
+          //
+          //   URL changed (cross-page Back) → navigate to the RESTORED URL.
+          //   The bare intent used to run here too, but it trusts a trail that
+          //   a server reset / WS re-session wipes while browser history
+          //   survives — the classic "URL changes, paint doesn't, Ctrl+R
+          //   fixes it" drift. The destination lives in the history entry the
+          //   browser just restored (path + optional deep block), so routing
+          //   by URL is reset-proof; when the trail IS intact the server's
+          //   walker reconciliation still pops frames past the on-trail scope
+          //   (pop_to_scope), so trail depth stays in lockstep either way.
+          //
+          // (NOT client.zBack(), which itself triggers history.back() — that
+          // would recurse through this very handler.)
           if (this._isSocketConnected()) {
+            if (departedPath !== path) {
+              const entryBlock = (e.state && e.state.block) ? e.state.block : null;
+              this.logger.debug(`[ClientNav] cross-page Back → route nav ${path}${entryBlock ? '#' + entryBlock : ''}`);
+              await this.navigateToRoute(path, { skipHistory: true, zBack: true, zBlock: entryBlock });
+              return;
+            }
             this.client._sendZBackIntent();
             return;
           }
