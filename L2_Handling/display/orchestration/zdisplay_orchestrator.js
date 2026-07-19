@@ -211,9 +211,17 @@ export class ZDisplayOrchestrator {
           && !_topKeys.some(k => k.startsWith('~'));
 
         if (_canSplit) {
-          const _total = _topKeys.length;
+          // Render EVERY section in declaration order — including _Keys, which
+          // are terminal-suppressed only and render like any sibling in Bifrost
+          // (#4: the filter above is for the metadata/gate CLASSIFICATION, but
+          // using it as the render list silently dropped top-level _sections on
+          // multi-section pages while single-section pages painted them fine).
+          // renderItems' own METADATA_KEYS skip keeps _zClass & co. out.
+          const _renderKeys = Object.keys(data).filter(
+            k => !this.metadataProcessor.isMetadataKey(k) && !k.startsWith('~'));
+          const _total = _renderKeys.length;
           let _done = 0;
-          for (const _k of _topKeys) {
+          for (const _k of _renderKeys) {
             await this.renderItems({ [_k]: data[_k] }, targetContainer);
             _done += 1;
             try { await this.client._updateRenderState({ current: _done, total: _total }); }
