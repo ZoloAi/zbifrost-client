@@ -25,7 +25,34 @@ export class WebSocketConnection {
     this._messageCallback = null;   // re-bound on every (re)connect — see onMessage()
     this._intentionalClose = false; // disconnect() was called — stay down
     this._reconnectPending = false; // one reconnect in flight at a time
+    this._failedReconnects = 0;     // consecutive failed attempts this outage
+    this._downSince = null;         // when the current outage started
+    this._outageEscalated = false;  // one error toast per outage, max
     this._bindWakeListeners();
+  }
+
+  /**
+   * Escalation seam for transport failures (#6). A single failed reconnect is
+   * NORMAL — mobile wakes reconnect before the radio is back, and the retry
+   * a second later succeeds. Toasting those made every tab-wake shout "error"
+   * under a green Connected dot. So: transport events log at warn
+   * (console-only), and ONE user-facing error fires only when the loop is
+   * genuinely stuck — several consecutive failures or ~10s down while the
+   * user is actually looking at the tab.
+   * @private
+   */
+  _noteReconnectFailure(err) {
+    this._failedReconnects += 1;
+    if (this._downSince === null) this._downSince = Date.now();
+    const visible = typeof document === 'undefined' || document.visibilityState === 'visible';
+    const stuck = this._failedReconnects >= 3
+      || (Date.now() - this._downSince) > 10000;
+    if (visible && stuck && !this._outageEscalated) {
+      this._outageEscalated = true;
+      this.logger.error('Connection lost — retrying in the background. Reload if this persists.');
+    } else {
+      this.logger.warn(`Reconnect attempt failed (${this._failedReconnects} so far):`, err?.message || err);
+    }
   }
 
   /**
@@ -63,7 +90,7 @@ export class WebSocketConnection {
     this._reconnectPending = true;
     this.logger.info(`Reconnecting (${reason})...`);
     this.connect()
-      .catch(err => { this.logger.error('Reconnect failed:', err); })
+      .catch(err => { this._noteReconnectFailure(err); })
       .finally(() => { this._reconnectPending = false; });
   }
 
@@ -125,12 +152,20 @@ export class WebSocketConnection {
 
       this.ws.onopen = () => {
         this.logger.info('Connected to server');
+        // Outage over — reset the escalation seam so the NEXT outage gets a
+        // fresh grace window.
+        this._failedReconnects = 0;
+        this._downSince = null;
+        this._outageEscalated = false;
         this.hooks.call('onConnected', { url: this.url });
         resolve();
       };
-      
+
       this.ws.onerror = (error) => {
-        this.logger.error('WebSocket error:', error);
+        // warn, not error: ws.onerror fires for every retryable transport blip
+        // (and hands back a content-free DOM Event, not an Error). Escalation
+        // to a user-facing toast is _noteReconnectFailure's call (#6).
+        this.logger.warn('WebSocket transport error (will retry if applicable)');
         this.hooks.call('onError', error);
         reject(error);
       };

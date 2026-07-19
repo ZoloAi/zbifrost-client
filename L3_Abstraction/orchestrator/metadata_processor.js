@@ -137,9 +137,15 @@ export class MetadataProcessor {
    */
   normalizeClasses(zClass) {
     if (!zClass) return [];
+    // Coerce non-array values to string before splitting: the grammar side can
+    // hand back numbers or objects here, and calling .includes on those killed
+    // the WHOLE chunk render (#5, found live on the zTheme docs page).
+    if (!Array.isArray(zClass) && typeof zClass !== 'string') {
+      this.logger?.warn(`[MetadataProcessor] _zClass is ${typeof zClass}, expected string/array — coercing:`, zClass);
+    }
     const parts = Array.isArray(zClass)
       ? zClass
-      : (zClass.includes(',') ? zClass.split(',') : zClass.split(' '));
+      : String(zClass).split(/[,\s]+/);
     return parts.map(c => String(c).trim()).filter(Boolean);
   }
 
@@ -244,6 +250,6 @@ export class MetadataProcessor {
    */
   isInputGroupContext(metadata) {
     return metadata._zGroup === 'input-group' ||
-           (metadata._zClass && metadata._zClass.includes('zInputGroup'));
+           this.normalizeClasses(metadata._zClass).includes('zInputGroup');
   }
 }
