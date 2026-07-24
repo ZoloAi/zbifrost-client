@@ -57,6 +57,18 @@ The renderer **key** corresponds to the decoded `event` name from the wire
 | `navigation/` | menu, navigation |
 | `specialized/` | input_request |
 
+Renderer contracts worth knowing:
+
+- **zTable row actions** — `table_renderer` draws a trailing action-button column
+  when the event carries `row_action`; a click sends `table_row_action` and the
+  server's ack re-fires a scoped delta repaint (see PROTOCOL.md §6).
+- **Confirm buttons are `type="submit"`** — fieldless dialogs render a confirm
+  button client-side, and it must stay a submit button: zRaven drives dialogs by
+  clicking `.zModal-overlay button[type='submit']`. That selector is a contract.
+- **`_zClass` is coerced, never trusted** — `normalizeClasses` accepts
+  string/array and coerces anything else (warning once per chunk); every class
+  read goes through it, so a malformed `_zClass` can't throw mid-render.
+
 Shared low-level DOM builders live in `L2_Handling/display/primitives/`
 (`link_primitives`, `typography_primitives`, `table_primitives`, `media_primitives`,
 `lists_primitives`, `semantic_element_primitive`, …). Prefer composing these over

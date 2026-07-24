@@ -17,7 +17,7 @@ After the socket opens, the server sends exactly one `connection_info`:
   "event": "connection_info",
   "data": {
     "server_version": "…",
-    "bifrost_core_url": "https://cdn.jsdelivr.net/gh/ZoloAi/zbifrost-client@v1.7.105/bifrost_core.js",
+    "bifrost_core_url": "https://cdn.jsdelivr.net/gh/ZoloAi/zbifrost-client@v1.7.112/bifrost_core.js",
     "nav_html": "<nav>…</nav>",        // pre-built, RBAC-filtered navbar
     "session": { "authenticated": false, "username": null, "role": null, … },
     "features": [ … ],
@@ -66,12 +66,22 @@ raw string literals.
 
 | Group | Events |
 |-------|--------|
-| Transport / connection | `render_chunk`, `connection_info`, `navigate_back`, `error` |
-| Display / output | `display`, `output`, `zTable`, `zDash`, `zMenu`, `zDialog`, `swiper_init` |
+| Transport / connection | `render_chunk`, `render_modal`, `connection_info`, `navigate_back`, `open_url`, `error` |
+| Display / output | `display`, `output`, `zTable`, `table_row_action_ack`, `zDash`, `zMenu`, `zDialog`, `swiper_init` |
 | Progress / spinner | `progress_bar`, `progress_update`, `progress_complete`, `spinner_start`, `spinner_stop` |
-| Input req/res | `request_input`, `input_request`, `input_response` |
+| Input req/res | `sandbox_input_request`, `display_prompt_request`, `input_response` |
 | Execution / wizard / RBAC | `execute_walker`, `execute_zfunc_response`, `execute_code_response`, `zfunc_exec`, `wizard_gate_result`, `rbac_denied` |
 | Logging | `app_log` |
+
+Two **different** input-request doors share one response hub: `sandbox_input_request`
+is a zGuard sandbox/plugin `input()` (terminal line), `display_prompt_request` is the
+zDisplay read-primitive (form widget); both answer with `input_response`. (These
+replaced the flipped near-twins `request_input` / `input_request`.)
+
+`PROTOCOL_VERSION` (integer, same file) is the wire-compatibility version — bumped
+only on breaking wire changes. The server is the SSOT and will emit its own
+`protocol_version` in `connection_info`; the client warns on mismatch but never
+hard-fails. Dormant until the server starts emitting the field.
 
 `navigate_back` carries a `reason` (`PROTOCOL_REASONS`):
 `bounce_back_block_completed` (post-login/logout bounce) and `rbac_denied`
@@ -104,3 +114,15 @@ The client sends `execute_walker` (and friends) back to the server. When a sessi
 cookie is readable it is attached to walker requests as a best-effort sync hint
 (see [SECURITY.md](SECURITY.md#session-cookie-handling)); the server remains the
 authority.
+
+Other outgoing messages: `table_row_action` (a zTable row-action button click; the
+server answers with `table_row_action_ack`, which re-fires a scoped delta repaint)
+and debounced **zLive** form submits (input-driven, coalesced while one is in
+flight, exempt from the duplicate-submit guard — repeats are by design).
+
+## 6. Scoped repaints — the `zdelta` field
+
+Responses may carry a `zdelta` field naming an on-page block. The client repaints
+just that block in place — no history entry, no scroll jump, focus preserved.
+This is a *field* on existing messages, not a new event type; it powers zLive
+forms, upload `onSuccess` refreshes, and row-action acks.

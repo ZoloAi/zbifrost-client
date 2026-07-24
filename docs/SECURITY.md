@@ -54,6 +54,11 @@ socket, a spoofed payload could otherwise point the import at attacker-hosted co
 
 Anything else is refused with a logged error and the core is not loaded.
 
+**Dev carve-out (local machines only):** a page served from `localhost`/`127.0.0.1`
+may load the core from another localhost port (`ZBIFROST_CLIENT_BASE=
+http://localhost:<port>` pointing at a source checkout). A non-localhost page gets
+no such exception — the carve-out cannot be reached from a deployed origin.
+
 ```js
 // permit a custom/self-hosted CDN origin:
 new BifrostClient(null, {
@@ -66,6 +71,13 @@ new BifrostClient(null, {
 > canonical distribution channel and the version is still chosen by *your* server.
 > Self-hosting the core? Serve it from the page origin (no config needed) or add its
 > origin to `coreOriginAllowlist`.
+
+## Client plugin imports (`&.`)
+
+zUI buttons can reference client-side plugin modules (`&.` paths). The client
+resolves those `import()` URLs against the **page origin** — never against the
+CDN or the socket host — so an app's client plugins always come from the server
+that served the page.
 
 ## Session-cookie handling
 

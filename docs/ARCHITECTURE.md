@@ -109,3 +109,18 @@ zSys/
    via hooks (`onRenderChunk`, `onDisplay`, `onMenu`, …).
 5. Renderers build DOM into the `zVaF` mount; navigation/menus drive subsequent
    walker calls. See [PROTOCOL.md](PROTOCOL.md).
+
+## Reconnect (wake-aware)
+
+The connection layer assumes sockets die — especially on mobile, where
+backgrounding a tab closes the socket *cleanly*:
+
+- **Clean closes retry too.** A deliberate-looking close is not treated as final.
+- **Wake triggers reconnect instantly:** `visibilitychange`, `pageshow` and
+  `online` events short-circuit the backoff when the socket is down.
+- **Handlers survive reconnects.** The `onmessage` callback is re-bound onto the
+  new socket, so a reconnected client is never a deaf one.
+- **Noise discipline:** transport retries log as console warnings only; the user
+  sees a single toast per outage, and only after ~3 failures over 10 visible
+  seconds. `ws.onerror` (a content-free DOM Event, always retryable) is a
+  warning, not an error.
